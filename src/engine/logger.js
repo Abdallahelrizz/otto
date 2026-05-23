@@ -1,0 +1,54 @@
+import { db } from '../db/client.js';
+
+export async function createExecution({ workflowId, triggerType, input }) {
+  const { rows } = await db.query(
+    `INSERT INTO executions (workflow_id, status, started_at, trigger_type, input)
+     VALUES ($1, 'running', NOW(), $2, $3)
+     RETURNING id`,
+    [workflowId, triggerType, JSON.stringify(input)]
+  );
+  return rows[0].id;
+}
+
+export async function completeExecution(executionId, { status, error } = {}) {
+  await db.query(
+    `UPDATE executions
+     SET status = $2, completed_at = NOW(), error = $3
+     WHERE id = $1`,
+    [executionId, status ?? 'success', error ?? null]
+  );
+}
+
+export async function logNodeStart({ executionId, nodeId, nodeName, nodeType, input }) {
+  const { rows } = await db.query(
+    `INSERT INTO node_executions
+       (execution_id, node_id, node_name, node_type, status, started_at, input)
+     VALUES ($1, $2, $3, $4, 'running', NOW(), $5)
+     RETURNING id`,
+    [executionId, nodeId, nodeName ?? nodeId, nodeType, JSON.stringify(input)]
+  );
+  return rows[0].id;
+}
+
+export async function logNodeEnd(logId, { status, output, error, retryCount = 0 }) {
+  await db.query(
+    `UPDATE node_executions
+     SET status = $2,
+         completed_at = NOW(),
+         duration_ms = EXTRACT(EPOCH FROM (NOW() - started_at)) * 1000,
+         output = $3,
+         error = $4,
+         retry_count = $5
+     WHERE id = $1`,
+    [logId, status, JSON.stringify(output ?? null), error ?? null, retryCount]
+  );
+}
+
+export async function logNodeSkipped({ executionId, nodeId, nodeName, nodeType }) {
+  await db.query(
+    `INSERT INTO node_executions
+       (execution_id, node_id, node_name, node_type, status, started_at, completed_at, duration_ms)
+     VALUES ($1, $2, $3, $4, 'skipped', NOW(), NOW(), 0)`,
+    [executionId, nodeId, nodeName ?? nodeId, nodeType]
+  );
+}

@@ -1,0 +1,119 @@
+{
+  "nodes": [
+    {
+      "id": "trigger",
+      "type": "webhook_trigger",
+      "name": "Webhook Trigger",
+      "config": { "path": "cortex-brain" }
+    },
+    {
+      "id": "embed",
+      "type": "http_request",
+      "name": "OpenAI Embed",
+      "config": {
+        "_mock": "embed",
+        "url": "https://api.openai.com/v1/embeddings",
+        "method": "POST",
+        "body": { "model": "text-embedding-3-small", "input": "{{ input.message }}" }
+      }
+    },
+    {
+      "id": "hippocampus",
+      "type": "http_request",
+      "name": "Hippocampus Encoder",
+      "config": {
+        "_mock": "hippocampus",
+        "url": "http://hippocampus-svc/encode",
+        "method": "POST",
+        "body": { "query": "{{ input.message }}" }
+      }
+    },
+    {
+      "id": "merge-parallel",
+      "type": "merge",
+      "name": "Merge Parallel Results",
+      "config": { "mode": "collect-array" }
+    },
+    {
+      "id": "subconscious",
+      "type": "llm_call",
+      "name": "LLM — Subconscious",
+      "config": {
+        "_mock": "subconscious",
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "systemPrompt": "You are a fast subconscious reasoning layer. Given embeddings and retrieved memories, produce a candidate answer and a confidence score (0-1).",
+        "userPrompt": "Embeddings and memories: {{ input.items }}",
+        "temperature": 0.3,
+        "maxTokens": 512
+      }
+    },
+    {
+      "id": "confidence-gate",
+      "type": "if",
+      "name": "Confidence Gate (≥ 0.75)",
+      "config": {
+        "conditions": [{ "left": "confidence", "operator": ">=", "right": 0.75 }],
+        "combinator": "and"
+      }
+    },
+    {
+      "id": "direct-response",
+      "type": "set",
+      "name": "Direct Response (high confidence)",
+      "config": {
+        "mode": "merge",
+        "assignments": [
+          { "key": "answer",   "value": "{{ input.text }}" },
+          { "key": "path",     "value": "subconscious" },
+          { "key": "confidence", "value": "{{ input.confidence }}" }
+        ]
+      }
+    },
+    {
+      "id": "consciousness",
+      "type": "llm_call",
+      "name": "LLM — Consciousness",
+      "config": {
+        "_mock": "consciousness",
+        "provider": "openai",
+        "model": "gpt-4o",
+        "systemPrompt": "You are the conscious reasoning layer. Think step by step, challenge the subconscious answer, and produce a high-quality final response.",
+        "userPrompt": "Subconscious candidate: {{ input.text }}\nConfidence: {{ input.confidence }}\n\nReason carefully and produce the final answer.",
+        "temperature": 0.7,
+        "maxTokens": 1024
+      }
+    },
+    {
+      "id": "merge-final",
+      "type": "merge",
+      "name": "Merge Final Answer",
+      "config": { "mode": "merge-object" }
+    },
+    {
+      "id": "output",
+      "type": "set",
+      "name": "Format Output",
+      "config": {
+        "mode": "merge",
+        "assignments": [
+          { "key": "workflow", "value": "cortex-brain" },
+          { "key": "version",  "value": "1.0" }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "trigger",         "target": "embed" },
+    { "id": "e2", "source": "trigger",         "target": "hippocampus" },
+    { "id": "e3", "source": "embed",           "target": "merge-parallel" },
+    { "id": "e4", "source": "hippocampus",     "target": "merge-parallel" },
+    { "id": "e5", "source": "merge-parallel",  "target": "subconscious" },
+    { "id": "e6", "source": "subconscious",    "target": "confidence-gate" },
+    { "id": "e7", "source": "confidence-gate", "target": "direct-response", "sourceHandle": "true" },
+    { "id": "e8", "source": "confidence-gate", "target": "consciousness",   "sourceHandle": "false" },
+    { "id": "e9", "source": "direct-response", "target": "merge-final" },
+    { "id": "e10","source": "consciousness",   "target": "merge-final" },
+    { "id": "e11","source": "merge-final",     "target": "output" }
+  ]
+}
