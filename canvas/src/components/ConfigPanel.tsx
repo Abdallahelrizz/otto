@@ -31,7 +31,7 @@ const inputStyle: CSSProperties = {
 
 const monoStyle: CSSProperties = {
   ...inputStyle,
-  fontFamily: 'Geist Mono, monospace',
+  fontFamily: 'Geist Mono',
   fontSize: '11px',
   resize: 'vertical',
   minHeight: '80px',
@@ -96,7 +96,7 @@ function ExecBadge({ execution }: { execution: NodeExecution }) {
       padding: '3px 9px', borderRadius: '100px',
       border: `1px solid ${color}`, color,
       fontSize: '10px', fontWeight: 600, letterSpacing: '0.07em',
-      fontFamily: 'Geist Mono, monospace',
+      fontFamily: 'Geist Mono',
     }}>
       {execution.status === 'running' && (
         <span className="animate-pulse" style={{ width: '5px', height: '5px', borderRadius: '50%', background: color, display: 'inline-block' }} />
@@ -329,7 +329,7 @@ function LlmCallPanel({ config, onChange }: PanelProps) {
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <label style={{ ...labelStyle, marginBottom: 0 }}>Temperature</label>
-          <span style={{ fontSize: '11px', fontFamily: 'Geist Mono, monospace', color: 'var(--text-secondary)' }}>
+          <span style={{ fontSize: '11px', fontFamily: 'Geist Mono', color: 'var(--text-secondary)' }}>
             {temperature.toFixed(2)}
           </span>
         </div>

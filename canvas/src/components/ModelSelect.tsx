@@ -56,7 +56,7 @@ const baseInputStyle: CSSProperties = {
   borderRadius: '5px',
   padding: '7px 10px',
   color: 'var(--text-primary)',
-  fontFamily: 'Geist, sans-serif',
+  fontFamily: "'Inter'",
   transition: 'border-color 0.15s ease',
 };
 

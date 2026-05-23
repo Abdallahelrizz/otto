@@ -42,7 +42,7 @@ export function JsonViewer({ label, data }: { label: string; data: unknown }) {
           padding: '0 0 6px 0',
           cursor: 'pointer',
           color: 'var(--text-secondary)',
-          fontFamily: 'Geist, sans-serif',
+          fontFamily: "'Inter'",
           fontSize: '10px',
           fontWeight: 600,
           textTransform: 'uppercase',
@@ -64,7 +64,7 @@ export function JsonViewer({ label, data }: { label: string; data: unknown }) {
             borderRadius: '6px',
             overflowY: 'auto',
             maxHeight: '180px',
-            fontFamily: 'Geist Mono, monospace',
+            fontFamily: "'Geist Mono'",
             color: 'var(--text-secondary)',
           }}
           dangerouslySetInnerHTML={{ __html: syntaxHighlight(json) }}

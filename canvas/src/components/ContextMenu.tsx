@@ -51,7 +51,7 @@ export function ContextMenu() {
         boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4)',
         minWidth: '170px',
         overflow: 'hidden',
-        fontFamily: 'Geist, sans-serif',
+        fontFamily: "'Inter'",
         fontSize: '13px',
       }}
     >
