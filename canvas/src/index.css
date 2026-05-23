@@ -181,6 +181,11 @@ code, pre, textarea.mono, .mono {
   transition: border-color 0.1s ease, box-shadow 0.1s ease !important;
 }
 
+/* ── Node card spinner ── */
+@keyframes otto-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ── Spring release on drag drop ── */
 @keyframes node-spring-release {
   0%   { transform: scale(1); }

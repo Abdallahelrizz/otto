@@ -2,6 +2,7 @@ export interface HandleDef {
   id: string;
   label?: string;
   color?: string;
+  side?: 'left' | 'right' | 'bottom';
 }
 
 export interface NodeTypeDef {
@@ -10,8 +11,13 @@ export interface NodeTypeDef {
   label: string;
   description: string;
   color: string;
-  hasInput: boolean;
-  outputHandles: HandleDef[];
+  complex?: boolean;
+  slug?: string;
+  handles: {
+    in: HandleDef[];
+    out: HandleDef[];
+    extras?: HandleDef[];
+  };
   defaultConfig: Record<string, unknown>;
   fields: FieldDef[];
 }
@@ -30,48 +36,6 @@ export const CATEGORY_COLORS: Record<string, string> = {
   data:     '#06b6d4',
 };
 
-export const CATEGORY_RADIUS: Record<string, string> = {
-  triggers: '8px',
-  core:     '50%',
-  ai:       '30%',
-  data:     '4px',
-};
-
-export const CATEGORY_CARD_BG: Record<string, string> = {
-  triggers: 'rgba(245,158,11,0.08)',
-  core:     'rgba(255,255,255,0.03)',
-  ai:       'rgba(139,92,246,0.08)',
-  data:     'rgba(6,182,212,0.06)',
-};
-
-export const CATEGORY_CARD_BG_HOVER: Record<string, string> = {
-  triggers: 'rgba(245,158,11,0.11)',
-  core:     'rgba(255,255,255,0.05)',
-  ai:       'rgba(139,92,246,0.11)',
-  data:     'rgba(6,182,212,0.09)',
-};
-
-export const CATEGORY_CARD_BG_SELECTED: Record<string, string> = {
-  triggers: 'rgba(245,158,11,0.14)',
-  core:     'rgba(255,255,255,0.07)',
-  ai:       'rgba(139,92,246,0.14)',
-  data:     'rgba(6,182,212,0.11)',
-};
-
-export const CATEGORY_CARD_BORDER: Record<string, string> = {
-  triggers: 'rgba(245,158,11,0.3)',
-  core:     'rgba(255,255,255,0.08)',
-  ai:       'rgba(139,92,246,0.3)',
-  data:     'rgba(6,182,212,0.25)',
-};
-
-export const CATEGORY_CARD_BORDER_SELECTED: Record<string, string> = {
-  triggers: 'rgba(245,158,11,0.6)',
-  core:     'rgba(255,255,255,0.25)',
-  ai:       'rgba(139,92,246,0.6)',
-  data:     'rgba(6,182,212,0.5)',
-};
-
 export const CATEGORY_EDGE_COLOR: Record<string, string> = {
   triggers: '#f59e0b',
   core:     'rgba(255,255,255,0.2)',
@@ -79,18 +43,11 @@ export const CATEGORY_EDGE_COLOR: Record<string, string> = {
   data:     '#06b6d4',
 };
 
-export const CATEGORY_ROW_HOVER: Record<string, string> = {
-  triggers: 'rgba(245,158,11,0.08)',
-  core:     'rgba(255,255,255,0.04)',
-  ai:       'rgba(139,92,246,0.08)',
-  data:     'rgba(6,182,212,0.06)',
-};
-
 export const CATEGORY_ICON_WEIGHT: Record<string, string> = {
-  triggers: 'fill',
+  triggers: 'bold',
   core:     'bold',
-  ai:       'duotone',
-  data:     'fill',
+  ai:       'bold',
+  data:     'bold',
 };
 
 export const NODE_CATEGORIES = [
@@ -108,9 +65,12 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'triggers',
     label: 'Webhook',
     description: 'Receive HTTP requests',
-    color: '#f97316',
-    hasInput: false,
-    outputHandles: [{ id: 'output' }],
+    color: '#f59e0b',
+    slug: 'WEBHK',
+    handles: {
+      in: [],
+      out: [{ id: 'output' }],
+    },
     defaultConfig: { path: 'my-webhook' },
     fields: [{ key: 'path', label: 'Path', type: 'text' }],
   },
@@ -121,9 +81,12 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'core',
     label: 'HTTP Request',
     description: 'Call any REST API',
-    color: '#3b82f6',
-    hasInput: true,
-    outputHandles: [{ id: 'output' }],
+    color: '#64748b',
+    slug: 'HTTP',
+    handles: {
+      in: [{ id: 'input' }],
+      out: [{ id: 'output' }],
+    },
     defaultConfig: {
       url: '',
       method: 'GET',
@@ -142,12 +105,16 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'core',
     label: 'IF Condition',
     description: 'Branch on conditions',
-    color: '#eab308',
-    hasInput: true,
-    outputHandles: [
-      { id: 'true',  label: 'TRUE',  color: '#22c55e' },
-      { id: 'false', label: 'FALSE', color: '#ef4444' },
-    ],
+    color: '#64748b',
+    slug: 'IF',
+    complex: true,
+    handles: {
+      in: [{ id: 'input' }],
+      out: [
+        { id: 'true',  label: 'true',  color: '#22c55e' },
+        { id: 'false', label: 'false', color: '#ef4444' },
+      ],
+    },
     defaultConfig: { conditions: [{ left: 'confidence', operator: '>=', right: '0.75' }], combinator: 'and' },
     fields: [{ key: 'conditions', label: 'Conditions', type: 'conditions' }],
   },
@@ -156,9 +123,17 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'core',
     label: 'Merge',
     description: 'Combine parallel branches',
-    color: '#06b6d4',
-    hasInput: true,
-    outputHandles: [{ id: 'output' }],
+    color: '#64748b',
+    slug: 'MERGE',
+    complex: true,
+    handles: {
+      in: [
+        { id: 'in1', label: 'input 1' },
+        { id: 'in2', label: 'input 2' },
+        { id: 'in3', label: 'input 3' },
+      ],
+      out: [{ id: 'output' }],
+    },
     defaultConfig: { mode: 'merge-object' },
     fields: [
       { key: 'mode', label: 'Mode', type: 'select', options: [{ value: 'merge-object', label: 'Merge Object' }, { value: 'collect-array', label: 'Collect Array' }] },
@@ -169,9 +144,12 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'core',
     label: 'Set / Transform',
     description: 'Shape and rename fields',
-    color: '#10b981',
-    hasInput: true,
-    outputHandles: [{ id: 'output' }],
+    color: '#64748b',
+    slug: 'SET',
+    handles: {
+      in: [{ id: 'input' }],
+      out: [{ id: 'output' }],
+    },
     defaultConfig: { mode: 'set', assignments: [] },
     fields: [
       { key: 'mode', label: 'Mode', type: 'select', options: [{ value: 'set', label: 'Set only' }, { value: 'merge', label: 'Merge with input' }] },
@@ -183,9 +161,12 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'core',
     label: 'Code (JS)',
     description: 'Run arbitrary JavaScript',
-    color: '#6366f1',
-    hasInput: true,
-    outputHandles: [{ id: 'output' }],
+    color: '#64748b',
+    slug: 'CODE',
+    handles: {
+      in: [{ id: 'input' }],
+      out: [{ id: 'output' }],
+    },
     defaultConfig: { code: 'return input;' },
     fields: [{ key: 'code', label: 'JavaScript', type: 'code' }],
   },
@@ -194,9 +175,12 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'core',
     label: 'Delay',
     description: 'Wait before continuing',
-    color: '#f59e0b',
-    hasInput: true,
-    outputHandles: [{ id: 'output' }],
+    color: '#64748b',
+    slug: 'DELAY',
+    handles: {
+      in: [{ id: 'input' }],
+      out: [{ id: 'output' }],
+    },
     defaultConfig: { amount: 1000, unit: 'ms' },
     fields: [
       { key: 'amount', label: 'Amount', type: 'number' },
@@ -208,9 +192,12 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'core',
     label: 'Filter',
     description: 'Drop items that don\'t match',
-    color: '#84cc16',
-    hasInput: true,
-    outputHandles: [{ id: 'output' }],
+    color: '#64748b',
+    slug: 'FLTR',
+    handles: {
+      in: [{ id: 'input' }],
+      out: [{ id: 'output' }],
+    },
     defaultConfig: { conditions: [] },
     fields: [{ key: 'conditions', label: 'Keep when', type: 'conditions' }],
   },
@@ -219,9 +206,16 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'core',
     label: 'Loop',
     description: 'Iterate over an array',
-    color: '#8b5cf6',
-    hasInput: true,
-    outputHandles: [{ id: 'output' }],
+    color: '#64748b',
+    slug: 'LOOP',
+    complex: true,
+    handles: {
+      in: [{ id: 'input' }],
+      out: [
+        { id: 'loop', label: 'loop' },
+        { id: 'done', label: 'done' },
+      ],
+    },
     defaultConfig: { over: 'input.items', limit: 100 },
     fields: [
       { key: 'over', label: 'Array path', type: 'text' },
@@ -233,9 +227,12 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'core',
     label: 'Sub-workflow',
     description: 'Call another workflow',
-    color: '#0ea5e9',
-    hasInput: true,
-    outputHandles: [{ id: 'output' }],
+    color: '#64748b',
+    slug: 'SUBFL',
+    handles: {
+      in: [{ id: 'input' }],
+      out: [{ id: 'output' }],
+    },
     defaultConfig: { workflowId: '' },
     fields: [{ key: 'workflowId', label: 'Workflow ID', type: 'text' }],
   },
@@ -244,9 +241,12 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'core',
     label: 'Send Email',
     description: 'Send an email via SMTP',
-    color: '#ec4899',
-    hasInput: true,
-    outputHandles: [{ id: 'output' }],
+    color: '#64748b',
+    slug: 'EMAIL',
+    handles: {
+      in: [{ id: 'input' }],
+      out: [{ id: 'output' }],
+    },
     defaultConfig: { to: '', subject: '', body: '' },
     fields: [
       { key: 'to', label: 'To', type: 'text' },
@@ -261,9 +261,14 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'ai',
     label: 'LLM Call',
     description: 'Call any language model',
-    color: '#a855f7',
-    hasInput: true,
-    outputHandles: [{ id: 'output' }],
+    color: '#8b5cf6',
+    slug: 'LLM',
+    complex: true,
+    handles: {
+      in: [{ id: 'input' }],
+      out: [{ id: 'output' }],
+      extras: [{ id: 'model', label: 'model', side: 'bottom' }],
+    },
     defaultConfig: { provider: 'openai', model: 'gpt-4o-mini', apiKey: '', systemPrompt: '', userPrompt: '{{ input.message }}', temperature: 0.7, maxTokens: 1000 },
     fields: [
       { key: 'provider', label: 'Provider', type: 'select', options: [{ value: 'openai', label: 'OpenAI' }, { value: 'anthropic', label: 'Anthropic' }, { value: 'openrouter', label: 'OpenRouter' }] },
@@ -279,9 +284,20 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'ai',
     label: 'AI Agent',
     description: 'Autonomous LLM agent with tools',
-    color: '#7c3aed',
-    hasInput: true,
-    outputHandles: [{ id: 'output' }],
+    color: '#8b5cf6',
+    slug: 'AGENT',
+    complex: true,
+    handles: {
+      in: [{ id: 'input' }],
+      out: [{ id: 'output' }],
+      extras: [
+        { id: 't1', label: '1', side: 'bottom' },
+        { id: 't2', label: '2', side: 'bottom' },
+        { id: 't3', label: '3', side: 'bottom' },
+        { id: 't4', label: '4', side: 'bottom' },
+        { id: 't5', label: '5', side: 'bottom' },
+      ],
+    },
     defaultConfig: { model: 'gpt-4o', systemPrompt: 'You are a helpful assistant.', tools: '[]', maxSteps: 10 },
     fields: [
       { key: 'model', label: 'Model', type: 'text' },
@@ -295,9 +311,12 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'ai',
     label: 'Vector Search',
     description: 'Semantic similarity search',
-    color: '#0891b2',
-    hasInput: true,
-    outputHandles: [{ id: 'output' }],
+    color: '#8b5cf6',
+    slug: 'VEC',
+    handles: {
+      in: [{ id: 'input' }],
+      out: [{ id: 'output' }],
+    },
     defaultConfig: { query: '{{ input.text }}', collection: 'memory', topK: 5 },
     fields: [
       { key: 'query', label: 'Query', type: 'text' },
@@ -312,9 +331,12 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'data',
     label: 'Postgres Query',
     description: 'Run a SQL query',
-    color: '#336791',
-    hasInput: true,
-    outputHandles: [{ id: 'output' }],
+    color: '#06b6d4',
+    slug: 'PG',
+    handles: {
+      in: [{ id: 'input' }],
+      out: [{ id: 'output' }],
+    },
     defaultConfig: { query: 'SELECT * FROM table WHERE id = $1', params: '[]' },
     fields: [
       { key: 'query', label: 'SQL Query', type: 'code' },
@@ -326,9 +348,12 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'data',
     label: 'Redis Get',
     description: 'Read a value from Redis',
-    color: '#dc382d',
-    hasInput: true,
-    outputHandles: [{ id: 'output' }],
+    color: '#06b6d4',
+    slug: 'GET',
+    handles: {
+      in: [{ id: 'input' }],
+      out: [{ id: 'output' }],
+    },
     defaultConfig: { key: '{{ input.key }}' },
     fields: [{ key: 'key', label: 'Key', type: 'text' }],
   },
@@ -337,9 +362,12 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'data',
     label: 'Redis Set',
     description: 'Write a value to Redis',
-    color: '#dc382d',
-    hasInput: true,
-    outputHandles: [{ id: 'output' }],
+    color: '#06b6d4',
+    slug: 'SET',
+    handles: {
+      in: [{ id: 'input' }],
+      out: [{ id: 'output' }],
+    },
     defaultConfig: { key: '{{ input.key }}', value: '{{ input.value }}', ttl: 3600 },
     fields: [
       { key: 'key', label: 'Key', type: 'text' },
@@ -357,9 +385,11 @@ export function getNodeDef(type: string): NodeTypeDef {
     category: 'core' as const,
     label: type,
     description: '',
-    color: '#52525b',
-    hasInput: true,
-    outputHandles: [{ id: 'output' }],
+    color: '#64748b',
+    handles: {
+      in: [{ id: 'input' }],
+      out: [{ id: 'output' }],
+    },
     defaultConfig: {},
     fields: [],
   };
