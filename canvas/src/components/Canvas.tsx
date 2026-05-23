@@ -166,33 +166,30 @@ export function Canvas() {
               pointerEvents: 'none', userSelect: 'none',
             }}
           >
-            <div
-              style={{
-                border: '1px dashed var(--border-node)',
-                borderRadius: '10px',
-                padding: '44px 64px',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px',
-              }}
-            >
-              <div
-                style={{
-                  width: '40px', height: '40px',
-                  borderRadius: '8px',
-                  border: '1px dashed var(--border-input)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '22px', color: 'var(--text-secondary)',
-                }}
-              >
-                +
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500, marginBottom: '3px' }}>
-                  Add your first node
-                </p>
-                <p style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
-                  Drag from the sidebar or click a type
-                </p>
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '10px' }}>
+              <p style={{
+                fontFamily: "'Fraunces'",
+                fontSize: '36px',
+                fontWeight: 500,
+                fontVariationSettings: '"opsz" 144',
+                letterSpacing: '-0.018em',
+                lineHeight: 1.1,
+                color: 'rgba(232,232,238,0.92)',
+                margin: 0,
+              }}>
+                Start with a trigger.
+              </p>
+              <p style={{
+                fontFamily: "'Inter'",
+                fontSize: '14px',
+                fontWeight: 400,
+                color: 'rgba(170,170,180,0.85)',
+                letterSpacing: '-0.005em',
+                lineHeight: 1.45,
+                margin: 0,
+              }}>
+                Drop a Webhook, Scheduler, or Manual trigger from the sidebar.
+              </p>
             </div>
           </div>
         )}

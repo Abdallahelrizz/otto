@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NODE_TYPE_DEFS, NODE_CATEGORIES, CATEGORY_COLORS, CATEGORY_RADIUS, CATEGORY_ROW_HOVER, type NodeTypeDef } from './nodes/nodeConfig';
+import { NODE_TYPE_DEFS, NODE_CATEGORIES, CATEGORY_COLORS, type NodeTypeDef } from './nodes/nodeConfig';
 import { NodeIcon } from './NodeIcon';
 import { v4 as uuidv4 } from 'uuid';
 import { useStore } from '../store';
@@ -86,7 +86,7 @@ export function Sidebar() {
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
-                  fontFamily: 'Geist, sans-serif',
+                  fontFamily: "'Inter'",
                   transition: 'background 120ms ease-out',
                 }}
                 onMouseEnter={(e) => {
@@ -107,16 +107,16 @@ export function Sidebar() {
                   }}
                 />
 
-                {/* Category name */}
+                {/* Category name — JetBrains Mono */}
                 <span
                   style={{
+                    fontFamily: "'JetBrains Mono'",
                     fontSize: '11px',
                     fontWeight: 600,
-                    color: 'var(--text-secondary)',
-                    letterSpacing: '0.1em',
+                    color: 'rgba(180,180,190,0.85)',
+                    letterSpacing: '0.14em',
                     flex: 1,
                     textAlign: 'left',
-                    fontFamily: 'Geist, sans-serif',
                   }}
                 >
                   {cat.label}
@@ -196,8 +196,7 @@ function NodeRow({
   onDragStart: (e: React.DragEvent, type: string) => void;
   onClick: (type: string) => void;
 }) {
-  const catColor = CATEGORY_COLORS[def.category] ?? def.color;
-  const hoverBg = CATEGORY_ROW_HOVER[def.category] ?? 'rgba(255,255,255,0.04)';
+  const catColor = CATEGORY_COLORS[def.category] ?? '#64748b';
 
   return (
     <div
@@ -216,13 +215,13 @@ function NodeRow({
         transition: 'background 120ms ease-out',
       }}
       onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.background = hoverBg;
+        (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)';
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLElement).style.background = 'transparent';
       }}
     >
-      {/* Icon container — 26×26, category shape, 10% opacity bg */}
+      {/* Icon container — 26×26, 6px radius, 10% opacity bg */}
       <span
         style={{
           flexShrink: 0,
@@ -231,16 +230,18 @@ function NodeRow({
           justifyContent: 'center',
           width: '26px',
           height: '26px',
-          borderRadius: CATEGORY_RADIUS[def.category] ?? '5px',
+          borderRadius: '6px',
           background: `${catColor}1a`,
         }}
       >
         <NodeIcon type={def.type} size={14} color={catColor} />
       </span>
 
+      {/* Label — Inter 13px */}
       <span
         style={{
-          fontSize: '12px',
+          fontFamily: "'Inter'",
+          fontSize: '13px',
           fontWeight: 500,
           color: 'var(--text-primary)',
           overflow: 'hidden',

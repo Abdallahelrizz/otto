@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { useStore } from '../store';
-import { getNodeDef, CATEGORY_COLORS, CATEGORY_RADIUS } from './nodes/nodeConfig';
+import { getNodeDef, CATEGORY_COLORS } from './nodes/nodeConfig';
 import { NodeIcon } from './NodeIcon';
 import { JsonViewer } from './JsonViewer';
 import { ModelSelect } from './ModelSelect';
@@ -9,23 +9,23 @@ import type { NodeExecution } from '../types';
 /* ── Shared style tokens ── */
 const labelStyle: CSSProperties = {
   display: 'block',
-  fontSize: '10px',
+  fontFamily: "'Inter'",
+  fontSize: '12px',
   fontWeight: 500,
   color: 'var(--text-secondary)',
-  letterSpacing: '0.06em',
+  letterSpacing: '0.02em',
   marginBottom: '5px',
-  fontFamily: 'Geist, sans-serif',
 };
 
 const inputStyle: CSSProperties = {
   width: '100%',
-  fontSize: '12px',
+  fontFamily: "'Inter'",
+  fontSize: '13px',
   background: 'var(--bg-input)',
   border: '1px solid var(--border-input)',
   borderRadius: '5px',
   padding: '7px 10px',
   color: 'var(--text-primary)',
-  fontFamily: 'Geist, sans-serif',
   transition: 'border-color 0.15s ease',
 };
 
@@ -58,7 +58,7 @@ const addBtnStyle: CSSProperties = {
   textAlign: 'left' as const,
   padding: '2px 0',
   fontWeight: 500,
-  fontFamily: 'Geist, sans-serif',
+  fontFamily: "'Inter'",
 };
 
 const removeBtnStyle: CSSProperties = {
@@ -388,7 +388,7 @@ function IfConditionPanel({ config, onChange }: PanelProps) {
                   background: 'var(--bg-input)',
                   cursor: 'pointer',
                   color: 'var(--accent)',
-                  fontFamily: 'Geist, sans-serif',
+                  fontFamily: "'Inter'",
                 }}
               >
                 {combinator.toUpperCase()}
@@ -603,7 +603,7 @@ export function ConfigPanel() {
           gap: '9px',
         }}
       >
-        {/* Category-tinted icon — 32×32 with category shape */}
+        {/* Category-tinted icon — 32×32 */}
         <span
           style={{
             display: 'flex',
@@ -611,7 +611,7 @@ export function ConfigPanel() {
             justifyContent: 'center',
             width: '32px',
             height: '32px',
-            borderRadius: CATEGORY_RADIUS[def.category] ?? '6px',
+            borderRadius: '6px',
             background: `${categoryColor}1e`,
             flexShrink: 0,
           }}
@@ -629,7 +629,7 @@ export function ConfigPanel() {
             background: 'transparent',
             border: 'none',
             outline: 'none',
-            fontFamily: 'Geist, sans-serif',
+            fontFamily: "'Inter'",
             letterSpacing: '-0.01em',
             minWidth: 0,
           }}
@@ -668,7 +668,34 @@ export function ConfigPanel() {
 
       {/* Scrollable body */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-        {execution && <ExecutionSection execution={execution} />}
+        {/* EXECUTION section */}
+        {execution && (
+          <>
+            <div style={{
+              fontFamily: "'JetBrains Mono'",
+              fontSize: '11px',
+              fontWeight: 600,
+              letterSpacing: '0.14em',
+              color: 'rgba(170,170,180,0.85)',
+              marginBottom: '12px',
+            }}>
+              EXECUTION
+            </div>
+            <ExecutionSection execution={execution} />
+          </>
+        )}
+
+        {/* CONFIGURATION section */}
+        <div style={{
+          fontFamily: "'JetBrains Mono'",
+          fontSize: '11px',
+          fontWeight: 600,
+          letterSpacing: '0.14em',
+          color: 'rgba(170,170,180,0.85)',
+          marginBottom: '12px',
+        }}>
+          CONFIGURATION
+        </div>
 
         <NodePanel
           nodeType={node.data.nodeType}
