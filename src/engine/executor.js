@@ -84,6 +84,12 @@ async function executeDAG(dag, ctx) {
         value: await getOutput(dep.source),
       })));
 
+      // Build a nodes context so {{ nodes.nodeId.field }} expressions resolve correctly
+      const nodesCtx = {};
+      for (const dep of depResults) {
+        if (dep.value !== SKIP) nodesCtx[dep.source] = dep.value;
+      }
+
       // Collect this node's merged input from dependency outputs.
       // Nodes with no incoming edges are trigger nodes — feed them the trigger payload.
       const { input, rawInputs, skipped } = deps.length === 0
@@ -96,7 +102,7 @@ async function executeDAG(dag, ctx) {
         return SKIP;
       }
 
-      return runNode(node, input, rawInputs, ctx);
+      return runNode(node, input, rawInputs, { ...ctx, nodesCtx });
     })();
 
     nodePromises.set(nodeId, promise);
@@ -151,8 +157,8 @@ function collectInput(depResults) {
 }
 
 async function runNode(node, input, rawInputs, ctx) {
-  const { executionId, workspaceId } = ctx;
-  const expressionCtx = { input };
+  const { executionId, workspaceId, nodesCtx = {} } = ctx;
+  const expressionCtx = { input, nodes: nodesCtx };
 
   const resolvedConfig = resolveConfig(node.config ?? {}, expressionCtx);
 
