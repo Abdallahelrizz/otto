@@ -45,11 +45,12 @@ interface OttoStore {
   savedWorkflowId: string | null;
   workflowList: WorkflowListItem[];
   workflowListLoading: boolean;
+  workflowListHasMore: boolean;
   isSaving: boolean;
   saveWorkflow: () => Promise<void>;
   loadWorkflow: (id: string) => Promise<void>;
   restoreLastWorkflow: () => Promise<void>;
-  fetchWorkflows: () => Promise<void>;
+  fetchWorkflows: (reset?: boolean) => Promise<void>;
   deleteWorkflow: (id: string) => Promise<void>;
   newWorkflow: () => void;
 
@@ -192,6 +193,7 @@ export const useStore = create<OttoStore>((set, get) => ({
   savedWorkflowId: null,
   workflowList: [],
   workflowListLoading: false,
+  workflowListHasMore: false,
   isSaving: false,
 
   saveWorkflow: async () => {
@@ -262,11 +264,13 @@ export const useStore = create<OttoStore>((set, get) => ({
     }
   },
 
-  fetchWorkflows: async () => {
+  fetchWorkflows: async (reset = true) => {
+    const PAGE = 50;
+    const current = reset ? [] : get().workflowList;
     set({ workflowListLoading: true });
     try {
-      const list = await api.listWorkflows();
-      set({ workflowList: list });
+      const list = await api.listWorkflows(PAGE, current.length);
+      set({ workflowList: reset ? list : [...current, ...list], workflowListHasMore: list.length === PAGE });
     } finally {
       set({ workflowListLoading: false });
     }

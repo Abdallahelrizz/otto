@@ -16,6 +16,7 @@ import { startWorker } from './queue/worker.js';
 import { cleanupExpiredSessions, getAuthContext } from './auth/session.js';
 import { checkRateLimit, rateLimitReply } from './middleware/rate-limit.js';
 import { reconcileActiveSchedules } from './schedules/service.js';
+import { seedIntegrations } from './seed/integrations.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(__dirname, '../public');
@@ -121,6 +122,9 @@ fastify.get('/*', async (req, reply) => {
 startWorker();
 await cleanupExpiredSessions().catch((err) => fastify.log.warn({ err }, 'session cleanup failed'));
 await reconcileActiveSchedules().catch((err) => fastify.log.warn({ err }, 'schedule reconcile failed'));
+await seedIntegrations().then(({ inserted, total }) => {
+  if (inserted > 0) fastify.log.info(`Seeded ${inserted}/${total} integrations`);
+}).catch((err) => fastify.log.warn({ err }, 'integration seed failed'));
 
 const host = process.env.HOST ?? '0.0.0.0';
 const port = Number(process.env.PORT ?? 3000);

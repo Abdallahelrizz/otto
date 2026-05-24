@@ -35,13 +35,14 @@ export async function httpRequest({ input, config, credential }) {
     }
   }
 
+  const methodUpper = method.toUpperCase();
   let bodyStr;
-  if (body !== undefined && body !== null) {
-    if (typeof body === 'object') {
+  if (body !== undefined && body !== null && !['GET', 'HEAD'].includes(methodUpper)) {
+    if (typeof body === 'object' && Object.keys(body).length > 0) {
       bodyStr = JSON.stringify(body);
       reqHeaders['Content-Type'] = reqHeaders['Content-Type'] ?? 'application/json';
-    } else {
-      bodyStr = String(body);
+    } else if (typeof body === 'string' && body.trim()) {
+      bodyStr = body;
     }
   }
 
@@ -51,7 +52,7 @@ export async function httpRequest({ input, config, credential }) {
   let response;
   try {
     response = await fetch(url, {
-      method,
+      method: methodUpper,
       headers: reqHeaders,
       body: bodyStr,
       signal: controller.signal,

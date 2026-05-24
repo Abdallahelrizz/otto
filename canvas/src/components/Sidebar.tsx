@@ -10,12 +10,13 @@ import type { WorkflowListItem } from '../types';
 const AMBER = OTTO_AMBER;
 
 const NAV_ITEMS = [
-  { id: 'workflows', label: 'Workflows',    badge: null },
-  { id: 'library',   label: 'Node library', badge: null },
-  { id: 'history',   label: 'History',      badge: null },
-  { id: 'models',    label: 'Models',       badge: 4    },
-  { id: 'memory',    label: 'Memory',       badge: null },
-  { id: 'settings',  label: 'Settings',     badge: null },
+  { id: 'workflows',    label: 'Workflows',    badge: null },
+  { id: 'library',     label: 'Node library', badge: null },
+  { id: 'history',     label: 'History',      badge: null },
+  { id: 'integrations',label: 'Integrations', badge: null },
+  { id: 'models',      label: 'Models',       badge: 4    },
+  { id: 'memory',      label: 'Memory',       badge: null },
+  { id: 'settings',    label: 'Settings',     badge: null },
 ];
 
 function NavIcon({ id }: { id: string }) {
@@ -46,6 +47,11 @@ function NavIcon({ id }: { id: string }) {
         <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
       </svg>
     ),
+    integrations: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+      </svg>
+    ),
     settings: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
@@ -70,6 +76,7 @@ function writeStorage(val: string | null) {
 function WorkflowsTab() {
   const workflowList = useStore((s) => s.workflowList);
   const workflowListLoading = useStore((s) => s.workflowListLoading);
+  const workflowListHasMore = useStore((s) => s.workflowListHasMore);
   const savedWorkflowId = useStore((s) => s.savedWorkflowId);
   const fetchWorkflows = useStore((s) => s.fetchWorkflows);
   const loadWorkflow = useStore((s) => s.loadWorkflow);
@@ -195,6 +202,26 @@ function WorkflowsTab() {
             onDelete={() => deleteWorkflow(wf.id)}
           />
         ))}
+        {workflowListHasMore && (
+          <button
+            onClick={() => fetchWorkflows(false)}
+            disabled={workflowListLoading}
+            style={{
+              width: '100%',
+              padding: '7px',
+              background: 'transparent',
+              border: '1px solid var(--border)',
+              borderRadius: '5px',
+              cursor: workflowListLoading ? 'not-allowed' : 'pointer',
+              fontSize: '12px',
+              color: 'var(--text-secondary)',
+              fontFamily: "'Inter'",
+              marginTop: '4px',
+            }}
+          >
+            {workflowListLoading ? 'Loading…' : 'Load more'}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -351,6 +378,132 @@ function HistoryTab() {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ── Integrations Tab ──────────────────────────────────────────────────────────
+function IntegrationsTab() {
+  const [all, setAll] = useState<import('../types').Integration[]>([]);
+  const [installed, setInstalled] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<Set<string>>(new Set());
+
+  const refresh = async () => {
+    setLoading(true);
+    try {
+      const [allRes, instRes] = await Promise.all([api.listIntegrations(), api.listInstalledIntegrations()]);
+      setAll(allRes);
+      setInstalled(new Set(instRes.map((i) => i.id)));
+    } catch { /* noop */ }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { refresh(); }, []);
+
+  const toggle = async (id: string, isInstalled: boolean) => {
+    setBusy((s) => new Set(s).add(id));
+    try {
+      if (isInstalled) await api.uninstallIntegration(id);
+      else await api.installIntegration(id);
+      setInstalled((s) => { const n = new Set(s); if (isInstalled) n.delete(id); else n.add(id); return n; });
+    } catch { /* noop */ }
+    finally { setBusy((s) => { const n = new Set(s); n.delete(id); return n; }); }
+  };
+
+  const byCategory = all.reduce<Record<string, import('../types').Integration[]>>((acc, i) => {
+    const cat = i.category ?? 'other';
+    (acc[cat] ??= []).push(i);
+    return acc;
+  }, {});
+
+  if (loading) return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>
+      Loading…
+    </div>
+  );
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
+      {Object.entries(byCategory).map(([cat, items]) => (
+        <div key={cat} style={{ marginBottom: '16px' }}>
+          <div style={{
+            fontFamily: "'JetBrains Mono'",
+            fontSize: '10px',
+            fontWeight: 600,
+            color: 'var(--text-muted)',
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            padding: '0 4px 6px',
+          }}>
+            {cat}
+          </div>
+          {items.map((intg) => {
+            const isInstalled = installed.has(intg.id);
+            const isBusy = busy.has(intg.id);
+            return (
+              <div key={intg.id} style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '8px',
+                borderRadius: '6px',
+                marginBottom: '2px',
+                background: isInstalled ? 'var(--bg-node-lift)' : 'transparent',
+                border: isInstalled ? '1px solid var(--border)' : '1px solid transparent',
+              }}>
+                <div style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: '6px',
+                  background: 'var(--bg-input)',
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  color: AMBER,
+                  fontFamily: "'Inter'",
+                }}>
+                  {intg.name[0]}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--text-primary)', fontFamily: "'Inter'", letterSpacing: '-0.005em' }}>
+                    {intg.name}
+                  </div>
+                  {intg.description && (
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {intg.description}
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => toggle(intg.id, isInstalled)}
+                  disabled={isBusy}
+                  style={{
+                    padding: '4px 10px',
+                    background: isInstalled ? 'transparent' : AMBER,
+                    border: isInstalled ? '1px solid var(--border)' : 'none',
+                    borderRadius: '4px',
+                    color: isInstalled ? 'var(--text-secondary)' : '#fff',
+                    fontFamily: "'Inter'",
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: isBusy ? 'not-allowed' : 'pointer',
+                    opacity: isBusy ? 0.5 : 1,
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {isBusy ? '…' : isInstalled ? 'Remove' : 'Install'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
@@ -790,6 +943,7 @@ export function Sidebar() {
 
       {activeSidebarTab === 'workflows' && <WorkflowsTab />}
       {activeSidebarTab === 'history' && <HistoryTab />}
+      {activeSidebarTab === 'integrations' && <IntegrationsTab />}
       {activeSidebarTab === 'settings' && <SettingsTab />}
 
       {/* Placeholder tabs */}

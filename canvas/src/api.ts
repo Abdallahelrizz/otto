@@ -80,8 +80,9 @@ export const api = {
   },
 
   // Workflows
-  async listWorkflows() {
-    const res = await req<{ workflows: WorkflowListItem[] }>('/workflows');
+  async listWorkflows(limit = 50, offset = 0) {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    const res = await req<{ workflows: WorkflowListItem[] }>(`/workflows?${params}`);
     return res.workflows;
   },
 
