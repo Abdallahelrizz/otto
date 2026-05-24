@@ -119,15 +119,13 @@ export function Toolbar() {
         gap: '8px',
       }}
     >
-      {/* Wordmark — Fraunces 500 opsz144 upright */}
+      {/* Wordmark — Inter 700 */}
       <span
         style={{
-          fontFamily: "'Fraunces'",
-          fontSize: '22px',
-          fontWeight: 500,
-          fontStyle: 'normal',
-          fontVariationSettings: '"opsz" 144',
-          letterSpacing: '-0.01em',
+          fontFamily: "'Inter'",
+          fontSize: '16px',
+          fontWeight: 700,
+          letterSpacing: '-0.022em',
           color: 'var(--text-primary)',
           flexShrink: 0,
         }}
@@ -137,7 +135,7 @@ export function Toolbar() {
 
       <span style={{ fontSize: '12px', fontWeight: 500, color: 'rgba(150,150,160,0.5)', fontFamily: "'Inter'", flexShrink: 0 }}>/</span>
 
-      {/* Editable workflow name — Fraunces 400 opsz60 italic */}
+      {/* Editable workflow name — Inter 500 */}
       {editingName ? (
         <input
           autoFocus
@@ -146,12 +144,10 @@ export function Toolbar() {
           onBlur={() => setEditingName(false)}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') setEditingName(false); }}
           style={{
-            fontFamily: "'Fraunces'",
-            fontSize: '18px',
-            fontWeight: 400,
-            fontStyle: 'italic',
-            fontVariationSettings: '"opsz" 60',
-            letterSpacing: '-0.005em',
+            fontFamily: "'Inter'",
+            fontSize: '13px',
+            fontWeight: 500,
+            letterSpacing: '-0.008em',
             color: 'var(--text-primary)',
             background: 'var(--bg-input)',
             border: '1px solid var(--accent)',
@@ -164,12 +160,10 @@ export function Toolbar() {
         <button
           onClick={() => setEditingName(true)}
           style={{
-            fontFamily: "'Fraunces'",
-            fontSize: '18px',
-            fontWeight: 400,
-            fontStyle: 'italic',
-            fontVariationSettings: '"opsz" 60',
-            letterSpacing: '-0.005em',
+            fontFamily: "'Inter'",
+            fontSize: '13px',
+            fontWeight: 500,
+            letterSpacing: '-0.008em',
             color: 'rgba(232,232,238,0.92)',
             background: 'none',
             border: 'none',
