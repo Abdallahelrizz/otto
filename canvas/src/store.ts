@@ -3,7 +3,7 @@ import { applyNodeChanges, applyEdgeChanges, addEdge } from 'reactflow';
 import type { Node, Edge, NodeChange, EdgeChange, Connection } from 'reactflow';
 import { v4 as uuidv4 } from 'uuid';
 import type { NodeExecution, ExecutionPhase } from './types';
-import { getNodeDef, CATEGORY_EDGE_COLOR } from './components/nodes/nodeConfig';
+import { getNodeDef, EDGE_COLOR_DARK, EDGE_COLOR_LIGHT } from './components/nodes/nodeConfig';
 
 interface ContextMenuState {
   x: number;
@@ -70,10 +70,7 @@ export const useStore = create<OttoStore>((set, get) => ({
     set((s) => ({ edges: applyEdgeChanges(changes, s.edges) })),
 
   onConnect: (connection) => {
-    const sourceNode = get().nodes.find((n) => n.id === connection.source);
-    const def = getNodeDef(sourceNode?.data?.nodeType ?? '');
-    const stroke = CATEGORY_EDGE_COLOR[def.category] ?? 'rgba(255,255,255,0.2)';
-
+    const stroke = get().theme === 'dark' ? EDGE_COLOR_DARK : EDGE_COLOR_LIGHT;
     set((s) => ({
       edges: addEdge({ ...connection, type: 'smoothstep', style: { strokeWidth: 1.5, stroke } }, s.edges),
     }));
