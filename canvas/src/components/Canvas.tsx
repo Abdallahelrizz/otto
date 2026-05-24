@@ -168,10 +168,9 @@ export function Canvas() {
           >
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '10px' }}>
               <p style={{
-                fontFamily: "'Fraunces'",
-                fontSize: '36px',
-                fontWeight: 500,
-                fontVariationSettings: '"opsz" 144',
+                fontFamily: "'Inter'",
+                fontSize: '22px',
+                fontWeight: 700,
                 letterSpacing: '-0.018em',
                 lineHeight: 1.1,
                 color: 'rgba(232,232,238,0.92)',
