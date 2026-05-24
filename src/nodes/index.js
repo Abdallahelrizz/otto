@@ -4,15 +4,17 @@ import { llmCall } from './llm-call.js';
 import { ifNode } from './if.js';
 import { mergeNode } from './merge.js';
 import { setNode } from './set.js';
+import { placeholderNode } from './placeholder.js';
 
 const registry = new Map([
-  ['webhook_trigger', webhookTrigger],
-  ['manual_trigger',  webhookTrigger], // manual trigger passes input straight through
-  ['http_request',    httpRequest],
-  ['llm_call',        llmCall],
-  ['if',              ifNode],
-  ['merge',           mergeNode],
-  ['set',             setNode],
+  ['webhook_trigger',  webhookTrigger],
+  ['manual_trigger',   webhookTrigger], // manual trigger passes input straight through
+  ['http_request',     httpRequest],
+  ['llm_call',         llmCall],
+  ['if',               ifNode],
+  ['merge',            mergeNode],
+  ['set',              setNode],
+  ['placeholder',      placeholderNode],
 ]);
 
 export function getNodeHandler(type) {

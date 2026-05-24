@@ -4,6 +4,7 @@ import { webhookRoutes } from './routes/webhooks.js';
 import { executionRoutes } from './routes/executions.js';
 import { workflowRoutes } from './routes/workflows.js';
 import { credentialRoutes } from './routes/credentials.js';
+import { importRoutes } from './routes/import.js';
 import { startWorker } from './queue/worker.js';
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
@@ -29,6 +30,7 @@ await fastify.register(webhookRoutes);
 await fastify.register(executionRoutes);
 await fastify.register(workflowRoutes);
 await fastify.register(credentialRoutes);
+await fastify.register(importRoutes);
 
 // Health check
 fastify.get('/health', async () => ({ status: 'ok', version: '0.1.0' }));
