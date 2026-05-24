@@ -1,13 +1,13 @@
-import { memo, useState, useCallback, Fragment, type CSSProperties } from 'react';
+import { memo, useState, useCallback, Fragment } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
 import { useStore } from '../../store';
-import { getNodeDef, nodeColor, nodeRadius } from './nodeConfig';
+import { getNodeDef, nodeColor, nodeRadius, OTTO_AMBER } from './nodeConfig';
 import { NodeIcon } from '../NodeIcon';
 import type { OttoNodeData } from '../../types';
 
-// ─── helpers ────────────────────────────────────────────────────────────────
-
 function hexA(hex: string, a: number): string {
+  if (hex.startsWith('rgba(')) return hex.replace(/rgba\(([^)]+),\s*[\d.]+\)/, `rgba($1, ${a})`);
+  if (hex.startsWith('rgb('))  return hex.replace(/rgb\(([^)]+)\)/, `rgba($1, ${a})`);
   const h = hex.replace('#', '');
   const r = parseInt(h.slice(0, 2), 16);
   const g = parseInt(h.slice(2, 4), 16);
@@ -15,68 +15,32 @@ function hexA(hex: string, a: number): string {
   return `rgba(${r},${g},${b},${a})`;
 }
 
-function cardHeightFor(inCount: number, outCount: number): number {
-  const vert = Math.max(inCount, outCount);
-  if (vert <= 1) return 72;
-  const computed = 14 + (vert - 1) * 22 + 14 + 24;
-  return Math.max(88, computed);
+const NODE_W = 196;
+const NODE_H_MIN = 58;
+
+function cardHeight(inCount: number, outCount: number): number {
+  const max = Math.max(inCount, outCount);
+  if (max <= 1) return NODE_H_MIN;
+  return NODE_H_MIN + (max - 1) * 24;
 }
-
-// ─── node label style (JetBrains Mono, 2-line clamp) ────────────────────────
-
-const nodeLabelStyle: CSSProperties = {
-  fontFamily: "'JetBrains Mono'",
-  fontSize: '11px',
-  fontWeight: 500,
-  color: 'rgba(232,232,238,0.92)',
-  textAlign: 'center',
-  lineHeight: 1.18,
-  letterSpacing: '-0.005em',
-  overflow: 'hidden',
-  display: '-webkit-box',
-  WebkitLineClamp: 2,
-  WebkitBoxOrient: 'vertical',
-  wordBreak: 'break-word',
-  maxWidth: '100%',
-};
-
-// ─── handle label style ──────────────────────────────────────────────────────
-
-const handleLabelBase: CSSProperties = {
-  position: 'absolute',
-  fontFamily: "'JetBrains Mono'",
-  fontSize: '11px',
-  fontWeight: 500,
-  letterSpacing: '0.02em',
-  lineHeight: 1,
-  pointerEvents: 'none',
-  whiteSpace: 'nowrap',
-  zIndex: 3,
-};
-
-// ─── small running spinner ────────────────────────────────────────────────────
 
 function RunningSpinner({ color }: { color: string }) {
   return (
-    <div
-      style={{
-        position: 'absolute',
-        top: 4,
-        right: 4,
-        width: 8,
-        height: 8,
-        borderRadius: '50%',
-        border: `1.5px solid ${hexA(color, 0.25)}`,
-        borderTopColor: color,
-        animation: 'otto-spin 0.7s linear infinite',
-        zIndex: 4,
-        flexShrink: 0,
-      }}
-    />
+    <span style={{
+      position: 'absolute',
+      top: 6,
+      right: 6,
+      width: 7,
+      height: 7,
+      borderRadius: '50%',
+      border: `1.5px solid ${hexA(color, 0.25)}`,
+      borderTopColor: color,
+      animation: 'otto-spin 0.7s linear infinite',
+      flexShrink: 0,
+      display: 'block',
+    }} />
   );
 }
-
-// ─── OttoNode component ──────────────────────────────────────────────────────
 
 export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) => {
   const execution = useStore((s) => s.nodeExecutions[id]);
@@ -87,32 +51,27 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
 
   const status = execution?.status ?? 'idle';
   const cardColor = nodeColor(def, theme);
+  const isRunning = status === 'running';
+  const isSuccess = status === 'success';
+  const isError   = status === 'error';
 
-  const isRunning  = status === 'running';
-  const isSuccess  = status === 'success';
-  const isError    = status === 'error';
-
-  // Card dimensions
   const inCount  = def.handles.in.length;
   const outCount = def.handles.out.length;
-  const cardWidth  = def.complex ? 100 : 72;
-  const cardHeight = def.complex ? cardHeightFor(inCount, outCount) : 72;
+  const h = cardHeight(inCount, outCount);
 
-  // Border color per state — neutral hairline, colored only on selection/execution
   const borderColor =
-    isRunning ? '#3B82F6' :
+    isRunning ? 'var(--node-running)' :
     isSuccess ? 'var(--node-success)' :
     isError   ? 'var(--node-error)' :
     selected  ? cardColor :
-    hovered   ? (theme === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(15,15,10,0.20)') :
-                (theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,15,10,0.10)');
+    hovered   ? 'var(--border-input)' :
+                'var(--border-node)';
 
-  // Box-shadow per state
   const boxShadow =
-    selected  ? `0 0 0 3px ${hexA(cardColor, 0.18)}` :
+    selected  ? `0 0 0 3px ${hexA(cardColor, 0.18)}, var(--shadow)` :
     isSuccess ? '0 0 0 2px rgba(34,197,94,0.14)' :
     isError   ? '0 0 0 2px rgba(239,68,68,0.14)' :
-    'none';
+    'var(--shadow)';
 
   const executionClass = isRunning ? ' otto-node-running' : isSuccess ? ' otto-node-success' : isError ? ' otto-node-error' : '';
 
@@ -125,162 +84,179 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
     [id, setContextMenu]
   );
 
-  // Shared handle dot style
-  const dotStyle = (color: string): CSSProperties => ({
+  const dotStyle = (color: string): React.CSSProperties => ({
     width: 8,
     height: 8,
     borderRadius: '50%',
     background: color,
-    boxShadow: `0 0 0 2px #0a0a0c`,
+    boxShadow: '0 0 0 2px var(--bg-canvas)',
     border: 'none',
     zIndex: 2,
     cursor: 'crosshair',
   });
 
-  const extras = def.handles.extras ?? [];
+  const tagText = def.tag || def.slug || '';
+  const tagColor = tagText === 'TRIGGER' ? OTTO_AMBER : 'var(--text-muted)';
+  const tagBg = tagText === 'TRIGGER' ? hexA(OTTO_AMBER, 0.12) : 'rgba(120,115,110,0.08)';
+  const tagBorder = tagText === 'TRIGGER' ? hexA(OTTO_AMBER, 0.22) : 'rgba(120,115,110,0.16)';
+
+  const subtitleText = def.subtitle ? def.subtitle(data.config ?? {}) : '';
 
   return (
     <div
-      style={{
-        position: 'relative',
-        width: cardWidth,
-        height: cardHeight,
-        overflow: 'visible',
-        cursor: 'pointer',
-        userSelect: 'none',
-      }}
+      style={{ position: 'relative', width: NODE_W, height: h, overflow: 'visible', cursor: 'pointer', userSelect: 'none' }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onContextMenu={onContextMenu}
     >
-      {/* ── Card body ── */}
+      {/* Card body */}
       <div
         className={`otto-node-card${executionClass}`}
         style={{
           position: 'absolute',
           inset: 0,
-          background: '#101015',
-          border: `1.5px solid ${borderColor}`,
+          background: 'var(--bg-node-card)',
+          border: `1px solid ${borderColor}`,
           borderRadius: '6px',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          paddingTop: '10px',
-          paddingBottom: '8px',
-          paddingLeft: '4px',
-          paddingRight: '4px',
-          transition: 'border-color 130ms ease-out, box-shadow 130ms ease-out',
-          boxSizing: 'border-box',
           boxShadow,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          padding: '9px 12px',
+          boxSizing: 'border-box',
+          transition: 'border-color 130ms ease-out, box-shadow 130ms ease-out',
+          overflow: 'hidden',
         }}
       >
-        {/* Running spinner — top-right corner */}
-        {isRunning && <RunningSpinner color="#3b82f6" />}
+        {isRunning && <RunningSpinner color="var(--node-running)" />}
 
-        {/* Icon container — shape from category, color from tint */}
-        <div style={{
-          width: 32, height: 32,
+        {/* Tag — top right */}
+        {tagText && (
+          <span style={{
+            position: 'absolute',
+            top: 7,
+            right: 10,
+            fontFamily: "'JetBrains Mono'",
+            fontSize: '9.5px',
+            fontWeight: 700,
+            letterSpacing: '0.10em',
+            color: tagColor,
+            background: tagBg,
+            border: `1px solid ${tagBorder}`,
+            padding: '2px 5px',
+            borderRadius: '3px',
+            lineHeight: 1.1,
+            whiteSpace: 'nowrap',
+            textTransform: 'uppercase',
+          }}>
+            {tagText}
+          </span>
+        )}
+
+        {/* Icon container */}
+        <span style={{
+          width: 26,
+          height: 26,
           borderRadius: nodeRadius(def),
-          background: hexA(cardColor, 0.14),
-          border: `1px solid ${hexA(cardColor, 0.28)}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0,
-          marginTop: 4,
-        }}>
-          <NodeIcon type={data.nodeType} size={18} color={cardColor} />
-        </div>
-
-        {/* Label */}
-        <div style={{
-          flex: 1,
+          background: hexA(cardColor, theme === 'dark' ? 0.14 : 0.11),
+          border: `1px solid ${hexA(cardColor, theme === 'dark' ? 0.22 : 0.18)}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '4px 4px 0',
-          width: '100%',
+          flexShrink: 0,
         }}>
-          <span style={nodeLabelStyle}>{data.label}</span>
+          <NodeIcon type={data.nodeType} size={14} color={cardColor} />
+        </span>
+
+        {/* Label + subtitle */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '1px' }}>
+          <span style={{
+            fontSize: '12.5px',
+            fontWeight: 600,
+            color: 'var(--text-primary)',
+            letterSpacing: '-0.012em',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            maxWidth: tagText ? 'calc(100% - 52px)' : '100%',
+          }}>
+            {data.label}
+          </span>
+          {subtitleText && (
+            <span style={{
+              fontFamily: "'JetBrains Mono'",
+              fontSize: '10.5px',
+              fontWeight: 400,
+              color: 'var(--text-muted)',
+              letterSpacing: '0.01em',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}>
+              {subtitleText}
+            </span>
+          )}
         </div>
       </div>
 
-      {/* ── Input handles + labels ── */}
-      {def.handles.in.map((h, i) => {
-        const y = ((i + 1) / (inCount + 1)) * cardHeight;
-        const color = h.color ?? cardColor;
+      {/* Input handles */}
+      {def.handles.in.map((h_, i) => {
+        const y = ((i + 1) / (inCount + 1)) * h;
+        const color = h_.color ?? cardColor;
         return (
-          <Fragment key={`in-${h.id}`}>
+          <Fragment key={`in-${h_.id}`}>
             <Handle
               type="target"
               position={Position.Left}
-              id={h.id}
+              id={h_.id}
               style={{ ...dotStyle(color), position: 'absolute', left: -4, top: y, transform: 'translateY(-50%)' }}
             />
-            {h.label && (
+            {h_.label && (
               <span style={{
-                ...handleLabelBase,
-                right: `calc(100% + 12px)`,
+                position: 'absolute',
+                right: `calc(100% + 10px)`,
                 top: y,
                 transform: 'translateY(-50%)',
-                textAlign: 'right',
-                color: hexA(color, 0.95),
+                fontFamily: "'JetBrains Mono'",
+                fontSize: '10px',
+                fontWeight: 500,
+                color: hexA(color, 0.85),
+                pointerEvents: 'none',
+                whiteSpace: 'nowrap',
               }}>
-                {h.label}
+                {h_.label}
               </span>
             )}
           </Fragment>
         );
       })}
 
-      {/* ── Output handles + labels ── */}
-      {def.handles.out.map((h, i) => {
-        const y = ((i + 1) / (outCount + 1)) * cardHeight;
-        const color = h.color ?? cardColor;
+      {/* Output handles */}
+      {def.handles.out.map((h_, i) => {
+        const y = ((i + 1) / (outCount + 1)) * h;
+        const color = h_.color ?? cardColor;
         return (
-          <Fragment key={`out-${h.id}`}>
+          <Fragment key={`out-${h_.id}`}>
             <Handle
               type="source"
               position={Position.Right}
-              id={h.id}
+              id={h_.id}
               style={{ ...dotStyle(color), position: 'absolute', right: -4, top: y, transform: 'translateY(-50%)' }}
             />
-            {h.label && (
+            {h_.label && (
               <span style={{
-                ...handleLabelBase,
-                left: `calc(100% + 12px)`,
+                position: 'absolute',
+                left: `calc(100% + 10px)`,
                 top: y,
                 transform: 'translateY(-50%)',
-                color: hexA(color, 0.95),
+                fontFamily: "'JetBrains Mono'",
+                fontSize: '10px',
+                fontWeight: 500,
+                color: hexA(color, 0.85),
+                pointerEvents: 'none',
+                whiteSpace: 'nowrap',
               }}>
-                {h.label}
-              </span>
-            )}
-          </Fragment>
-        );
-      })}
-
-      {/* ── Bottom (extras) handles + labels ── */}
-      {extras.map((h, i) => {
-        const x = ((i + 1) / (extras.length + 1)) * cardWidth;
-        const color = h.color ?? cardColor;
-        return (
-          <Fragment key={`ex-${h.id}`}>
-            <Handle
-              type="target"
-              position={Position.Bottom}
-              id={h.id}
-              style={{ ...dotStyle(color), position: 'absolute', left: x, bottom: -4, transform: 'translateX(-50%)' }}
-            />
-            {h.label && (
-              <span style={{
-                ...handleLabelBase,
-                top: `calc(100% + 12px)`,
-                left: x,
-                transform: 'translateX(-50%)',
-                color: hexA(color, 0.90),
-                textAlign: 'center',
-              }}>
-                {h.label}
+                {h_.label}
               </span>
             )}
           </Fragment>

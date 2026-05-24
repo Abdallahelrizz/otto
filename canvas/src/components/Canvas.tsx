@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -12,9 +12,57 @@ import 'reactflow/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
 import { useStore } from '../store';
 import { OttoNode } from './nodes/OttoNode';
+import { AgentNode } from './nodes/AgentNode';
 import { NODE_TYPE_MAP, getNodeDef, nodeColor } from './nodes/nodeConfig';
 
-const nodeTypes = { ottoNode: OttoNode };
+const nodeTypes = {
+  ottoNode: OttoNode,
+  agentNode: AgentNode,
+};
+
+function CanvasTabs() {
+  const [active, setActive] = useState(0);
+  const tabs = ['Editor', 'Executions', 'Test'];
+
+  return (
+    <div style={{
+      position: 'absolute',
+      top: 16,
+      left: '50%',
+      transform: 'translateX(-50%)',
+      display: 'flex',
+      background: 'var(--bg-panel)',
+      border: '1px solid var(--border)',
+      borderRadius: '7px',
+      padding: '3px',
+      boxShadow: 'var(--shadow)',
+      zIndex: 10,
+      pointerEvents: 'all',
+    }}>
+      {tabs.map((label, i) => (
+        <button
+          key={label}
+          onClick={() => setActive(i)}
+          style={{
+            padding: '5px 13px',
+            fontSize: '12px',
+            fontWeight: active === i ? 600 : 500,
+            color: active === i ? 'var(--text-primary)' : 'var(--text-secondary)',
+            background: active === i ? 'var(--bg-node-lift)' : 'transparent',
+            border: 'none',
+            borderRadius: '4px',
+            letterSpacing: '-0.005em',
+            cursor: 'pointer',
+            fontFamily: "'Inter'",
+            transition: 'background 100ms ease, color 100ms ease',
+          }}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function Canvas() {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -34,15 +82,14 @@ export function Canvas() {
   const deleteNode = useStore((s) => s.deleteNode);
   const setContextMenu = useStore((s) => s.setContextMenu);
 
-  const dotColor = theme === 'dark' ? '#ffffff' : '#000000';
-  const minimapMask = theme === 'dark' ? 'rgba(10,10,12,0.75)' : 'rgba(244,244,245,0.75)';
+  const dotColor = theme === 'dark' ? 'rgba(255,255,255,0.035)' : 'rgba(15,15,10,0.06)';
+  const minimapMask = theme === 'dark' ? 'rgba(10,9,8,0.75)' : 'rgba(244,243,240,0.75)';
 
   const displayEdges = useMemo(
     () => executionPhase === 'running' ? edges.map((e) => ({ ...e, animated: true })) : edges,
     [edges, executionPhase]
   );
 
-  // Spring release: briefly add CSS class that triggers scale bounce animation
   const onNodeDragStop: NodeMouseHandler = useCallback((_e, node) => {
     const el = document.querySelector(`.react-flow__node[data-id="${node.id}"]`);
     if (!el) return;
@@ -51,7 +98,6 @@ export function Canvas() {
       el.classList.remove('node-spring-release');
       el.removeEventListener('animationend', onEnd);
     };
-    // Fallback removal after 500ms in case animationend doesn't fire
     const fallback = setTimeout(() => el.classList.remove('node-spring-release'), 500);
     el.addEventListener('animationend', () => {
       clearTimeout(fallback);
@@ -62,7 +108,6 @@ export function Canvas() {
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       const meta = e.metaKey || e.ctrlKey;
-      // No animation on keyboard actions per Emil's rules
       if (meta && e.key === 'd') { e.preventDefault(); if (selectedNodeId) duplicateNode(selectedNodeId); }
       if (meta && e.shiftKey && e.key === 'f') { e.preventDefault(); fitView({ padding: 0.15 }); }
       if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -86,12 +131,12 @@ export function Canvas() {
       const def = getNodeDef(nodeType);
       setNodes([...nodes, {
         id: uuidv4(),
-        type: 'ottoNode',
+        type: nodeType === 'ai_agent' ? 'agentNode' : 'ottoNode',
         position,
         data: { label: def.label, nodeType: def.type, config: { ...def.defaultConfig } },
       }]);
     },
-    [nodes, screenToFlowPosition]
+    [nodes, screenToFlowPosition, setNodes]
   );
 
   const onNodeClick: NodeMouseHandler = useCallback(
@@ -144,12 +189,18 @@ export function Canvas() {
         proOptions={{ hideAttribution: true }}
         defaultEdgeOptions={{
           animated: false,
-          type: 'smoothstep',
-          style: { strokeWidth: 1.5, stroke: 'rgba(255,255,255,0.2)' },
+          type: 'default',
+          style: { strokeWidth: 1.4, stroke: 'var(--edge-idle)' },
         }}
         style={{ background: 'var(--bg-canvas)' }}
       >
-        <Background variant={BackgroundVariant.Dots} color={dotColor} gap={24} size={1.5} style={{ opacity: 0.15 }} />
+        <Background
+          variant={BackgroundVariant.Dots}
+          color={dotColor}
+          gap={18}
+          size={1}
+          style={{ opacity: 0.20 }}
+        />
         <Controls position="bottom-left" showInteractive={false} />
         <MiniMap
           nodeColor={(n) => nodeColor(getNodeDef(n.data?.nodeType ?? ''), theme) + '90'}
@@ -159,13 +210,11 @@ export function Canvas() {
         />
 
         {nodes.length === 0 && (
-          <div
-            style={{
-              position: 'absolute', inset: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              pointerEvents: 'none', userSelect: 'none',
-            }}
-          >
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            pointerEvents: 'none', userSelect: 'none',
+          }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '10px' }}>
               <p style={{
                 fontFamily: "'Inter'",
@@ -173,8 +222,9 @@ export function Canvas() {
                 fontWeight: 700,
                 letterSpacing: '-0.018em',
                 lineHeight: 1.1,
-                color: 'rgba(232,232,238,0.92)',
+                color: 'var(--text-primary)',
                 margin: 0,
+                opacity: 0.7,
               }}>
                 Start with a trigger.
               </p>
@@ -182,17 +232,20 @@ export function Canvas() {
                 fontFamily: "'Inter'",
                 fontSize: '14px',
                 fontWeight: 400,
-                color: 'rgba(170,170,180,0.85)',
+                color: 'var(--text-secondary)',
                 letterSpacing: '-0.005em',
                 lineHeight: 1.45,
                 margin: 0,
               }}>
-                Drop a Webhook, Scheduler, or Manual trigger from the sidebar.
+                Drop a Webhook or Manual trigger from the library.
               </p>
             </div>
           </div>
         )}
       </ReactFlow>
+
+      {/* Floating canvas tabs */}
+      <CanvasTabs />
     </div>
   );
 }

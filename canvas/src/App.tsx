@@ -5,6 +5,7 @@ import { Sidebar } from './components/Sidebar';
 import { Canvas } from './components/Canvas';
 import { ConfigPanel } from './components/ConfigPanel';
 import { ContextMenu } from './components/ContextMenu';
+import { BottomPanels } from './components/panels/BottomPanels';
 import { useStore } from './store';
 
 export function App() {
@@ -15,7 +16,6 @@ export function App() {
 
   const panelOpen = !!selectedNodeId;
 
-  // Ctrl+B sidebar toggle — no animation (keyboard action, used frequently)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
@@ -35,11 +35,11 @@ export function App() {
       >
         <Toolbar />
 
-        <div className="flex flex-1 overflow-hidden" style={{ position: 'relative' }}>
-          {/* Sidebar with clip-path slide animation */}
+        <div className="flex flex-1 overflow-hidden" style={{ position: 'relative', minHeight: 0 }}>
+          {/* Sidebar — 216px, slides in/out */}
           <div
             className="sidebar-wrap"
-            style={{ width: sidebarOpen ? '220px' : '0px' }}
+            style={{ width: sidebarOpen ? '216px' : '0px' }}
           >
             <Sidebar />
           </div>
@@ -49,7 +49,7 @@ export function App() {
             className="sidebar-chevron"
             onClick={toggleSidebar}
             title={sidebarOpen ? 'Hide sidebar (Ctrl+B)' : 'Show sidebar (Ctrl+B)'}
-            style={{ left: sidebarOpen ? '220px' : '0px' }}
+            style={{ left: sidebarOpen ? '216px' : '0px' }}
           >
             <svg
               width="8"
@@ -65,7 +65,11 @@ export function App() {
             </svg>
           </button>
 
-          <Canvas />
+          {/* Main column: Canvas + BottomPanels */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+            <Canvas />
+            <BottomPanels />
+          </div>
 
           {/* Config panel — 320px, slides in 200ms ease-out via CSS */}
           <div

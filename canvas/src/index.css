@@ -22,9 +22,6 @@ body, * {
   font-family: 'Inter';
 }
 code, pre, textarea.mono, .mono {
-  font-family: 'Geist Mono';
-}
-.font-jbm {
   font-family: 'JetBrains Mono';
 }
 
@@ -39,67 +36,88 @@ code, pre, textarea.mono, .mono {
 ───────────────────────────────────────── */
 :root,
 .theme-dark {
-  --bg-canvas:    #0a0a0c;
-  --bg-sidebar:   #111113;
-  --bg-toolbar:   #111113;
-  --bg-node:      #101015;
-  --bg-node-card: #101015;
-  --bg-panel:     #111113;
-  --bg-input:     #18181b;
-  --bg-hover:     #27272a;
+  --bg-canvas:    #0A0908;
+  --bg-sidebar:   #0E0D0C;
+  --bg-toolbar:   #100F0E;
+  --bg-node:      #16151A;
+  --bg-node-card: #16151A;
+  --bg-node-lift: #1B1A1F;
+  --bg-panel:     #100F0E;
+  --bg-input:     #0F0E0D;
+  --bg-hover:     rgba(255,255,255,0.04);
 
-  --border:       #27272a;
-  --border-node:  #27272a;
-  --border-input: #3f3f46;
+  --border:       rgba(255,255,255,0.07);
+  --border-node:  rgba(255,255,255,0.07);
+  --border-input: rgba(255,255,255,0.13);
 
-  --text-primary:   rgba(232,232,238,0.92);
-  --text-secondary: rgba(170,170,180,0.85);
-  --text-muted:     rgba(120,120,135,0.7);
+  --text-primary:   rgba(247,245,242,0.96);
+  --text-secondary: rgba(170,165,160,0.72);
+  --text-muted:     rgba(120,115,110,0.55);
 
-  --accent:       #3b82f6;
-  --accent-hover: #2563eb;
-  --accent-dim:   rgba(59,130,246,0.12);
+  --accent:       #FF6F1A;
+  --accent-hover: #FF8A47;
+  --accent-dim:   rgba(255,111,26,0.12);
 
-  --node-success: #22c55e;
-  --node-error:   #ef4444;
-  --node-running: #3b82f6;
-  --node-pending: #52525b;
+  --brand-soft:   rgba(255,111,26,0.13);
+  --brand-ring:   rgba(255,111,26,0.34);
 
-  --dot-color:    #27272a;
-  --edge-idle:    #3f3f46;
+  --live:         #22C55E;
+  --live-soft:    rgba(34,197,94,0.15);
+
+  --node-success: #22C55E;
+  --node-error:   #EF4444;
+  --node-running: #22C55E;
+  --node-pending: rgba(120,115,110,0.55);
+
+  --dot-color:    rgba(255,255,255,0.035);
+  --edge-idle:    rgba(255,255,255,0.13);
+
+  --shadow:       none;
+  --shadow-main:  0 16px 48px rgba(0,0,0,0.55);
 }
 
 /* ─────────────────────────────────────────
    Color tokens — Light
 ───────────────────────────────────────── */
 .theme-light {
-  --bg-canvas:    #f4f4f5;
-  --bg-sidebar:   #ffffff;
-  --bg-toolbar:   #ffffff;
-  --bg-node:      #ffffff;
-  --bg-panel:     #ffffff;
-  --bg-input:     #f4f4f5;
-  --bg-hover:     #f4f4f5;
+  --bg-canvas:    #FAFAF8;
+  --bg-sidebar:   #F4F3F0;
+  --bg-toolbar:   #FFFFFF;
+  --bg-node:      #FFFFFF;
+  --bg-node-card: #FFFFFF;
+  --bg-node-lift: #FAFAF8;
+  --bg-panel:     #FFFFFF;
+  --bg-input:     #FAFAF8;
+  --bg-hover:     rgba(15,15,10,0.04);
 
-  --border:       #e4e4e7;
-  --border-node:  #e4e4e7;
-  --border-input: #d4d4d8;
+  --border:       rgba(15,15,10,0.08);
+  --border-node:  rgba(15,15,10,0.08);
+  --border-input: rgba(15,15,10,0.14);
 
-  --text-primary:   #09090b;
-  --text-secondary: #71717a;
-  --text-muted:     #d4d4d8;
+  --text-primary:   #0A0908;
+  --text-secondary: #525050;
+  --text-muted:     #A3A09C;
 
-  --accent:       #3b82f6;
-  --accent-hover: #2563eb;
-  --accent-dim:   rgba(59,130,246,0.10);
+  --accent:       #FF6F1A;
+  --accent-hover: #FF8A47;
+  --accent-dim:   rgba(255,111,26,0.10);
 
-  --node-success: #16a34a;
-  --node-error:   #dc2626;
-  --node-running: #3b82f6;
-  --node-pending: #a1a1aa;
+  --brand-soft:   rgba(255,111,26,0.08);
+  --brand-ring:   rgba(255,111,26,0.28);
 
-  --dot-color:    #d4d4d8;
-  --edge-idle:    #a1a1aa;
+  --live:         #16A34A;
+  --live-soft:    rgba(22,163,74,0.10);
+
+  --node-success: #16A34A;
+  --node-error:   #DC2626;
+  --node-running: #16A34A;
+  --node-pending: #A3A09C;
+
+  --dot-color:    rgba(15,15,10,0.06);
+  --edge-idle:    rgba(15,15,10,0.14);
+
+  --shadow:       0 1px 2px rgba(15,15,10,0.04), 0 3px 12px rgba(15,15,10,0.05);
+  --shadow-main:  0 4px 12px rgba(15,15,10,0.06), 0 18px 48px rgba(15,15,10,0.10);
 }
 
 /* ── React Flow: handles — always visible ── */
@@ -113,21 +131,21 @@ code, pre, textarea.mono, .mono {
 /* ── React Flow: edges ── */
 .react-flow__edge-path {
   stroke: var(--edge-idle);
-  stroke-width: 1.5;
+  stroke-width: 1.4;
 }
 .react-flow__edge.selected .react-flow__edge-path,
 .react-flow__edge:hover .react-flow__edge-path {
-  filter: brightness(1.5) drop-shadow(0 0 3px rgba(255,255,255,0.15));
+  filter: brightness(1.5) drop-shadow(0 0 3px rgba(255,255,255,0.10));
   stroke-width: 2;
 }
 
 /* ── React Flow: controls ── */
 .react-flow__controls {
-  background: var(--bg-sidebar) !important;
+  background: var(--bg-panel) !important;
   border: 1px solid var(--border) !important;
-  border-radius: 8px !important;
+  border-radius: 6px !important;
   overflow: hidden;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.4) !important;
+  box-shadow: var(--shadow) !important;
 }
 .react-flow__controls-button {
   background: transparent !important;
@@ -144,36 +162,41 @@ code, pre, textarea.mono, .mono {
 
 /* ── React Flow: minimap ── */
 .react-flow__minimap {
-  background: var(--bg-sidebar) !important;
+  background: var(--bg-panel) !important;
   border: 1px solid var(--border) !important;
-  border-radius: 8px !important;
+  border-radius: 6px !important;
   overflow: hidden;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.4) !important;
+  box-shadow: var(--shadow) !important;
 }
 
 /* ── Node execution state — border pulse animations ── */
 @keyframes node-running-pulse {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
   }
   50% {
-    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.18);
+    box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.16);
   }
 }
 
+@keyframes otto-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 .otto-node-running {
-  border-color: #3b82f6 !important;
+  border-color: var(--node-running) !important;
   animation: node-running-pulse 1.8s ease-in-out infinite;
 }
 
 .otto-node-success {
-  border-color: #22c55e !important;
+  border-color: var(--node-success) !important;
   box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.14) !important;
   transition: border-color 0.1s ease, box-shadow 0.1s ease !important;
 }
 
 .otto-node-error {
-  border-color: #ef4444 !important;
+  border-color: var(--node-error) !important;
   box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.14) !important;
   transition: border-color 0.1s ease, box-shadow 0.1s ease !important;
 }

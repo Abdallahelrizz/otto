@@ -1,7 +1,6 @@
 import type { CSSProperties } from 'react';
 import { useStore } from '../store';
 import { getNodeDef, CATEGORY_COLORS } from './nodes/nodeConfig';
-import { NodeIcon } from './NodeIcon';
 import { JsonViewer } from './JsonViewer';
 import { ModelSelect } from './ModelSelect';
 import type { NodeExecution } from '../types';
@@ -574,8 +573,6 @@ export function ConfigPanel() {
 
   const def = getNodeDef(node.data.nodeType);
   const config = (node.data.config ?? {}) as Record<string, unknown>;
-  const categoryColor = CATEGORY_COLORS[def.category] ?? def.color;
-
   function setField(key: string, value: unknown) {
     updateNodeConfig(node!.id, { ...config, [key]: value });
   }
@@ -595,7 +592,8 @@ export function ConfigPanel() {
       {/* Header */}
       <div
         style={{
-          padding: '11px 12px',
+          height: '54px',
+          padding: '0 16px',
           borderBottom: '1px solid var(--border)',
           flexShrink: 0,
           display: 'flex',
@@ -603,53 +601,52 @@ export function ConfigPanel() {
           gap: '9px',
         }}
       >
-        {/* Category-tinted icon — 32×32 */}
-        <span
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '32px',
-            height: '32px',
-            borderRadius: '6px',
-            background: `${categoryColor}1e`,
-            flexShrink: 0,
-          }}
-        >
-          <NodeIcon type={node.data.nodeType} size={16} color={categoryColor} />
+        <span style={{
+          fontSize: '13.5px',
+          fontWeight: 700,
+          color: 'var(--text-primary)',
+          letterSpacing: '-0.012em',
+          fontFamily: "'Inter'",
+          flexShrink: 0,
+        }}>
+          Properties
         </span>
 
-        {/* Editable node name */}
-        <input
-          style={{
-            flex: 1,
-            fontSize: '13px',
-            fontWeight: 600,
-            color: 'var(--text-primary)',
-            background: 'transparent',
-            border: 'none',
-            outline: 'none',
-            fontFamily: "'Inter'",
-            letterSpacing: '-0.01em',
-            minWidth: 0,
-          }}
-          value={node.data.label as string}
-          onChange={(e) => updateNodeLabel(node.id, e.target.value)}
-          placeholder="Node name"
-        />
+        {/* Node ID pill */}
+        <span style={{
+          fontFamily: "'JetBrains Mono'",
+          fontSize: '9.5px',
+          fontWeight: 600,
+          color: 'var(--text-muted)',
+          letterSpacing: '0.04em',
+          padding: '2px 6px',
+          background: 'var(--bg-hover)',
+          border: '1px solid var(--border)',
+          borderRadius: '3px',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          maxWidth: '120px',
+        }}>
+          {node.data.nodeType}_{node.id.slice(0, 6)}
+        </span>
+
+        <div style={{ flex: 1 }} />
 
         {/* Close */}
         <button
           onClick={() => selectNode(null)}
           style={{
-            width: '22px', height: '22px',
+            width: '24px',
+            height: '24px',
             borderRadius: '4px',
             border: 'none',
             background: 'transparent',
             cursor: 'pointer',
-            fontSize: '16px',
             color: 'var(--text-secondary)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             flexShrink: 0,
             transition: 'background 0.1s ease, color 0.1s ease',
           }}
@@ -662,7 +659,9 @@ export function ConfigPanel() {
             (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)';
           }}
         >
-          ×
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
         </button>
       </div>
 

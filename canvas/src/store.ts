@@ -33,13 +33,22 @@ interface OttoStore {
   duplicateNode: (id: string) => void;
   deleteNode: (id: string) => void;
 
-  // Workflow name
+  // Workflow name + meta
   workflowName: string;
   setWorkflowName: (name: string) => void;
+  workflowVersion: string;
+  workflowActive: boolean;
+  setWorkflowActive: (active: boolean) => void;
 
   // Sidebar
   sidebarOpen: boolean;
   toggleSidebar: () => void;
+  activeSidebarTab: string;
+  setActiveSidebarTab: (tab: string) => void;
+
+  // Bottom panels
+  bottomPanelsOpen: boolean;
+  setBottomPanelsOpen: (open: boolean) => void;
 
   // Context menu
   contextMenu: ContextMenuState | null;
@@ -72,7 +81,7 @@ export const useStore = create<OttoStore>((set, get) => ({
   onConnect: (connection) => {
     const stroke = get().theme === 'dark' ? EDGE_COLOR_DARK : EDGE_COLOR_LIGHT;
     set((s) => ({
-      edges: addEdge({ ...connection, type: 'smoothstep', style: { strokeWidth: 1.5, stroke } }, s.edges),
+      edges: addEdge({ ...connection, type: 'default', style: { strokeWidth: 1.4, stroke } }, s.edges),
     }));
   },
 
@@ -118,9 +127,17 @@ export const useStore = create<OttoStore>((set, get) => ({
 
   workflowName: 'Untitled Workflow',
   setWorkflowName: (name) => set({ workflowName: name }),
+  workflowVersion: 'v1.0.0',
+  workflowActive: false,
+  setWorkflowActive: (active) => set({ workflowActive: active }),
 
   sidebarOpen: true,
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+  activeSidebarTab: 'library',
+  setActiveSidebarTab: (tab) => set({ activeSidebarTab: tab }),
+
+  bottomPanelsOpen: true,
+  setBottomPanelsOpen: (open) => set({ bottomPanelsOpen: open }),
 
   contextMenu: null,
   setContextMenu: (menu) => set({ contextMenu: menu }),

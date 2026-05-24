@@ -5,6 +5,12 @@ export interface HandleDef {
   side?: 'left' | 'right' | 'bottom';
 }
 
+export interface AgentTool {
+  id: string;
+  name: string;
+  type: string;
+}
+
 export interface NodeTypeDef {
   type: string;
   category: 'triggers' | 'core' | 'ai' | 'data';
@@ -15,6 +21,8 @@ export interface NodeTypeDef {
   serviceColor?: string;
   complex?: boolean;
   slug?: string;
+  tag?: string;
+  subtitle?: (config: Record<string, unknown>) => string;
   handles: {
     in: HandleDef[];
     out: HandleDef[];
@@ -119,7 +127,9 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     description: 'Receive HTTP requests',
     color: OTTO_AMBER,
     tint: 'amber',
-    slug: 'WEBHK',
+    slug: 'TRIGGER',
+    tag: 'TRIGGER',
+    subtitle: (c) => `POST /${(c.path as string) || 'my-webhook'}`,
     handles: {
       in: [],
       out: [{ id: 'output' }],
@@ -137,6 +147,8 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     color: '#A1A1AA',
     tint: 'neutral',
     slug: 'HTTP',
+    tag: 'ACTION',
+    subtitle: (c) => `${(c.method as string) || 'GET'} · ${(c.url as string) || 'no url set'}`,
     handles: {
       in: [{ id: 'input' }],
       out: [{ id: 'output' }],
@@ -162,6 +174,11 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     color: '#A1A1AA',
     tint: 'neutral',
     slug: 'IF',
+    tag: 'BRANCH',
+    subtitle: (c) => {
+      const conds = (c.conditions as unknown[]) || [];
+      return `${conds.length} condition${conds.length !== 1 ? 's' : ''}`;
+    },
     complex: true,
     handles: {
       in: [{ id: 'input' }],
@@ -181,6 +198,8 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     color: '#A1A1AA',
     tint: 'neutral',
     slug: 'MERGE',
+    tag: 'MERGE',
+    subtitle: (c) => (c.mode as string) || 'merge-object',
     complex: true,
     handles: {
       in: [
@@ -203,6 +222,11 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     color: '#A1A1AA',
     tint: 'neutral',
     slug: 'SET',
+    tag: 'ACTION',
+    subtitle: (c) => {
+      const a = (c.assignments as unknown[]) || [];
+      return `${a.length} field${a.length !== 1 ? 's' : ''}`;
+    },
     handles: {
       in: [{ id: 'input' }],
       out: [{ id: 'output' }],
@@ -221,6 +245,8 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     color: '#A1A1AA',
     tint: 'neutral',
     slug: 'CODE',
+    tag: 'CODE',
+    subtitle: () => 'JavaScript',
     handles: {
       in: [{ id: 'input' }],
       out: [{ id: 'output' }],
@@ -236,6 +262,8 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     color: '#A1A1AA',
     tint: 'neutral',
     slug: 'DELAY',
+    tag: 'DELAY',
+    subtitle: (c) => `${c.amount || 1000} ${c.unit || 'ms'}`,
     handles: {
       in: [{ id: 'input' }],
       out: [{ id: 'output' }],
@@ -253,7 +281,12 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     description: 'Drop items that don\'t match',
     color: '#A1A1AA',
     tint: 'neutral',
-    slug: 'FLTR',
+    slug: 'FILTER',
+    tag: 'FILTER',
+    subtitle: (c) => {
+      const conds = (c.conditions as unknown[]) || [];
+      return `${conds.length} condition${conds.length !== 1 ? 's' : ''}`;
+    },
     handles: {
       in: [{ id: 'input' }],
       out: [{ id: 'output' }],
@@ -269,6 +302,8 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     color: '#A1A1AA',
     tint: 'neutral',
     slug: 'LOOP',
+    tag: 'LOOP',
+    subtitle: (c) => `over ${(c.over as string) || 'items'}`,
     complex: true,
     handles: {
       in: [{ id: 'input' }],
@@ -290,7 +325,9 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     description: 'Call another workflow',
     color: '#A1A1AA',
     tint: 'neutral',
-    slug: 'SUBFL',
+    slug: 'SUB',
+    tag: 'SUB',
+    subtitle: (c) => (c.workflowId as string) || 'not configured',
     handles: {
       in: [{ id: 'input' }],
       out: [{ id: 'output' }],
@@ -306,6 +343,8 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     color: '#A1A1AA',
     tint: 'neutral',
     slug: 'EMAIL',
+    tag: 'ACTION',
+    subtitle: (c) => `to ${(c.to as string) || 'not set'}`,
     handles: {
       in: [{ id: 'input' }],
       out: [{ id: 'output' }],
@@ -327,11 +366,12 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     color: OTTO_AMBER,
     tint: 'amber',
     slug: 'LLM',
+    tag: 'LLM',
+    subtitle: (c) => `${(c.provider as string) || 'openai'} · ${(c.model as string) || 'gpt-4o-mini'}`,
     complex: true,
     handles: {
       in: [{ id: 'input' }],
       out: [{ id: 'output' }],
-      extras: [{ id: 'model', label: 'model', side: 'bottom' }],
     },
     defaultConfig: { provider: 'openai', model: 'gpt-4o-mini', apiKey: '', systemPrompt: '', userPrompt: '{{ input.message }}', temperature: 0.7, maxTokens: 1000 },
     fields: [
@@ -351,23 +391,27 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     color: OTTO_AMBER,
     tint: 'amber',
     slug: 'AGENT',
+    tag: 'MAIN',
+    subtitle: (c) => `Autonomous · ${(c.model as string) || 'gpt-4o'}`,
     complex: true,
     handles: {
       in: [{ id: 'input' }],
       out: [{ id: 'output' }],
-      extras: [
-        { id: 't1', label: '1', side: 'bottom' },
-        { id: 't2', label: '2', side: 'bottom' },
-        { id: 't3', label: '3', side: 'bottom' },
-        { id: 't4', label: '4', side: 'bottom' },
-        { id: 't5', label: '5', side: 'bottom' },
-      ],
     },
-    defaultConfig: { model: 'gpt-4o', systemPrompt: 'You are a helpful assistant.', tools: '[]', maxSteps: 10 },
+    defaultConfig: {
+      model: 'gpt-4o',
+      systemPrompt: 'You are a helpful assistant.',
+      tools: [
+        { id: 't1', name: 'CRM lookup',         type: 'http_request'   },
+        { id: 't2', name: 'Customer DB',         type: 'postgres_query' },
+        { id: 't3', name: 'Past conversations',  type: 'memory_read'    },
+        { id: 't4', name: 'Calculator',          type: 'code_js'        },
+      ],
+      maxSteps: 10,
+    },
     fields: [
       { key: 'model', label: 'Model', type: 'text' },
       { key: 'systemPrompt', label: 'System Prompt', type: 'textarea' },
-      { key: 'tools', label: 'Tools (JSON array)', type: 'code' },
       { key: 'maxSteps', label: 'Max steps', type: 'number' },
     ],
   },
@@ -379,6 +423,8 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     color: OTTO_AMBER,
     tint: 'amber',
     slug: 'VEC',
+    tag: 'VEC',
+    subtitle: (c) => (c.collection as string) || 'memory',
     handles: {
       in: [{ id: 'input' }],
       out: [{ id: 'output' }],
@@ -401,6 +447,12 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     tint: 'service',
     serviceColor: SERVICE.postgres,
     slug: 'PG',
+    tag: 'ACTION',
+    subtitle: (c) => {
+      const q = (c.query as string) || '';
+      const preview = q.replace(/\s+/g, ' ').trim().slice(0, 22);
+      return preview.length < q.trim().length ? preview + '…' : preview || 'no query';
+    },
     handles: {
       in: [{ id: 'input' }],
       out: [{ id: 'output' }],
@@ -419,7 +471,9 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     color: SERVICE.redis,
     tint: 'service',
     serviceColor: SERVICE.redis,
-    slug: 'GET',
+    slug: 'R-GET',
+    tag: 'ACTION',
+    subtitle: (c) => (c.key as string) || '{{ input.key }}',
     handles: {
       in: [{ id: 'input' }],
       out: [{ id: 'output' }],
@@ -435,7 +489,9 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     color: SERVICE.redis,
     tint: 'service',
     serviceColor: SERVICE.redis,
-    slug: 'SET',
+    slug: 'R-SET',
+    tag: 'ACTION',
+    subtitle: (c) => `${(c.key as string) || 'key'} · ${(c.ttl as number) || 3600}s`,
     handles: {
       in: [{ id: 'input' }],
       out: [{ id: 'output' }],

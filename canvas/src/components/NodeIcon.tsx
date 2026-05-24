@@ -28,6 +28,7 @@ const ICON_MAP: Record<string, PhosphorIcon> = {
   merge:           GitMerge,
   set:             Sliders,
   code:            Code,
+  code_js:         Code,
   delay:           Timer,
   filter:          Funnel,
   loop:            ArrowsClockwise,
@@ -39,6 +40,8 @@ const ICON_MAP: Record<string, PhosphorIcon> = {
   postgres_query:  Database,
   redis_get:       Lightning,
   redis_set:       PencilSimple,
+  memory_read:     Brain,
+  memory_write:    Brain,
 };
 
 export interface NodeIconProps {
