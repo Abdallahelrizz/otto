@@ -1,4 +1,4 @@
-// Schedule trigger — pass-through handler (the scheduler runner is a separate cron service, not yet wired)
+// Schedule trigger is fired by BullMQ job schedulers for active workflows.
 export async function scheduleTrigger({ input }) {
-  return input;
+  return input ?? {};
 }

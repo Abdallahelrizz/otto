@@ -6,6 +6,8 @@ import { Canvas } from './components/Canvas';
 import { ConfigPanel } from './components/ConfigPanel';
 import { ContextMenu } from './components/ContextMenu';
 import { BottomPanels } from './components/panels/BottomPanels';
+import { AuthGate } from './components/AuthGate';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { useStore } from './store';
 
 export function App() {
@@ -28,12 +30,13 @@ export function App() {
   }, [toggleSidebar]);
 
   return (
-    <ReactFlowProvider>
-      <div
-        className={`flex flex-col h-screen overflow-hidden theme-${theme}`}
-        style={{ background: 'var(--bg-canvas)', color: 'var(--text-primary)' }}
-      >
-        <Toolbar />
+    <AuthGate>
+      <ReactFlowProvider>
+        <div
+          className={`flex flex-col h-screen overflow-hidden theme-${theme}`}
+          style={{ background: 'var(--bg-canvas)', color: 'var(--text-primary)' }}
+        >
+          <Toolbar />
 
         <div className="flex flex-1 overflow-hidden" style={{ position: 'relative', minHeight: 0 }}>
           {/* Sidebar — 216px, slides in/out */}
@@ -67,8 +70,10 @@ export function App() {
 
           {/* Main column: Canvas + BottomPanels */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-            <Canvas />
-            <BottomPanels />
+            <ErrorBoundary>
+              <Canvas />
+              <BottomPanels />
+            </ErrorBoundary>
           </div>
 
           {/* Config panel — 320px, slides in 200ms ease-out via CSS */}
@@ -77,13 +82,16 @@ export function App() {
             style={{ width: panelOpen ? '320px' : '0px' }}
           >
             <div style={{ width: '320px', height: '100%' }}>
-              <ConfigPanel />
+              <ErrorBoundary>
+                <ConfigPanel />
+              </ErrorBoundary>
             </div>
           </div>
         </div>
       </div>
 
-      <ContextMenu />
-    </ReactFlowProvider>
+        <ContextMenu />
+      </ReactFlowProvider>
+    </AuthGate>
   );
 }

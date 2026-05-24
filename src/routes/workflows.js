@@ -1,11 +1,11 @@
 import { db } from '../db/client.js';
 import { randomUUID } from 'crypto';
+import { reconcileWorkflowSchedule, validateWorkflowActivation } from '../schedules/service.js';
 
 export async function workflowRoutes(fastify) {
-  // List workflows for a workspace
   fastify.get('/api/v1/workflows', async (req, reply) => {
-    const { workspaceId, limit = 50, offset = 0 } = req.query;
-    if (!workspaceId) return reply.code(400).send({ error: 'workspaceId is required' });
+    const { limit = 50, offset = 0 } = req.query;
+    const { workspaceId } = req.auth;
 
     const { rows } = await db.query(
       `SELECT id, name, active, created_at, updated_at
@@ -18,41 +18,58 @@ export async function workflowRoutes(fastify) {
     return reply.send({ workflows: rows });
   });
 
-  // Get a single workflow (includes definition)
   fastify.get('/api/v1/workflows/:id', async (req, reply) => {
     const { rows } = await db.query(
-      'SELECT id, workspace_id, name, definition, active, created_at, updated_at FROM workflows WHERE id = $1',
-      [req.params.id]
+      `SELECT id, workspace_id, name, definition, active, created_at, updated_at
+       FROM workflows
+       WHERE id = $1 AND workspace_id = $2`,
+      [req.params.id, req.auth.workspaceId]
     );
     if (!rows.length) return reply.code(404).send({ error: 'Workflow not found' });
     return reply.send({ workflow: rows[0] });
   });
 
-  // Create a workflow
   fastify.post('/api/v1/workflows', async (req, reply) => {
-    const { workspaceId, name, definition = { nodes: [], edges: [] }, active = false } = req.body ?? {};
-    if (!workspaceId) return reply.code(400).send({ error: 'workspaceId is required' });
+    const { name, definition = { nodes: [], edges: [] }, active = false } = req.body ?? {};
     if (!name) return reply.code(400).send({ error: 'name is required' });
+
+    if (active) {
+      const errors = validateWorkflowActivation(definition);
+      if (errors.length) return reply.code(422).send({ error: 'Workflow cannot be activated', details: errors });
+    }
 
     const id = randomUUID();
     await db.query(
       `INSERT INTO workflows (id, workspace_id, name, definition, active)
        VALUES ($1, $2, $3, $4, $5)`,
-      [id, workspaceId, name, JSON.stringify(definition), active]
+      [id, req.auth.workspaceId, name, JSON.stringify(definition), active]
     );
+
+    if (active) {
+      await reconcileWorkflowSchedule({ id, workspace_id: req.auth.workspaceId, definition, active });
+    }
+
     return reply.code(201).send({ id });
   });
 
-  // Update a workflow (name, definition, active)
   fastify.put('/api/v1/workflows/:id', async (req, reply) => {
     const { id } = req.params;
     const { name, definition, active } = req.body ?? {};
 
     const { rows: existing } = await db.query(
-      'SELECT id, name, definition FROM workflows WHERE id = $1',
-      [id]
+      `SELECT id, workspace_id, name, definition, active
+       FROM workflows
+       WHERE id = $1 AND workspace_id = $2`,
+      [id, req.auth.workspaceId]
     );
     if (!existing.length) return reply.code(404).send({ error: 'Workflow not found' });
+
+    const nextDefinition = definition ?? existing[0].definition;
+    const nextActive = active ?? existing[0].active;
+    if (nextActive) {
+      const errors = validateWorkflowActivation(nextDefinition);
+      if (errors.length) return reply.code(422).send({ error: 'Workflow cannot be activated', details: errors });
+    }
 
     const setParts = ['updated_at = NOW()'];
     const params = [];
@@ -61,13 +78,15 @@ export async function workflowRoutes(fastify) {
     if (definition !== undefined) { params.push(JSON.stringify(definition)); setParts.push(`definition = $${params.length}`); }
     if (active !== undefined) { params.push(active); setParts.push(`active = $${params.length}`); }
 
-    params.push(id);
-    await db.query(
-      `UPDATE workflows SET ${setParts.join(', ')} WHERE id = $${params.length}`,
+    params.push(id, req.auth.workspaceId);
+    const { rows: updatedRows } = await db.query(
+      `UPDATE workflows
+       SET ${setParts.join(', ')}
+       WHERE id = $${params.length - 1} AND workspace_id = $${params.length}
+       RETURNING id, workspace_id, definition, active`,
       params
     );
 
-    // Snapshot to workflow_versions if definition changed
     if (definition !== undefined) {
       const { rows: versionRows } = await db.query(
         'SELECT COALESCE(MAX(version_number), 0) AS max_v FROM workflow_versions WHERE workflow_id = $1',
@@ -75,30 +94,36 @@ export async function workflowRoutes(fastify) {
       );
       const nextVersion = (versionRows[0]?.max_v ?? 0) + 1;
       await db.query(
-        `INSERT INTO workflow_versions (workflow_id, version_number, definition)
-         VALUES ($1, $2, $3)`,
-        [id, nextVersion, JSON.stringify(definition)]
+        `INSERT INTO workflow_versions (workflow_id, version_number, definition, created_by)
+         VALUES ($1, $2, $3, $4)`,
+        [id, nextVersion, JSON.stringify(definition), req.auth.userId]
       );
     }
 
-    return reply.send({ ok: true });
+    await reconcileWorkflowSchedule(updatedRows[0]);
+
+    return reply.send({ ok: true, id });
   });
 
-  // Soft-delete (deactivate) a workflow
   fastify.delete('/api/v1/workflows/:id', async (req, reply) => {
     const { rows } = await db.query(
-      'UPDATE workflows SET active = false, updated_at = NOW() WHERE id = $1 RETURNING id',
-      [req.params.id]
+      `UPDATE workflows
+       SET active = false, updated_at = NOW()
+       WHERE id = $1 AND workspace_id = $2
+       RETURNING id, workspace_id, definition, active`,
+      [req.params.id, req.auth.workspaceId]
     );
     if (!rows.length) return reply.code(404).send({ error: 'Workflow not found' });
+    await reconcileWorkflowSchedule(rows[0]);
     return reply.send({ ok: true });
   });
 
-  // Duplicate a workflow
   fastify.post('/api/v1/workflows/:id/duplicate', async (req, reply) => {
     const { rows } = await db.query(
-      'SELECT workspace_id, name, definition FROM workflows WHERE id = $1',
-      [req.params.id]
+      `SELECT workspace_id, name, definition
+       FROM workflows
+       WHERE id = $1 AND workspace_id = $2`,
+      [req.params.id, req.auth.workspaceId]
     );
     if (!rows.length) return reply.code(404).send({ error: 'Workflow not found' });
 

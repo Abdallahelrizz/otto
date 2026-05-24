@@ -23,6 +23,7 @@ import { getNodeDef, CATEGORY_ICON_WEIGHT } from './nodes/nodeConfig';
 const ICON_MAP: Record<string, PhosphorIcon> = {
   webhook_trigger: Lightning,
   manual_trigger:  Lightning,
+  schedule_trigger: Timer,
   http_request:    Globe,
   if:              GitBranch,
   merge:           GitMerge,

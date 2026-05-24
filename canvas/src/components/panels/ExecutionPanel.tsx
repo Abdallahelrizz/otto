@@ -1,13 +1,5 @@
 import { useStore } from '../../store';
 
-const AGENT_OUTPUT = `{
-  "sentiment": "positive",
-  "score": 0.982,
-  "summary": "User highly satisfied with response speed.",
-  "tags": [ "shipping", "quality" ],
-  "tools_used": [ "CRM lookup", "Chat history" ]
-}`;
-
 function hexA(hex: string, a: number): string {
   if (hex.startsWith('rgba(')) return hex.replace(/rgba\(([^)]+),\s*[\d.]+\)/, `rgba($1, ${a})`);
   const h = hex.replace('#', '');
@@ -28,11 +20,11 @@ function SyntaxJson({ text, isDark }: { text: string; isDark: boolean }) {
     <>
       {parts.map((p, i) => {
         if (!p) return null;
-        if (/^"[^"]*"\s*:$/.test(p))       return <span key={i} style={{ color: keyC }}>{p}</span>;
-        if (/^"[^"]*"$/.test(p))           return <span key={i} style={{ color: strC }}>{p}</span>;
+        if (/^"[^"]*"\s*:$/.test(p)) return <span key={i} style={{ color: keyC }}>{p}</span>;
+        if (/^"[^"]*"$/.test(p)) return <span key={i} style={{ color: strC }}>{p}</span>;
         if (p === 'true' || p === 'false') return <span key={i} style={{ color: boolC }}>{p}</span>;
-        if (p === 'null')                  return <span key={i} style={{ color: 'var(--text-muted)' }}>{p}</span>;
-        if (/^-?\d+\.?\d*$/.test(p))       return <span key={i} style={{ color: numC }}>{p}</span>;
+        if (p === 'null') return <span key={i} style={{ color: 'var(--text-muted)' }}>{p}</span>;
+        if (/^-?\d+\.?\d*$/.test(p)) return <span key={i} style={{ color: numC }}>{p}</span>;
         return <span key={i}>{p}</span>;
       })}
     </>
@@ -41,6 +33,8 @@ function SyntaxJson({ text, isDark }: { text: string; isDark: boolean }) {
 
 export function ExecutionPanel() {
   const nodeExecutions = useStore((s) => s.nodeExecutions);
+  const selectedExecutionDetail = useStore((s) => s.selectedExecutionDetail);
+  const executionDetailLoading = useStore((s) => s.executionDetailLoading);
   const executionId = useStore((s) => s.executionId);
   const executionPhase = useStore((s) => s.executionPhase);
   const theme = useStore((s) => s.theme);
@@ -48,31 +42,44 @@ export function ExecutionPanel() {
 
   const live = isDark ? '#22C55E' : '#16A34A';
   const liveSoft = isDark ? 'rgba(34,197,94,0.15)' : 'rgba(22,163,74,0.10)';
-
   const isRunning = executionPhase === 'running';
   const isSuccess = executionPhase === 'success';
-  const isError   = executionPhase === 'error';
+  const isError = executionPhase === 'error';
+  const execLabel = isRunning ? 'RUNNING' : isSuccess ? 'DONE' : isError ? 'FAILED' : 'IDLE';
+  const execColor = (isRunning || isSuccess) ? live : isError ? 'var(--node-error)' : 'var(--text-muted)';
+  const execSoft = (isRunning || isSuccess) ? liveSoft : isError ? 'rgba(239,68,68,0.12)' : 'var(--bg-hover)';
 
-  const timelineItems = Object.values(nodeExecutions).length > 0
-    ? Object.values(nodeExecutions).map((ne) => ({
-        label: ne.node_id,
-        status: ne.status,
-        dur: ne.duration_ms != null ? (ne.duration_ms > 999 ? `${(ne.duration_ms / 1000).toFixed(1)}s` : `${ne.duration_ms}ms`) : null,
-      }))
-    : [
-        { label: 'Waiting for run…', status: 'pending' as const, dur: null },
-      ];
+  const rows = selectedExecutionDetail?.nodes?.length
+    ? selectedExecutionDetail.nodes
+    : Object.values(nodeExecutions);
+  const inspectedNode = [...rows].reverse().find((ne) => ne.output != null || ne.error) ?? rows[0] ?? null;
+  const outputText = inspectedNode
+    ? JSON.stringify({
+        execution: selectedExecutionDetail?.execution ?? { id: executionId, phase: executionPhase },
+        node: {
+          id: inspectedNode.node_id,
+          name: inspectedNode.node_name,
+          type: inspectedNode.node_type,
+          status: inspectedNode.status,
+          duration_ms: inspectedNode.duration_ms,
+          model: inspectedNode.model,
+          total_tokens: inspectedNode.total_tokens,
+        },
+        input: inspectedNode.input,
+        output: inspectedNode.output,
+        error: inspectedNode.error,
+      }, null, 2)
+    : JSON.stringify({
+        executionId,
+        status: executionDetailLoading ? 'loading' : execLabel.toLowerCase(),
+      }, null, 2);
 
   const statusColor = (status: string) => {
     if (status === 'success') return 'var(--node-success)';
     if (status === 'running') return live;
-    if (status === 'error')   return 'var(--node-error)';
+    if (status === 'error') return 'var(--node-error)';
     return 'var(--text-muted)';
   };
-
-  const execLabel = isRunning ? 'RUNNING' : isSuccess ? 'DONE' : isError ? 'FAILED' : 'IDLE';
-  const execColor = (isRunning || isSuccess) ? live : isError ? 'var(--node-error)' : 'var(--text-muted)';
-  const execSoft = (isRunning || isSuccess) ? liveSoft : isError ? 'rgba(239,68,68,0.12)' : 'var(--bg-hover)';
 
   return (
     <div style={{
@@ -82,7 +89,6 @@ export function ExecutionPanel() {
       flexDirection: 'column',
       minWidth: 0,
     }}>
-      {/* Header */}
       <div style={{
         height: 36,
         padding: '0 14px',
@@ -102,7 +108,7 @@ export function ExecutionPanel() {
           letterSpacing: '-0.008em',
           fontFamily: "'Inter'",
         }}>
-          Live execution
+          {selectedExecutionDetail ? 'Execution detail' : 'Live execution'}
         </span>
         <span style={{
           fontFamily: "'JetBrains Mono'",
@@ -116,7 +122,7 @@ export function ExecutionPanel() {
           borderRadius: '3px',
           textTransform: 'uppercase',
         }}>
-          · {execLabel}
+          {execLabel}
         </span>
         <div style={{ flex: 1 }} />
         {executionId && (
@@ -127,13 +133,12 @@ export function ExecutionPanel() {
             letterSpacing: '0.04em',
             fontWeight: 500,
           }}>
-            {executionId.slice(0, 8)} · just now
+            {executionId.slice(0, 8)}
           </span>
         )}
       </div>
 
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        {/* Timeline */}
         <div style={{
           width: 188,
           borderRight: '1px solid var(--border)',
@@ -144,17 +149,17 @@ export function ExecutionPanel() {
           overflow: 'auto',
           flexShrink: 0,
         }}>
-          {timelineItems.map((step, i) => {
+          {(rows.length ? rows : [{ node_id: 'waiting', node_name: executionDetailLoading ? 'Loading run...' : 'Waiting for run...', status: 'pending', duration_ms: null }]).map((step, i) => {
             const c = statusColor(step.status);
-            const isStep = step.status === 'running';
+            const active = step.status === 'running';
             return (
-              <div key={i} style={{
+              <div key={`${step.node_id}-${i}`} style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '9px',
                 padding: '6px 8px',
-                background: isStep ? liveSoft : 'transparent',
-                border: isStep ? `1px solid ${hexA(live, 0.22)}` : '1px solid transparent',
+                background: active ? liveSoft : 'transparent',
+                border: active ? `1px solid ${hexA(live, 0.22)}` : '1px solid transparent',
                 borderRadius: '4px',
               }}>
                 <span style={{
@@ -162,7 +167,7 @@ export function ExecutionPanel() {
                   height: 7,
                   borderRadius: '50%',
                   background: c,
-                  animation: isStep ? 'otto-pulse 1.4s ease-in-out infinite' : 'none',
+                  animation: active ? 'otto-pulse 1.4s ease-in-out infinite' : 'none',
                   flexShrink: 0,
                 }} />
                 <span style={{
@@ -176,9 +181,9 @@ export function ExecutionPanel() {
                   whiteSpace: 'nowrap',
                   fontFamily: "'Inter'",
                 }}>
-                  {step.label}
+                  {step.node_name || step.node_id}
                 </span>
-                {step.dur && (
+                {step.duration_ms != null && (
                   <span style={{
                     fontFamily: "'JetBrains Mono'",
                     fontSize: '9.5px',
@@ -187,7 +192,7 @@ export function ExecutionPanel() {
                     letterSpacing: '0.02em',
                     flexShrink: 0,
                   }}>
-                    {step.dur}
+                    {step.duration_ms > 999 ? `${(step.duration_ms / 1000).toFixed(1)}s` : `${step.duration_ms}ms`}
                   </span>
                 )}
               </div>
@@ -195,7 +200,6 @@ export function ExecutionPanel() {
           })}
         </div>
 
-        {/* JSON output */}
         <div style={{
           flex: 1,
           padding: '12px 14px',
@@ -212,7 +216,7 @@ export function ExecutionPanel() {
             marginBottom: '8px',
             textTransform: 'uppercase',
           }}>
-            Output · agent.tool_call
+            {inspectedNode ? `${inspectedNode.node_name || inspectedNode.node_id} output` : 'Output'}
           </div>
           <pre style={{
             margin: 0,
@@ -224,7 +228,7 @@ export function ExecutionPanel() {
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
           }}>
-            <SyntaxJson text={AGENT_OUTPUT} isDark={isDark} />
+            <SyntaxJson text={outputText} isDark={isDark} />
           </pre>
         </div>
       </div>

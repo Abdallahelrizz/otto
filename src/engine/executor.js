@@ -1,5 +1,5 @@
 import { parseDAG } from './dag.js';
-import { logNodeStart, logNodeEnd, logNodeSkipped, createExecution, completeExecution } from './logger.js';
+import { logNodeStart, logNodeEnd, logNodeSkipped, createExecution, startExecution, completeExecution } from './logger.js';
 import { getCredential } from './credentials.js';
 import { resolveConfig } from './expressions.js';
 import { getNodeHandler } from '../nodes/index.js';
@@ -17,32 +17,10 @@ import { emitExecutionEvent } from './events.js';
  * @param {string} opts.triggerType — 'webhook' | 'manual' | 'schedule'
  * @returns {Promise<{ executionId: string, outputs: Map<string,any> }>}
  */
-/**
- * Fire-and-forget variant used by the canvas.
- * Creates the execution record immediately (so the ID can be returned to the
- * browser), then runs the workflow in the background without blocking.
- */
-export async function fireWorkflow({ workflowId, workspaceId, definition, input, triggerType }) {
-  const executionId = await createExecution({ workflowId, triggerType, input });
-  emitExecutionEvent(executionId, 'execution:start', { workflowId, triggerType });
-
-  setImmediate(async () => {
-    try {
-      const dag = parseDAG(definition);
-      await executeDAG(dag, { executionId, workspaceId, workflowId, triggerInput: input });
-      await completeExecution(executionId, { status: 'success' });
-      emitExecutionEvent(executionId, 'execution:end', { status: 'success' });
-    } catch (err) {
-      await completeExecution(executionId, { status: 'error', error: err.message });
-      emitExecutionEvent(executionId, 'execution:end', { status: 'error', error: err.message });
-    }
-  });
-
-  return executionId;
-}
-
-export async function runWorkflow({ workflowId, workspaceId, definition, input, triggerType }) {
-  const executionId = await createExecution({ workflowId, triggerType, input });
+export async function runWorkflow({ executionId: existingExecutionId, workflowId, workspaceId, definition, input, triggerType }) {
+  const executionId = existingExecutionId
+    ?? await createExecution({ workflowId, workspaceId, triggerType, input, status: 'running' });
+  if (existingExecutionId) await startExecution(existingExecutionId);
   emitExecutionEvent(executionId, 'execution:start', { workflowId, triggerType });
 
   try {
@@ -167,6 +145,7 @@ async function runNode(node, input, rawInputs, ctx) {
     credential = await getCredential(resolvedConfig.credentialId, {
       workflowId: ctx.workflowId,
       nodeId: node.id,
+      workspaceId,
     });
   }
 
@@ -203,4 +182,3 @@ async function runNode(node, input, rawInputs, ctx) {
     throw err;
   }
 }
-

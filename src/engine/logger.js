@@ -1,13 +1,25 @@
 import { db } from '../db/client.js';
 
-export async function createExecution({ workflowId, triggerType, input }) {
+export async function createExecution({ workflowId, workspaceId, triggerType, input, status = 'running' }) {
   const { rows } = await db.query(
-    `INSERT INTO executions (workflow_id, status, started_at, trigger_type, input)
-     VALUES ($1, 'running', NOW(), $2, $3)
+    `INSERT INTO executions (workflow_id, workspace_id, status, started_at, trigger_type, input)
+     VALUES ($1, $2, $3, CASE WHEN $3 = 'running' THEN NOW() ELSE NULL END, $4, $5)
      RETURNING id`,
-    [workflowId, triggerType, JSON.stringify(input)]
+    [workflowId, workspaceId, status, triggerType, JSON.stringify(input)]
   );
   return rows[0].id;
+}
+
+export async function startExecution(executionId) {
+  await db.query(
+    `UPDATE executions
+     SET status = 'running',
+         started_at = COALESCE(started_at, NOW()),
+         completed_at = NULL,
+         error = NULL
+     WHERE id = $1`,
+    [executionId]
+  );
 }
 
 export async function completeExecution(executionId, { status, error } = {}) {

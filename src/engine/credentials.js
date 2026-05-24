@@ -17,10 +17,17 @@ function decrypt(encryptedData) {
   return JSON.parse(decrypted);
 }
 
-export async function getCredential(credentialId, { workflowId, nodeId } = {}) {
+export async function getCredential(credentialId, { workflowId, nodeId, workspaceId } = {}) {
+  const params = [credentialId];
+  let workspaceClause = '';
+  if (workspaceId) {
+    params.push(workspaceId);
+    workspaceClause = ` AND workspace_id = $${params.length}`;
+  }
+
   const { rows } = await db.query(
-    'SELECT id, name, type, data FROM credentials WHERE id = $1',
-    [credentialId]
+    `SELECT id, name, type, data FROM credentials WHERE id = $1${workspaceClause}`,
+    params
   );
   if (!rows.length) throw new Error(`Credential ${credentialId} not found`);
   const cred = rows[0];

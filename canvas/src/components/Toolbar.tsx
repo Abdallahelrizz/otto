@@ -86,7 +86,7 @@ export function Toolbar() {
         const res = await api.executeSaved(savedWorkflowId);
         executionId = res.executionId;
       } else {
-        const res = await api.execute(definition);
+        const res = await api.execute(definition, {}, workflowName);
         executionId = res.executionId;
       }
       setExecutionStarted(executionId);
@@ -101,11 +101,19 @@ export function Toolbar() {
     } catch (err: unknown) {
       alert(`Run failed: ${err instanceof Error ? err.message : String(err)}`);
     }
-  }, [nodes, edges, btnState, workflowActive, savedWorkflowId]);
+  }, [nodes, edges, btnState, workflowActive, savedWorkflowId, workflowName]);
 
   const handleSave = useCallback(async () => {
     await saveWorkflow();
   }, [saveWorkflow]);
+
+  const handleActiveToggle = useCallback(async () => {
+    try {
+      await setWorkflowActive(!workflowActive);
+    } catch (err: unknown) {
+      alert(`Activation failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, [setWorkflowActive, workflowActive]);
 
   const iconBtn: React.CSSProperties = {
     width: '28px',
@@ -219,7 +227,7 @@ export function Toolbar() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
         {/* Active toggle */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-          <Toggle on={workflowActive} onToggle={() => setWorkflowActive(!workflowActive)} />
+          <Toggle on={workflowActive} onToggle={handleActiveToggle} />
           <span style={{
             fontSize: '12.5px',
             fontWeight: 500,
@@ -331,6 +339,13 @@ export function Toolbar() {
                     a.download = `${workflowName.replace(/\s+/g, '-').toLowerCase()}.json`;
                     a.click();
                     URL.revokeObjectURL(url);
+                  },
+                },
+                {
+                  label: 'Sign out',
+                  action: async () => {
+                    await api.logout().catch(() => null);
+                    window.location.reload();
                   },
                 },
               ].map(({ label, action }) => (

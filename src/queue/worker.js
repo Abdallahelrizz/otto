@@ -7,7 +7,10 @@ export function startWorker() {
   const worker = new Worker(
     'executions',
     async (job) => {
-      const { workflowId, workspaceId, triggerType, input } = job.data;
+      const { executionId, workflowId, workspaceId, triggerType } = job.data;
+      const input = job.data.input?.schedule?.firedAt === '{{ scheduled_at }}'
+        ? { ...job.data.input, schedule: { ...job.data.input.schedule, firedAt: new Date().toISOString() } }
+        : (job.data.input ?? {});
 
       // Fetch the latest workflow definition
       const { rows } = await db.query(
@@ -18,7 +21,7 @@ export function startWorker() {
 
       const definition = rows[0].definition;
 
-      await runWorkflow({ workflowId, workspaceId, definition, input, triggerType });
+      await runWorkflow({ executionId, workflowId, workspaceId, definition, input, triggerType });
     },
     {
       connection: redis,

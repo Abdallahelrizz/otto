@@ -20,6 +20,10 @@ export interface NodeExecution {
   output: unknown;
   error: string | null;
   retry_count: number;
+  prompt_tokens?: number | null;
+  completion_tokens?: number | null;
+  total_tokens?: number | null;
+  model?: string | null;
 }
 
 export interface Execution {
@@ -55,9 +59,34 @@ export interface Credential {
 
 export interface Integration {
   id: string;
+  slug?: string;
   name: string;
-  type: string;
+  type?: string;
   description: string | null;
   icon_url: string | null;
   category: string | null;
+  installed_at?: string;
+  credential_schema?: unknown;
+  node_types?: unknown;
+  version?: string;
+  official?: boolean;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string | null;
+}
+
+export interface AuthWorkspace {
+  id: string;
+  name: string;
+  plan: string;
+}
+
+export interface AuthStatus {
+  setupRequired?: boolean;
+  authenticated?: boolean;
+  user?: AuthUser | null;
+  workspace?: AuthWorkspace | null;
 }

@@ -282,6 +282,7 @@ function WorkflowRow({ wf, isActive, onLoad, onDelete }: {
 // ── History Tab ───────────────────────────────────────────────────────────────
 function HistoryTab() {
   const savedWorkflowId = useStore((s) => s.savedWorkflowId);
+  const loadExecutionDetail = useStore((s) => s.loadExecutionDetail);
   const [executions, setExecutions] = useState<Array<{ id: string; status: string; started_at: string | null }>>([]);
   const [loading, setLoading] = useState(false);
 
@@ -317,6 +318,7 @@ function HistoryTab() {
         return (
           <div
             key={ex.id}
+            onClick={() => loadExecutionDetail(ex.id)}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -324,6 +326,7 @@ function HistoryTab() {
               padding: '7px 8px',
               borderRadius: '5px',
               marginBottom: '1px',
+              cursor: 'pointer',
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
@@ -369,14 +372,23 @@ function SettingsTab() {
 
   useEffect(() => { fetchCredentials(); }, []);
 
-  const CRED_TYPES = ['api_key', 'basic_auth', 'bearer_token', 'smtp', 'resend', 'oauth2'];
+  const CRED_TYPES = ['api_key', 'basic_auth', 'bearer_token', 'smtp', 'resend', 'postgres', 'oauth2'];
 
   const handleAdd = async () => {
     if (!name.trim() || !keyValue.trim()) return;
     setSaving(true);
     setError(null);
     try {
-      await createCredential(name.trim(), type, { key: keyValue.trim() });
+      const value = keyValue.trim();
+      let data: Record<string, string>;
+      if (type === 'postgres') {
+        data = { connectionString: value };
+      } else if (type === 'resend') {
+        data = { provider: 'resend', apiKey: value, value, key: value };
+      } else {
+        data = { value, key: value };
+      }
+      await createCredential(name.trim(), type, data);
       setName(''); setType('api_key'); setKeyValue('');
       setAddOpen(false);
     } catch (e: unknown) {

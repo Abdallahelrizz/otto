@@ -137,6 +137,25 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     defaultConfig: { path: 'my-webhook' },
     fields: [{ key: 'path', label: 'Path', type: 'text' }],
   },
+  {
+    type: 'schedule_trigger',
+    category: 'triggers',
+    label: 'Schedule',
+    description: 'Run on a durable schedule',
+    color: OTTO_AMBER,
+    tint: 'amber',
+    slug: 'SCHEDULE',
+    tag: 'TRIGGER',
+    subtitle: (c) => (c.mode === 'cron'
+      ? ((c.cron as string) || '0 * * * *')
+      : `Every ${c.every || 15} ${c.unit || 'minutes'}`),
+    handles: {
+      in: [],
+      out: [{ id: 'output' }],
+    },
+    defaultConfig: { mode: 'interval', every: 15, unit: 'minutes', cron: '0 * * * *', timezone: 'UTC' },
+    fields: [],
+  },
 
   // ─── CORE ──────────────────────────────────────────────────
   {
@@ -240,19 +259,26 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   {
     type: 'code',
     category: 'core',
-    label: 'Code (JS)',
-    description: 'Run arbitrary JavaScript',
+    label: 'Code',
+    description: 'Run sandboxed code',
     color: '#A1A1AA',
     tint: 'neutral',
     slug: 'CODE',
     tag: 'CODE',
-    subtitle: () => 'JavaScript',
+    subtitle: (c) => (c.language as string) || 'javascript',
     handles: {
       in: [{ id: 'input' }],
       out: [{ id: 'output' }],
     },
-    defaultConfig: { code: 'return input;' },
-    fields: [{ key: 'code', label: 'JavaScript', type: 'code' }],
+    defaultConfig: {
+      language: 'javascript',
+      version: '18.x',
+      code: 'return input;',
+      timeoutMs: 5000,
+      memoryLimitMb: 128,
+      stdinMode: 'json',
+    },
+    fields: [{ key: 'code', label: 'Code', type: 'code' }],
   },
   {
     type: 'delay',
@@ -405,7 +431,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
         { id: 't1', name: 'CRM lookup',         type: 'http_request'   },
         { id: 't2', name: 'Customer DB',         type: 'postgres_query' },
         { id: 't3', name: 'Past conversations',  type: 'memory_read'    },
-        { id: 't4', name: 'Calculator',          type: 'code_js'        },
+        { id: 't4', name: 'Calculator',          type: 'code'           },
       ],
       maxSteps: 10,
     },

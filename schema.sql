@@ -12,7 +12,9 @@ CREATE TABLE users (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email       TEXT NOT NULL UNIQUE,
   name        TEXT,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  password_hash TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE workspaces (
@@ -156,6 +158,16 @@ CREATE TABLE api_keys (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE sessions (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  token_hash    TEXT NOT NULL UNIQUE,
+  expires_at    TIMESTAMPTZ NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ─────────────────────────────────────────────
 -- Indexes
 -- ─────────────────────────────────────────────
@@ -168,6 +180,9 @@ CREATE INDEX idx_node_executions_execution ON node_executions(execution_id);
 CREATE INDEX idx_credentials_workspace ON credentials(workspace_id);
 CREATE INDEX idx_memory_patterns_workspace ON memory_patterns(workspace_id);
 CREATE INDEX idx_memory_interactions_session ON memory_interactions(session_id);
+CREATE INDEX idx_sessions_token_hash ON sessions(token_hash);
+CREATE INDEX idx_sessions_user ON sessions(user_id);
+CREATE INDEX idx_sessions_expires ON sessions(expires_at);
 
 -- Webhook path lookup index (workflows with webhook triggers)
 CREATE INDEX idx_workflows_webhook ON workflows USING GIN (definition jsonb_path_ops);

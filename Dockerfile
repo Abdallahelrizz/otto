@@ -1,14 +1,20 @@
-FROM node:20-alpine AS base
+FROM node:20-alpine AS canvas-build
+WORKDIR /app/canvas
+COPY canvas/package*.json ./
+RUN npm ci
+COPY canvas ./
+RUN npm run build
+
+FROM node:20-alpine AS server
 WORKDIR /app
 
-# Install dependencies in a separate layer so they cache independently of source
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-# Copy source
 COPY src ./src
 COPY migrations ./migrations
 COPY schema.sql ./schema.sql
+COPY --from=canvas-build /app/canvas/dist ./public
 
 EXPOSE 3000
 

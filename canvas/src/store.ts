@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { applyNodeChanges, applyEdgeChanges, addEdge } from 'reactflow';
 import type { Node, Edge, NodeChange, EdgeChange, Connection } from 'reactflow';
 import { v4 as uuidv4 } from 'uuid';
-import type { NodeExecution, ExecutionPhase, WorkflowListItem, Credential } from './types';
+import type { NodeExecution, ExecutionPhase, WorkflowListItem, Credential, ExecutionDetail } from './types';
 import { getNodeDef, EDGE_COLOR_DARK, EDGE_COLOR_LIGHT } from './components/nodes/nodeConfig';
 import { api } from './api';
 
@@ -48,6 +48,7 @@ interface OttoStore {
   isSaving: boolean;
   saveWorkflow: () => Promise<void>;
   loadWorkflow: (id: string) => Promise<void>;
+  restoreLastWorkflow: () => Promise<void>;
   fetchWorkflows: () => Promise<void>;
   deleteWorkflow: (id: string) => Promise<void>;
   newWorkflow: () => void;
@@ -81,13 +82,32 @@ interface OttoStore {
   executionPhase: ExecutionPhase;
   executionId: string | null;
   nodeExecutions: Record<string, NodeExecution>;
+  selectedExecutionDetail: ExecutionDetail | null;
+  executionDetailLoading: boolean;
   setExecutionStarted: (executionId: string) => void;
   setNodeExecutions: (executions: NodeExecution[]) => void;
+  loadExecutionDetail: (executionId: string) => Promise<void>;
   setExecutionPhase: (phase: ExecutionPhase) => void;
   resetExecution: () => void;
   _sseSource: EventSource | null;
   startSSE: (executionId: string) => void;
   stopSSE: () => void;
+}
+
+const LAST_WORKFLOW_KEY = 'otto_last_workflow_id';
+
+function readLastWorkflowId(): string | null {
+  try { return localStorage.getItem(LAST_WORKFLOW_KEY); }
+  catch { return null; }
+}
+
+function writeLastWorkflowId(id: string | null) {
+  try {
+    if (id) localStorage.setItem(LAST_WORKFLOW_KEY, id);
+    else localStorage.removeItem(LAST_WORKFLOW_KEY);
+  } catch {
+    // Browser storage can be disabled.
+  }
 }
 
 export const useStore = create<OttoStore>((set, get) => ({
@@ -152,10 +172,19 @@ export const useStore = create<OttoStore>((set, get) => ({
   workflowVersion: 'v1.0.0',
   workflowActive: false,
   setWorkflowActive: async (active) => {
+    const prev = get().workflowActive;
     set({ workflowActive: active });
-    const { savedWorkflowId } = get();
-    if (savedWorkflowId) {
-      await api.updateWorkflow(savedWorkflowId, { active }).catch(() => null);
+    try {
+      if (active && !get().savedWorkflowId) {
+        await get().saveWorkflow();
+      }
+      const { savedWorkflowId } = get();
+      if (savedWorkflowId) {
+        await api.updateWorkflow(savedWorkflowId, { active });
+      }
+    } catch (err) {
+      set({ workflowActive: prev });
+      throw err;
     }
   },
 
@@ -175,7 +204,9 @@ export const useStore = create<OttoStore>((set, get) => ({
       } else {
         const { id } = await api.createWorkflow(workflowName, definition);
         set({ savedWorkflowId: id });
+        writeLastWorkflowId(id);
       }
+      if (savedWorkflowId) writeLastWorkflowId(savedWorkflowId);
       get().fetchWorkflows();
     } finally {
       set({ isSaving: false });
@@ -218,6 +249,17 @@ export const useStore = create<OttoStore>((set, get) => ({
       edges: loadedEdges,
       selectedNodeId: null,
     });
+    writeLastWorkflowId(id);
+  },
+
+  restoreLastWorkflow: async () => {
+    const id = readLastWorkflowId();
+    if (!id) return;
+    try {
+      await get().loadWorkflow(id);
+    } catch {
+      writeLastWorkflowId(null);
+    }
   },
 
   fetchWorkflows: async () => {
@@ -235,6 +277,7 @@ export const useStore = create<OttoStore>((set, get) => ({
     const { savedWorkflowId } = get();
     if (savedWorkflowId === id) {
       set({ savedWorkflowId: null, workflowName: 'Untitled Workflow', nodes: [], edges: [], workflowActive: false });
+      writeLastWorkflowId(null);
     }
     get().fetchWorkflows();
   },
@@ -248,6 +291,7 @@ export const useStore = create<OttoStore>((set, get) => ({
       edges: [],
       selectedNodeId: null,
     });
+    writeLastWorkflowId(null);
   },
 
   // Credentials
@@ -291,15 +335,38 @@ export const useStore = create<OttoStore>((set, get) => ({
   executionPhase: 'idle',
   executionId: null,
   nodeExecutions: {},
+  selectedExecutionDetail: null,
+  executionDetailLoading: false,
   _sseSource: null,
 
   setExecutionStarted: (executionId) =>
-    set({ executionId, executionPhase: 'running', nodeExecutions: {} }),
+    set({ executionId, executionPhase: 'running', nodeExecutions: {}, selectedExecutionDetail: null }),
 
   setNodeExecutions: (executions) =>
     set({
       nodeExecutions: Object.fromEntries(executions.map((e) => [e.node_id, e])),
     }),
+
+  loadExecutionDetail: async (executionId) => {
+    set({ executionDetailLoading: true });
+    try {
+      const detail = await api.getExecution(executionId);
+      set({
+        selectedExecutionDetail: detail,
+        executionId,
+        executionPhase: detail.execution.status === 'running' || detail.execution.status === 'pending'
+          ? 'running'
+          : detail.execution.status === 'success'
+            ? 'success'
+            : detail.execution.status === 'error'
+              ? 'error'
+              : 'idle',
+        nodeExecutions: Object.fromEntries(detail.nodes.map((e) => [e.node_id, e])),
+      });
+    } finally {
+      set({ executionDetailLoading: false });
+    }
+  },
 
   setExecutionPhase: (phase) => set({ executionPhase: phase }),
 
@@ -312,24 +379,59 @@ export const useStore = create<OttoStore>((set, get) => ({
     get().stopSSE();
     const source = api.streamExecution(executionId);
 
+    const mergeEvent = (raw: unknown, status: NodeExecution['status']) => {
+      const data = raw as { nodeId?: string; node_id?: string; nodeName?: string; node_name?: string; nodeType?: string; node_type?: string; error?: string | null };
+      const nodeId = data.node_id ?? data.nodeId;
+      if (!nodeId) return;
+      const ne: NodeExecution = {
+        id: `${executionId}:${nodeId}:${status}`,
+        node_id: nodeId,
+        node_name: data.node_name ?? data.nodeName ?? nodeId,
+        node_type: data.node_type ?? data.nodeType ?? 'unknown',
+        status,
+        started_at: status === 'running' ? new Date().toISOString() : null,
+        completed_at: status !== 'running' ? new Date().toISOString() : null,
+        duration_ms: null,
+        input: null,
+        output: null,
+        error: data.error ?? null,
+        retry_count: 0,
+      };
+      set((s) => ({ nodeExecutions: { ...s.nodeExecutions, [nodeId]: { ...s.nodeExecutions[nodeId], ...ne } } }));
+    };
+
+    source.addEventListener('snapshot', (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data) as ExecutionDetail;
+        const phase = data.execution.status === 'success'
+          ? 'success'
+          : data.execution.status === 'error'
+            ? 'error'
+            : 'running';
+        set({
+          selectedExecutionDetail: data,
+          executionPhase: phase,
+          nodeExecutions: Object.fromEntries(data.nodes.map((ne) => [ne.node_id, ne])),
+        });
+      } catch {}
+    });
+
     source.addEventListener('node:start', (e: MessageEvent) => {
       try {
-        const ne = JSON.parse(e.data) as NodeExecution;
-        set((s) => ({ nodeExecutions: { ...s.nodeExecutions, [ne.node_id]: ne } }));
+        mergeEvent(JSON.parse(e.data), 'running');
       } catch {}
     });
 
     source.addEventListener('node:end', (e: MessageEvent) => {
       try {
-        const ne = JSON.parse(e.data) as NodeExecution;
-        set((s) => ({ nodeExecutions: { ...s.nodeExecutions, [ne.node_id]: ne } }));
+        const data = JSON.parse(e.data);
+        mergeEvent(data, data.status === 'error' ? 'error' : 'success');
       } catch {}
     });
 
     source.addEventListener('node:skipped', (e: MessageEvent) => {
       try {
-        const ne = JSON.parse(e.data) as NodeExecution;
-        set((s) => ({ nodeExecutions: { ...s.nodeExecutions, [ne.node_id]: ne } }));
+        mergeEvent(JSON.parse(e.data), 'skipped');
       } catch {}
     });
 
@@ -338,6 +440,12 @@ export const useStore = create<OttoStore>((set, get) => ({
         const data = JSON.parse(e.data) as { status: string };
         const phase = data.status === 'success' ? 'success' : 'error';
         set({ executionPhase: phase });
+        api.getExecution(executionId).then((detail) => {
+          set({
+            selectedExecutionDetail: detail,
+            nodeExecutions: Object.fromEntries(detail.nodes.map((ne) => [ne.node_id, ne])),
+          });
+        }).catch(() => {});
         setTimeout(() => {
           set({ executionPhase: 'idle' });
         }, 3000);

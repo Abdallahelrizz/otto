@@ -169,6 +169,47 @@ function WebhookPanel({ config, onChange }: PanelProps) {
   );
 }
 
+/* Schedule */
+function SchedulePanel({ config, onChange }: PanelProps) {
+  const mode = (config.mode as string) ?? 'interval';
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <FieldGroup label="Mode">
+        <select style={selectStyle} value={mode} onChange={(e) => onChange('mode', e.target.value)}>
+          <option value="interval">Interval</option>
+          <option value="cron">Cron</option>
+        </select>
+      </FieldGroup>
+      {mode === 'cron' ? (
+        <>
+          <FieldGroup label="Cron expression">
+            <input style={inputStyle} value={(config.cron as string) ?? '0 * * * *'} onChange={(e) => onChange('cron', e.target.value)} />
+          </FieldGroup>
+          <FieldGroup label="Timezone">
+            <input style={inputStyle} value={(config.timezone as string) ?? 'UTC'} onChange={(e) => onChange('timezone', e.target.value)} />
+          </FieldGroup>
+        </>
+      ) : (
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ flex: 1 }}>
+            <label style={labelStyle}>Every</label>
+            <input type="number" min={1} style={inputStyle} value={(config.every as number) ?? 15}
+              onChange={(e) => onChange('every', parseInt(e.target.value))} />
+          </div>
+          <div style={{ width: 120 }}>
+            <label style={labelStyle}>Unit</label>
+            <select style={selectStyle} value={(config.unit as string) ?? 'minutes'} onChange={(e) => onChange('unit', e.target.value)}>
+              <option value="seconds">Seconds</option>
+              <option value="minutes">Minutes</option>
+              <option value="hours">Hours</option>
+            </select>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── HTTP Request ── */
 type Header = { key: string; value: string };
 
@@ -619,9 +660,9 @@ function PostgresQueryPanel({ config, onChange }: PanelProps) {
       </FieldGroup>
       <FieldGroup label="SQL">
         <textarea style={{ ...monoStyle, minHeight: '100px' }}
-          value={(config.sql as string) ?? ''}
+          value={(config.query as string) ?? ''}
           placeholder="SELECT * FROM users WHERE id = $1"
-          onChange={(e) => onChange('sql', e.target.value)} />
+          onChange={(e) => onChange('query', e.target.value)} />
       </FieldGroup>
       <div>
         <label style={labelStyle}>Params (JSON array)</label>
@@ -680,7 +721,7 @@ function RedisSetPanel({ config, onChange }: PanelProps) {
 /* ── AI Agent ── */
 function AiAgentPanel({ config, onChange }: PanelProps) {
   const tools = (config.tools as AgentTool[]) ?? [];
-  const TOOL_TYPES = ['http_request', 'postgres_query', 'redis_get', 'code_js', 'memory_read', 'vector_search'];
+  const TOOL_TYPES = ['http_request', 'postgres_query', 'redis_get', 'code', 'memory_read', 'vector_search'];
 
   const updateTool = (i: number, field: keyof AgentTool, val: string) => {
     onChange('tools', tools.map((t, j) => j === i ? { ...t, [field]: val } : t));
@@ -766,6 +807,49 @@ function VectorSearchPanel({ config, onChange }: PanelProps) {
   );
 }
 
+/* Code */
+function CodePanel({ config, onChange }: PanelProps) {
+  const language = (config.language as string) ?? 'javascript';
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ flex: 1 }}>
+          <label style={labelStyle}>Language</label>
+          <select style={selectStyle} value={language} onChange={(e) => onChange('language', e.target.value)}>
+            <option value="javascript">JavaScript</option>
+            <option value="python">Python</option>
+            <option value="bash">Bash</option>
+          </select>
+        </div>
+        <div style={{ width: 96 }}>
+          <label style={labelStyle}>Version</label>
+          <input style={inputStyle} value={(config.version as string) ?? (language === 'python' ? '3.11.x' : language === 'bash' ? '5.x' : '18.x')}
+            onChange={(e) => onChange('version', e.target.value)} />
+        </div>
+      </div>
+      <FieldGroup label="Code">
+        <textarea style={{ ...monoStyle, minHeight: '160px' }}
+          value={(config.code as string) ?? ''}
+          onChange={(e) => onChange('code', e.target.value)} />
+      </FieldGroup>
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ flex: 1 }}>
+          <label style={labelStyle}>Timeout ms</label>
+          <input type="number" min={100} max={30000} style={inputStyle}
+            value={(config.timeoutMs as number) ?? 5000}
+            onChange={(e) => onChange('timeoutMs', parseInt(e.target.value))} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={labelStyle}>Memory MB</label>
+          <input type="number" min={16} max={512} style={inputStyle}
+            value={(config.memoryLimitMb as number) ?? 128}
+            onChange={(e) => onChange('memoryLimitMb', parseInt(e.target.value))} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Generic fallback (for non-custom nodes) ── */
 function GenericPanel({ config, onChange, nodeType }: PanelProps & { nodeType: string }) {
   const def = getNodeDef(nodeType);
@@ -825,6 +909,8 @@ function NodePanel({ nodeType, config, onChange }: PanelProps & { nodeType: stri
     case 'webhook_trigger':
     case 'manual_trigger':
       return <WebhookPanel config={config} onChange={onChange} />;
+    case 'schedule_trigger':
+      return <SchedulePanel config={config} onChange={onChange} />;
     case 'http_request':
       return <HttpRequestPanel config={config} onChange={onChange} />;
     case 'llm_call':
@@ -835,6 +921,8 @@ function NodePanel({ nodeType, config, onChange }: PanelProps & { nodeType: stri
       return <MergePanel config={config} onChange={onChange} />;
     case 'set':
       return <SetPanel config={config} onChange={onChange} />;
+    case 'code':
+      return <CodePanel config={config} onChange={onChange} />;
     case 'delay':
       return <DelayPanel config={config} onChange={onChange} />;
     case 'filter':
@@ -975,6 +1063,15 @@ export function ConfigPanel() {
 
       {/* Scrollable body */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+        <div style={{ marginBottom: '18px' }}>
+          <label style={labelStyle}>Node label</label>
+          <input
+            style={inputStyle}
+            value={(node.data.label as string) ?? ''}
+            onChange={(e) => updateNodeLabel(node.id, e.target.value)}
+          />
+        </div>
+
         {/* EXECUTION section */}
         {execution && (
           <>

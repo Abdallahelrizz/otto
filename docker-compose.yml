@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   # ─── Infrastructure ────────────────────────────────────────────────────────
 
@@ -35,6 +33,28 @@ services:
       retries: 10
     restart: unless-stopped
 
+  piston:
+    image: ghcr.io/engineer-man/piston:latest
+    privileged: true
+    ports:
+      - '2000:2000'
+    volumes:
+      - piston_data:/piston
+    restart: unless-stopped
+
+  piston-init:
+    image: curlimages/curl:8.10.1
+    depends_on:
+      - piston
+    command: >
+      sh -c "
+      until curl -fsS http://piston:2000/api/v2/packages >/dev/null; do sleep 2; done;
+      curl -fsS -X POST http://piston:2000/api/v2/packages -H 'Content-Type: application/json' -d '{\"language\":\"node\",\"version\":\"18.x\"}' || true;
+      curl -fsS -X POST http://piston:2000/api/v2/packages -H 'Content-Type: application/json' -d '{\"language\":\"python\",\"version\":\"3.11.x\"}' || true;
+      curl -fsS -X POST http://piston:2000/api/v2/packages -H 'Content-Type: application/json' -d '{\"language\":\"bash\",\"version\":\"5.x\"}' || true;
+      echo piston runtimes initialized
+      "
+
   # ─── Otto server ───────────────────────────────────────────────────────────
 
   otto:
@@ -44,7 +64,9 @@ services:
     environment:
       DATABASE_URL:              postgresql://otto:otto_dev@postgres:5432/otto
       REDIS_URL:                 redis://redis:6379
+      PISTON_URL:                http://piston:2000
       CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:?set CREDENTIAL_ENCRYPTION_KEY in .env}
+      SESSION_DAYS:              ${SESSION_DAYS:-7}
       PORT:                      3000
       HOST:                      0.0.0.0
       # Optional — nodes fall back to these if no credential is attached
@@ -56,8 +78,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      piston:
+        condition: service_started
     restart: unless-stopped
 
 volumes:
   postgres_data:
   redis_data:
+  piston_data:
