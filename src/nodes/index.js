@@ -5,6 +5,7 @@ import { ifNode } from './if.js';
 import { mergeNode } from './merge.js';
 import { setNode } from './set.js';
 import { placeholderNode } from './placeholder.js';
+import { aiAgent } from './ai-agent.js';
 
 const registry = new Map([
   ['webhook_trigger',  webhookTrigger],
@@ -15,6 +16,7 @@ const registry = new Map([
   ['merge',            mergeNode],
   ['set',              setNode],
   ['placeholder',      placeholderNode],
+  ['ai_agent',         aiAgent],
 ]);
 
 export function getNodeHandler(type) {
