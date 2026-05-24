@@ -1,15 +1,4 @@
-/**
- * Simple expression resolver for node config values.
- * Replaces {{ path }} patterns with values from context.
- *
- * Supported paths:
- *   {{ input.field }}          — from the node's merged input
- *   {{ nodes.nodeId.field }}   — from a specific node's output
- */
-
-function getByPath(obj, path) {
-  return path.trim().split('.').reduce((acc, key) => acc?.[key], obj);
-}
+import { getByPath } from '../utils/path.js';
 
 export function resolveValue(value, context) {
   if (typeof value !== 'string') return value;

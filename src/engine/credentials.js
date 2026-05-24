@@ -17,12 +17,20 @@ function decrypt(encryptedData) {
   return JSON.parse(decrypted);
 }
 
-export async function getCredential(credentialId) {
+export async function getCredential(credentialId, { workflowId, nodeId } = {}) {
   const { rows } = await db.query(
     'SELECT id, name, type, data FROM credentials WHERE id = $1',
     [credentialId]
   );
   if (!rows.length) throw new Error(`Credential ${credentialId} not found`);
   const cred = rows[0];
+
+  // Fire-and-forget access log (non-blocking, non-fatal)
+  db.query(
+    `INSERT INTO credentials_access_log (credential_id, workflow_id, node_id)
+     VALUES ($1, $2, $3)`,
+    [credentialId, workflowId ?? null, nodeId ?? null]
+  ).catch(() => {});
+
   return { id: cred.id, name: cred.name, type: cred.type, data: decrypt(cred.data) };
 }

@@ -171,3 +171,16 @@ CREATE INDEX idx_memory_interactions_session ON memory_interactions(session_id);
 
 -- Webhook path lookup index (workflows with webhook triggers)
 CREATE INDEX idx_workflows_webhook ON workflows USING GIN (definition jsonb_path_ops);
+
+-- ─────────────────────────────────────────────
+-- Migration 002: workspace_id on executions
+-- ─────────────────────────────────────────────
+
+ALTER TABLE executions
+  ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE;
+
+CREATE INDEX IF NOT EXISTS idx_executions_workspace
+  ON executions(workspace_id, started_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_workflows_workspace_updated
+  ON workflows(workspace_id, updated_at DESC);

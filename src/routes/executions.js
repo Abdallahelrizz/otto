@@ -20,10 +20,9 @@ const DEMO_USER_ID      = '00000000-0000-0000-0000-000000000000';
 const DEMO_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
 
 export async function executionRoutes(fastify) {
-  // Canvas endpoint — accepts a workflow definition inline, fires async execution
+  // Canvas endpoint — accepts an inline definition OR a saved workflowId
   fastify.post('/api/v1/execute', async (req, reply) => {
-    const { definition, input = {}, name = 'Canvas Draft' } = req.body ?? {};
-    if (!definition) return reply.code(400).send({ error: 'definition is required' });
+    const { definition, workflowId: savedWorkflowId, input = {}, name = 'Canvas Draft' } = req.body ?? {};
 
     // Bootstrap demo workspace (idempotent)
     await db.query(
@@ -35,18 +34,34 @@ export async function executionRoutes(fastify) {
       [DEMO_WORKSPACE_ID, DEMO_USER_ID]
     );
 
-    // Create a workflow record for this run
-    const workflowId = randomUUID();
-    await db.query(
-      `INSERT INTO workflows (id, workspace_id, name, definition, active)
-       VALUES ($1, $2, $3, $4, true)`,
-      [workflowId, DEMO_WORKSPACE_ID, name, JSON.stringify(definition)]
-    );
+    let workflowId;
+    let resolvedDefinition;
+
+    if (savedWorkflowId) {
+      // Run a saved workflow by ID — fetch its stored definition
+      const { rows } = await db.query(
+        'SELECT id, workspace_id, definition FROM workflows WHERE id = $1',
+        [savedWorkflowId]
+      );
+      if (!rows.length) return reply.code(404).send({ error: 'Workflow not found' });
+      workflowId = rows[0].id;
+      resolvedDefinition = rows[0].definition;
+    } else {
+      if (!definition) return reply.code(400).send({ error: 'definition or workflowId is required' });
+      // Unsaved canvas run — create a transient draft workflow row
+      workflowId = randomUUID();
+      resolvedDefinition = definition;
+      await db.query(
+        `INSERT INTO workflows (id, workspace_id, name, definition, active)
+         VALUES ($1, $2, $3, $4, false)`,
+        [workflowId, DEMO_WORKSPACE_ID, name, JSON.stringify(resolvedDefinition)]
+      );
+    }
 
     const executionId = await fireWorkflow({
       workflowId,
       workspaceId: DEMO_WORKSPACE_ID,
-      definition,
+      definition: resolvedDefinition,
       input,
       triggerType: 'manual',
     });

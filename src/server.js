@@ -2,11 +2,17 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { webhookRoutes } from './routes/webhooks.js';
 import { executionRoutes } from './routes/executions.js';
+import { workflowRoutes } from './routes/workflows.js';
+import { credentialRoutes } from './routes/credentials.js';
 import { startWorker } from './queue/worker.js';
 
-const fastify = Fastify({ logger: true });
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim())
+  : true; // true = reflect request origin (dev default)
 
-await fastify.register(cors, { origin: true });
+const fastify = Fastify({ logger: true, bodyLimit: 10 * 1024 * 1024 });
+
+await fastify.register(cors, { origin: allowedOrigins });
 
 // Parse JSON bodies
 fastify.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
@@ -21,6 +27,8 @@ fastify.addContentTypeParser('application/json', { parseAs: 'string' }, (req, bo
 // Routes
 await fastify.register(webhookRoutes);
 await fastify.register(executionRoutes);
+await fastify.register(workflowRoutes);
+await fastify.register(credentialRoutes);
 
 // Health check
 fastify.get('/health', async () => ({ status: 'ok', version: '0.1.0' }));

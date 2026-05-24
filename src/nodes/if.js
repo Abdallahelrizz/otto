@@ -10,6 +10,7 @@
  *   { _ifBranches: { true: data | SKIP, false: data | SKIP } }
  */
 import { SKIP } from '../engine/skip.js';
+import { getByPath } from '../utils/path.js';
 
 const OPERATORS = {
   '==':          (a, b) => a == b,
@@ -25,9 +26,6 @@ const OPERATORS = {
   'isNotEmpty':  (a)    => a !== '' && a !== null && a !== undefined,
 };
 
-function getByPath(obj, path) {
-  return path.split('.').reduce((acc, key) => acc?.[key], obj);
-}
 
 function evaluate(condition, input) {
   const { left, operator, right } = condition;
