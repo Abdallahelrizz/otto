@@ -11,6 +11,8 @@ export interface NodeTypeDef {
   label: string;
   description: string;
   color: string;
+  tint: NodeTint;
+  serviceColor?: string;
   complex?: boolean;
   slug?: string;
   handles: {
@@ -29,18 +31,68 @@ export type FieldDef =
   | { key: string; label: string; type: 'conditions' }
   | { key: string; label: string; type: 'code' };
 
+// ─── v5 amber brand system ────────────────────────────────────────────────────
+
+export const OTTO_AMBER       = '#FF6F1A';
+export const OTTO_AMBER_HOVER = '#FF8A47';
+
+// Shape encodes what a node DOES — driven by category
+export const CATEGORY_SHAPE: Record<string, 'rounded' | 'circle' | 'square-soft' | 'square-tight'> = {
+  triggers: 'rounded',
+  ai:       'circle',
+  core:     'square-soft',
+  data:     'square-tight',
+};
+
+// Color encodes WHAT a node IS — per-node tint
+export type NodeTint = 'amber' | 'service' | 'neutral';
+
+// Real service brand colors — only used when tint === 'service'
+export const SERVICE = {
+  postgres:  '#336791',
+  openai:    '#10A37F',
+  anthropic: '#D97757',
+  slack:     '#611F69',
+  twilio:    '#F22F46',
+  github:    '#1F2328',
+  stripe:    '#635BFF',
+  redis:     '#DC382D',
+} as const;
+
+// Edge colors — neutral, not category-tinted
+export const EDGE_COLOR_DARK  = 'rgba(255,255,255,0.16)';
+export const EDGE_COLOR_LIGHT = 'rgba(15,15,10,0.18)';
+
+// Resolve the display color for a node, theme-aware
+export function nodeColor(def: NodeTypeDef, theme: 'dark' | 'light'): string {
+  if (def.tint === 'amber')   return OTTO_AMBER;
+  if (def.tint === 'service') return def.serviceColor ?? '#94A3B8';
+  return theme === 'dark' ? '#A1A1AA' : '#52525B';
+}
+
+// Resolve the icon-container border-radius for a node
+export function nodeRadius(def: NodeTypeDef): string {
+  const shape = CATEGORY_SHAPE[def.category];
+  if (shape === 'circle')        return '50%';
+  if (shape === 'rounded')       return '7px';
+  if (shape === 'square-tight')  return '2px';
+  return '4px';
+}
+
+// ─── Legacy exports — kept for backwards compatibility ────────────────────────
+
 export const CATEGORY_COLORS: Record<string, string> = {
-  triggers: '#f59e0b',
-  core:     '#64748b',
-  ai:       '#8b5cf6',
-  data:     '#06b6d4',
+  triggers: OTTO_AMBER,
+  core:     '#A1A1AA',
+  ai:       OTTO_AMBER,
+  data:     '#A1A1AA',
 };
 
 export const CATEGORY_EDGE_COLOR: Record<string, string> = {
-  triggers: '#f59e0b',
-  core:     'rgba(255,255,255,0.2)',
-  ai:       '#8b5cf6',
-  data:     '#06b6d4',
+  triggers: EDGE_COLOR_DARK,
+  core:     EDGE_COLOR_DARK,
+  ai:       EDGE_COLOR_DARK,
+  data:     EDGE_COLOR_DARK,
 };
 
 export const CATEGORY_ICON_WEIGHT: Record<string, string> = {
@@ -65,7 +117,8 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'triggers',
     label: 'Webhook',
     description: 'Receive HTTP requests',
-    color: '#f59e0b',
+    color: OTTO_AMBER,
+    tint: 'amber',
     slug: 'WEBHK',
     handles: {
       in: [],
@@ -81,7 +134,8 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'core',
     label: 'HTTP Request',
     description: 'Call any REST API',
-    color: '#64748b',
+    color: '#A1A1AA',
+    tint: 'neutral',
     slug: 'HTTP',
     handles: {
       in: [{ id: 'input' }],
@@ -105,7 +159,8 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'core',
     label: 'IF Condition',
     description: 'Branch on conditions',
-    color: '#64748b',
+    color: '#A1A1AA',
+    tint: 'neutral',
     slug: 'IF',
     complex: true,
     handles: {
@@ -123,7 +178,8 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'core',
     label: 'Merge',
     description: 'Combine parallel branches',
-    color: '#64748b',
+    color: '#A1A1AA',
+    tint: 'neutral',
     slug: 'MERGE',
     complex: true,
     handles: {
@@ -144,7 +200,8 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'core',
     label: 'Set / Transform',
     description: 'Shape and rename fields',
-    color: '#64748b',
+    color: '#A1A1AA',
+    tint: 'neutral',
     slug: 'SET',
     handles: {
       in: [{ id: 'input' }],
@@ -161,7 +218,8 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'core',
     label: 'Code (JS)',
     description: 'Run arbitrary JavaScript',
-    color: '#64748b',
+    color: '#A1A1AA',
+    tint: 'neutral',
     slug: 'CODE',
     handles: {
       in: [{ id: 'input' }],
@@ -175,7 +233,8 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'core',
     label: 'Delay',
     description: 'Wait before continuing',
-    color: '#64748b',
+    color: '#A1A1AA',
+    tint: 'neutral',
     slug: 'DELAY',
     handles: {
       in: [{ id: 'input' }],
@@ -192,7 +251,8 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'core',
     label: 'Filter',
     description: 'Drop items that don\'t match',
-    color: '#64748b',
+    color: '#A1A1AA',
+    tint: 'neutral',
     slug: 'FLTR',
     handles: {
       in: [{ id: 'input' }],
@@ -206,7 +266,8 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'core',
     label: 'Loop',
     description: 'Iterate over an array',
-    color: '#64748b',
+    color: '#A1A1AA',
+    tint: 'neutral',
     slug: 'LOOP',
     complex: true,
     handles: {
@@ -227,7 +288,8 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'core',
     label: 'Sub-workflow',
     description: 'Call another workflow',
-    color: '#64748b',
+    color: '#A1A1AA',
+    tint: 'neutral',
     slug: 'SUBFL',
     handles: {
       in: [{ id: 'input' }],
@@ -241,7 +303,8 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'core',
     label: 'Send Email',
     description: 'Send an email via SMTP',
-    color: '#64748b',
+    color: '#A1A1AA',
+    tint: 'neutral',
     slug: 'EMAIL',
     handles: {
       in: [{ id: 'input' }],
@@ -261,7 +324,8 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'ai',
     label: 'LLM Call',
     description: 'Call any language model',
-    color: '#8b5cf6',
+    color: OTTO_AMBER,
+    tint: 'amber',
     slug: 'LLM',
     complex: true,
     handles: {
@@ -284,7 +348,8 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'ai',
     label: 'AI Agent',
     description: 'Autonomous LLM agent with tools',
-    color: '#8b5cf6',
+    color: OTTO_AMBER,
+    tint: 'amber',
     slug: 'AGENT',
     complex: true,
     handles: {
@@ -311,7 +376,8 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'ai',
     label: 'Vector Search',
     description: 'Semantic similarity search',
-    color: '#8b5cf6',
+    color: OTTO_AMBER,
+    tint: 'amber',
     slug: 'VEC',
     handles: {
       in: [{ id: 'input' }],
@@ -331,7 +397,9 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'data',
     label: 'Postgres Query',
     description: 'Run a SQL query',
-    color: '#06b6d4',
+    color: SERVICE.postgres,
+    tint: 'service',
+    serviceColor: SERVICE.postgres,
     slug: 'PG',
     handles: {
       in: [{ id: 'input' }],
@@ -348,7 +416,9 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'data',
     label: 'Redis Get',
     description: 'Read a value from Redis',
-    color: '#06b6d4',
+    color: SERVICE.redis,
+    tint: 'service',
+    serviceColor: SERVICE.redis,
     slug: 'GET',
     handles: {
       in: [{ id: 'input' }],
@@ -362,7 +432,9 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     category: 'data',
     label: 'Redis Set',
     description: 'Write a value to Redis',
-    color: '#06b6d4',
+    color: SERVICE.redis,
+    tint: 'service',
+    serviceColor: SERVICE.redis,
     slug: 'SET',
     handles: {
       in: [{ id: 'input' }],
