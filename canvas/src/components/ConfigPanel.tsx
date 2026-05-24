@@ -1,9 +1,10 @@
 import type { CSSProperties } from 'react';
 import { useStore } from '../store';
-import { getNodeDef, CATEGORY_COLORS } from './nodes/nodeConfig';
+import { getNodeDef } from './nodes/nodeConfig';
 import { JsonViewer } from './JsonViewer';
 import { ModelSelect } from './ModelSelect';
 import type { NodeExecution } from '../types';
+import type { AgentTool } from './nodes/nodeConfig';
 
 /* ── Shared style tokens ── */
 const labelStyle: CSSProperties = {
@@ -478,6 +479,293 @@ function SetPanel({ config, onChange }: PanelProps) {
   );
 }
 
+/* ── Delay ── */
+function DelayPanel({ config, onChange }: PanelProps) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ flex: 1 }}>
+          <label style={labelStyle}>Amount</label>
+          <input type="number" style={inputStyle} min={0}
+            value={(config.amount as number) ?? 1}
+            onChange={(e) => onChange('amount', parseFloat(e.target.value))} />
+        </div>
+        <div style={{ width: '90px' }}>
+          <label style={labelStyle}>Unit</label>
+          <select style={selectStyle} value={(config.unit as string) ?? 's'}
+            onChange={(e) => onChange('unit', e.target.value)}>
+            <option value="ms">ms</option>
+            <option value="s">s</option>
+            <option value="m">m</option>
+          </select>
+        </div>
+      </div>
+      <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+        Max 5 minutes. Input passes through unchanged.
+      </p>
+    </div>
+  );
+}
+
+/* ── Filter ── */
+function FilterPanel({ config, onChange }: PanelProps) {
+  return <IfConditionPanel config={config} onChange={onChange} />;
+}
+
+/* ── Loop ── */
+function LoopPanel({ config, onChange }: PanelProps) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div>
+        <label style={labelStyle}>Array path</label>
+        <input style={inputStyle}
+          value={(config.over as string) ?? ''}
+          placeholder="input.items or {{ input.results }}"
+          onChange={(e) => onChange('over', e.target.value)} />
+        <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '3px', display: 'block' }}>
+          Dot-path to the array to iterate over
+        </span>
+      </div>
+      <FieldGroup label="Max iterations">
+        <input type="number" style={inputStyle} min={1} max={1000}
+          value={(config.limit as number) ?? 100}
+          onChange={(e) => onChange('limit', parseInt(e.target.value))} />
+      </FieldGroup>
+    </div>
+  );
+}
+
+/* ── Sub-workflow ── */
+function SubWorkflowPanel({ config, onChange }: PanelProps) {
+  const workflowList = useStore((s) => s.workflowList);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div>
+        <label style={labelStyle}>Workflow</label>
+        {workflowList.length > 0 ? (
+          <select style={selectStyle}
+            value={(config.workflowId as string) ?? ''}
+            onChange={(e) => onChange('workflowId', e.target.value)}>
+            <option value="">Select a workflow…</option>
+            {workflowList.map((wf) => (
+              <option key={wf.id} value={wf.id}>{wf.name}</option>
+            ))}
+          </select>
+        ) : (
+          <input style={inputStyle}
+            value={(config.workflowId as string) ?? ''}
+            placeholder="Workflow ID (UUID)"
+            onChange={(e) => onChange('workflowId', e.target.value)} />
+        )}
+      </div>
+      <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+        Max recursion depth: 5
+      </p>
+    </div>
+  );
+}
+
+/* ── Send Email ── */
+function SendEmailPanel({ config, onChange }: PanelProps) {
+  const credentials = useStore((s) => s.credentials);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <FieldGroup label="Credential">
+        <select style={selectStyle}
+          value={(config.credentialId as string) ?? ''}
+          onChange={(e) => onChange('credentialId', e.target.value)}>
+          <option value="">Use env SMTP config</option>
+          {credentials.filter((c) => ['smtp', 'resend'].includes(c.type)).map((c) => (
+            <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
+          ))}
+        </select>
+      </FieldGroup>
+      <FieldGroup label="To">
+        <input style={inputStyle} value={(config.to as string) ?? ''}
+          placeholder="{{ input.email }}"
+          onChange={(e) => onChange('to', e.target.value)} />
+      </FieldGroup>
+      <FieldGroup label="Subject">
+        <input style={inputStyle} value={(config.subject as string) ?? ''}
+          placeholder="{{ input.subject }}"
+          onChange={(e) => onChange('subject', e.target.value)} />
+      </FieldGroup>
+      <FieldGroup label="Body">
+        <textarea style={monoStyle} value={(config.body as string) ?? ''}
+          placeholder="Hello {{ input.name }},&#10;&#10;…"
+          onChange={(e) => onChange('body', e.target.value)} />
+      </FieldGroup>
+    </div>
+  );
+}
+
+/* ── Postgres Query ── */
+function PostgresQueryPanel({ config, onChange }: PanelProps) {
+  const credentials = useStore((s) => s.credentials);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <FieldGroup label="Credential">
+        <select style={selectStyle}
+          value={(config.credentialId as string) ?? ''}
+          onChange={(e) => onChange('credentialId', e.target.value)}>
+          <option value="">Use DATABASE_URL env</option>
+          {credentials.filter((c) => c.type === 'postgres').map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+      </FieldGroup>
+      <FieldGroup label="SQL">
+        <textarea style={{ ...monoStyle, minHeight: '100px' }}
+          value={(config.sql as string) ?? ''}
+          placeholder="SELECT * FROM users WHERE id = $1"
+          onChange={(e) => onChange('sql', e.target.value)} />
+      </FieldGroup>
+      <div>
+        <label style={labelStyle}>Params (JSON array)</label>
+        <textarea style={{ ...monoStyle, minHeight: '50px' }}
+          value={(config.params as string) ?? '[]'}
+          placeholder='["{{ input.userId }}"]'
+          onChange={(e) => onChange('params', e.target.value)} />
+        <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '3px', display: 'block' }}>
+          Array of values for $1, $2, … placeholders
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ── Redis Get ── */
+function RedisGetPanel({ config, onChange }: PanelProps) {
+  return (
+    <div>
+      <label style={labelStyle}>Key</label>
+      <input style={inputStyle} value={(config.key as string) ?? ''}
+        placeholder="{{ input.userId }}"
+        onChange={(e) => onChange('key', e.target.value)} />
+      <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '3px', display: 'block' }}>
+        Supports {'{{ }}'} expressions. Returns &#123; key, value, found &#125;.
+      </span>
+    </div>
+  );
+}
+
+/* ── Redis Set ── */
+function RedisSetPanel({ config, onChange }: PanelProps) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <FieldGroup label="Key">
+        <input style={inputStyle} value={(config.key as string) ?? ''}
+          placeholder="{{ input.sessionId }}"
+          onChange={(e) => onChange('key', e.target.value)} />
+      </FieldGroup>
+      <FieldGroup label="Value">
+        <input style={inputStyle} value={(config.value as string) ?? ''}
+          placeholder="{{ input.data }}"
+          onChange={(e) => onChange('value', e.target.value)} />
+      </FieldGroup>
+      <div>
+        <label style={labelStyle}>TTL (seconds)</label>
+        <input type="number" style={inputStyle} min={0}
+          value={(config.ttl as number) ?? ''}
+          placeholder="Leave empty for no expiry"
+          onChange={(e) => onChange('ttl', e.target.value ? parseInt(e.target.value) : null)} />
+      </div>
+    </div>
+  );
+}
+
+/* ── AI Agent ── */
+function AiAgentPanel({ config, onChange }: PanelProps) {
+  const tools = (config.tools as AgentTool[]) ?? [];
+  const TOOL_TYPES = ['http_request', 'postgres_query', 'redis_get', 'code_js', 'memory_read', 'vector_search'];
+
+  const updateTool = (i: number, field: keyof AgentTool, val: string) => {
+    onChange('tools', tools.map((t, j) => j === i ? { ...t, [field]: val } : t));
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <FieldGroup label="Provider">
+        <select style={selectStyle} value={(config.provider as string) ?? 'openai'}
+          onChange={(e) => onChange('provider', e.target.value)}>
+          <option value="openai">OpenAI</option>
+          <option value="anthropic">Anthropic</option>
+          <option value="openrouter">OpenRouter</option>
+        </select>
+      </FieldGroup>
+      <FieldGroup label="Model">
+        <input style={inputStyle} value={(config.model as string) ?? 'gpt-4o'}
+          onChange={(e) => onChange('model', e.target.value)} />
+      </FieldGroup>
+      <FieldGroup label="System Prompt">
+        <textarea style={{ ...monoStyle, minHeight: '80px' }}
+          value={(config.systemPrompt as string) ?? ''}
+          placeholder="You are a helpful assistant."
+          onChange={(e) => onChange('systemPrompt', e.target.value)} />
+      </FieldGroup>
+      <FieldGroup label="Max Steps">
+        <input type="number" style={inputStyle} min={1} max={100}
+          value={(config.maxSteps as number) ?? 20}
+          onChange={(e) => onChange('maxSteps', parseInt(e.target.value))} />
+      </FieldGroup>
+
+      <div>
+        <label style={labelStyle}>Tools</label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {tools.map((tool, i) => (
+            <div key={tool.id} style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+              <input style={{ ...inputStyle, flex: 2 }} placeholder="Tool name"
+                value={tool.name}
+                onChange={(e) => updateTool(i, 'name', e.target.value)} />
+              <select style={{ ...selectStyle, flex: 1 }}
+                value={tool.type}
+                onChange={(e) => updateTool(i, 'type', e.target.value)}>
+                {TOOL_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <button style={removeBtnStyle}
+                onClick={() => onChange('tools', tools.filter((_, j) => j !== i))}>×</button>
+            </div>
+          ))}
+          <button style={addBtnStyle}
+            onClick={() => onChange('tools', [...tools, { id: crypto.randomUUID().slice(0, 8), name: '', type: 'http_request' }])}>
+            + Add tool
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Vector Search ── */
+function VectorSearchPanel({ config, onChange }: PanelProps) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <FieldGroup label="Query">
+        <input style={inputStyle} value={(config.query as string) ?? ''}
+          placeholder="{{ input.question }}"
+          onChange={(e) => onChange('query', e.target.value)} />
+      </FieldGroup>
+      <FieldGroup label="Collection">
+        <input style={inputStyle} value={(config.collection as string) ?? 'memory_patterns'}
+          onChange={(e) => onChange('collection', e.target.value)} />
+      </FieldGroup>
+      <FieldGroup label="Top K">
+        <input type="number" style={inputStyle} min={1} max={100}
+          value={(config.topK as number) ?? 10}
+          onChange={(e) => onChange('topK', parseInt(e.target.value))} />
+      </FieldGroup>
+      <FieldGroup label="Min Score (0–1)">
+        <input type="number" style={inputStyle} min={0} max={1} step={0.05}
+          value={(config.minScore as number) ?? 0.7}
+          onChange={(e) => onChange('minScore', parseFloat(e.target.value))} />
+      </FieldGroup>
+    </div>
+  );
+}
+
 /* ── Generic fallback (for non-custom nodes) ── */
 function GenericPanel({ config, onChange, nodeType }: PanelProps & { nodeType: string }) {
   const def = getNodeDef(nodeType);
@@ -547,6 +835,26 @@ function NodePanel({ nodeType, config, onChange }: PanelProps & { nodeType: stri
       return <MergePanel config={config} onChange={onChange} />;
     case 'set':
       return <SetPanel config={config} onChange={onChange} />;
+    case 'delay':
+      return <DelayPanel config={config} onChange={onChange} />;
+    case 'filter':
+      return <FilterPanel config={config} onChange={onChange} />;
+    case 'loop':
+      return <LoopPanel config={config} onChange={onChange} />;
+    case 'sub_workflow':
+      return <SubWorkflowPanel config={config} onChange={onChange} />;
+    case 'send_email':
+      return <SendEmailPanel config={config} onChange={onChange} />;
+    case 'postgres_query':
+      return <PostgresQueryPanel config={config} onChange={onChange} />;
+    case 'redis_get':
+      return <RedisGetPanel config={config} onChange={onChange} />;
+    case 'redis_set':
+      return <RedisSetPanel config={config} onChange={onChange} />;
+    case 'ai_agent':
+      return <AiAgentPanel config={config} onChange={onChange} />;
+    case 'vector_search':
+      return <VectorSearchPanel config={config} onChange={onChange} />;
     default:
       return <GenericPanel nodeType={nodeType} config={config} onChange={onChange} />;
   }

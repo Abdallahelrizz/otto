@@ -1,19 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NODE_TYPE_DEFS, NODE_CATEGORIES, nodeColor, nodeRadius, OTTO_AMBER, type NodeTypeDef } from './nodes/nodeConfig';
 import { NodeIcon } from './NodeIcon';
 import { v4 as uuidv4 } from 'uuid';
 import { useStore } from '../store';
+import { api } from '../api';
 import type { Node } from 'reactflow';
+import type { WorkflowListItem } from '../types';
 
 const AMBER = OTTO_AMBER;
 
 const NAV_ITEMS = [
-  { id: 'workflows', label: 'Workflows',    badge: null   },
-  { id: 'library',   label: 'Node library', badge: null   },
-  { id: 'history',   label: 'History',      badge: null   },
-  { id: 'models',    label: 'Models',       badge: 4      },
-  { id: 'memory',    label: 'Memory',       badge: null   },
-  { id: 'settings',  label: 'Settings',     badge: null   },
+  { id: 'workflows', label: 'Workflows',    badge: null },
+  { id: 'library',   label: 'Node library', badge: null },
+  { id: 'history',   label: 'History',      badge: null },
+  { id: 'models',    label: 'Models',       badge: 4    },
+  { id: 'memory',    label: 'Memory',       badge: null },
+  { id: 'settings',  label: 'Settings',     badge: null },
 ];
 
 function NavIcon({ id }: { id: string }) {
@@ -64,12 +66,500 @@ function writeStorage(val: string | null) {
   catch { /* noop */ }
 }
 
+// ── Workflows Tab ─────────────────────────────────────────────────────────────
+function WorkflowsTab() {
+  const workflowList = useStore((s) => s.workflowList);
+  const workflowListLoading = useStore((s) => s.workflowListLoading);
+  const savedWorkflowId = useStore((s) => s.savedWorkflowId);
+  const fetchWorkflows = useStore((s) => s.fetchWorkflows);
+  const loadWorkflow = useStore((s) => s.loadWorkflow);
+  const deleteWorkflow = useStore((s) => s.deleteWorkflow);
+  const newWorkflow = useStore((s) => s.newWorkflow);
+
+  const [importOpen, setImportOpen] = useState(false);
+  const [importJson, setImportJson] = useState('');
+  const [importLoading, setImportLoading] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  useEffect(() => { fetchWorkflows(); }, []);
+
+  const handleImport = async () => {
+    setImportLoading(true);
+    setImportError(null);
+    try {
+      const parsed = JSON.parse(importJson);
+      const { id, warnings } = await api.importN8n(parsed);
+      await loadWorkflow(id);
+      setImportOpen(false);
+      setImportJson('');
+      if (warnings.length > 0) alert(`Imported with warnings:\n${warnings.join('\n')}`);
+      fetchWorkflows();
+    } catch (e: unknown) {
+      setImportError(e instanceof Error ? e.message : 'Import failed');
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ padding: '8px 8px 4px', flexShrink: 0 }}>
+        <button
+          onClick={() => setImportOpen((x) => !x)}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '7px',
+            padding: '6px 10px',
+            background: 'transparent',
+            border: '1px solid var(--border)',
+            borderRadius: '5px',
+            cursor: 'pointer',
+            fontSize: '12px',
+            fontFamily: "'Inter'",
+            fontWeight: 500,
+            color: 'var(--text-secondary)',
+            letterSpacing: '-0.005em',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Import from n8n
+        </button>
+
+        {importOpen && (
+          <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <textarea
+              value={importJson}
+              onChange={(e) => setImportJson(e.target.value)}
+              placeholder="Paste n8n workflow JSON here…"
+              style={{
+                width: '100%',
+                height: '100px',
+                background: 'var(--bg-input)',
+                border: '1px solid var(--border-input)',
+                borderRadius: '5px',
+                color: 'var(--text-primary)',
+                fontFamily: "'JetBrains Mono'",
+                fontSize: '11px',
+                padding: '8px',
+                resize: 'vertical',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+            {importError && <span style={{ fontSize: '11px', color: 'var(--node-error)' }}>{importError}</span>}
+            <button
+              onClick={handleImport}
+              disabled={importLoading || !importJson.trim()}
+              style={{
+                padding: '6px',
+                background: AMBER,
+                border: 'none',
+                borderRadius: '4px',
+                color: '#fff',
+                fontFamily: "'Inter'",
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: importLoading || !importJson.trim() ? 'not-allowed' : 'pointer',
+                opacity: importLoading || !importJson.trim() ? 0.6 : 1,
+              }}
+            >
+              {importLoading ? 'Importing…' : 'Import'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px 8px' }}>
+        {workflowListLoading && (
+          <div style={{ padding: '20px', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>
+            Loading…
+          </div>
+        )}
+        {!workflowListLoading && workflowList.length === 0 && (
+          <div style={{ padding: '20px 12px', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            No saved workflows yet.<br />Save a workflow to see it here.
+          </div>
+        )}
+        {workflowList.map((wf) => (
+          <WorkflowRow
+            key={wf.id}
+            wf={wf}
+            isActive={wf.id === savedWorkflowId}
+            onLoad={() => loadWorkflow(wf.id)}
+            onDelete={() => deleteWorkflow(wf.id)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WorkflowRow({ wf, isActive, onLoad, onDelete }: {
+  wf: WorkflowListItem;
+  isActive: boolean;
+  onLoad: () => void;
+  onDelete: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const ts = new Date(wf.updated_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+  return (
+    <div
+      onClick={onLoad}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '7px 8px',
+        borderRadius: '5px',
+        background: isActive ? 'var(--bg-node-lift)' : hovered ? 'var(--bg-hover)' : 'transparent',
+        cursor: 'pointer',
+        transition: 'background 100ms ease',
+        border: isActive ? `1px solid ${AMBER}33` : '1px solid transparent',
+      }}
+    >
+      <span style={{
+        width: 6,
+        height: 6,
+        borderRadius: '50%',
+        background: wf.active ? 'var(--live)' : 'var(--border-input)',
+        flexShrink: 0,
+      }} />
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '1px' }}>
+        <span style={{
+          fontSize: '12.5px',
+          fontWeight: isActive ? 600 : 500,
+          color: 'var(--text-primary)',
+          fontFamily: "'Inter'",
+          letterSpacing: '-0.008em',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
+          {wf.name}
+        </span>
+        <span style={{
+          fontSize: '11px',
+          color: 'var(--text-muted)',
+          fontFamily: "'JetBrains Mono'",
+          letterSpacing: '0.01em',
+        }}>
+          {ts}
+        </span>
+      </div>
+      {hovered && (
+        <button
+          onClick={(e) => { e.stopPropagation(); if (confirm(`Delete "${wf.name}"?`)) onDelete(); }}
+          style={{
+            padding: '3px 5px',
+            background: 'transparent',
+            border: '1px solid var(--border)',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            color: 'var(--node-error)',
+            display: 'flex',
+            alignItems: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── History Tab ───────────────────────────────────────────────────────────────
+function HistoryTab() {
+  const savedWorkflowId = useStore((s) => s.savedWorkflowId);
+  const [executions, setExecutions] = useState<Array<{ id: string; status: string; started_at: string | null }>>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    api.listExecutions(savedWorkflowId ?? undefined).then((res) => {
+      setExecutions(res.executions as Array<{ id: string; status: string; started_at: string | null }>);
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, [savedWorkflowId]);
+
+  const statusColor: Record<string, string> = {
+    success: 'var(--node-success)',
+    error: 'var(--node-error)',
+    running: 'var(--node-running)',
+    pending: 'var(--text-muted)',
+    cancelled: 'var(--text-muted)',
+  };
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
+      {loading && (
+        <div style={{ padding: '20px', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>Loading…</div>
+      )}
+      {!loading && executions.length === 0 && (
+        <div style={{ padding: '20px 12px', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          No executions yet.<br />Run a workflow to see history here.
+        </div>
+      )}
+      {executions.map((ex) => {
+        const ts = ex.started_at
+          ? new Date(ex.started_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+          : '—';
+        return (
+          <div
+            key={ex.id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '7px 8px',
+              borderRadius: '5px',
+              marginBottom: '1px',
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor[ex.status] ?? 'var(--text-muted)', flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ fontSize: '11px', fontFamily: "'JetBrains Mono'", color: 'var(--text-muted)', letterSpacing: '0.01em' }}>
+                {ex.id.slice(0, 8)}…
+              </span>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: "'Inter'" }}>{ts}</div>
+            </div>
+            <span style={{
+              fontSize: '10px',
+              fontFamily: "'JetBrains Mono'",
+              fontWeight: 600,
+              color: statusColor[ex.status] ?? 'var(--text-muted)',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+            }}>
+              {ex.status}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Settings Tab (Credentials) ────────────────────────────────────────────────
+function SettingsTab() {
+  const credentials = useStore((s) => s.credentials);
+  const credentialsLoading = useStore((s) => s.credentialsLoading);
+  const fetchCredentials = useStore((s) => s.fetchCredentials);
+  const createCredential = useStore((s) => s.createCredential);
+  const deleteCredential = useStore((s) => s.deleteCredential);
+
+  const [addOpen, setAddOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [type, setType] = useState('api_key');
+  const [keyValue, setKeyValue] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => { fetchCredentials(); }, []);
+
+  const CRED_TYPES = ['api_key', 'basic_auth', 'bearer_token', 'smtp', 'resend', 'oauth2'];
+
+  const handleAdd = async () => {
+    if (!name.trim() || !keyValue.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await createCredential(name.trim(), type, { key: keyValue.trim() });
+      setName(''); setType('api_key'); setKeyValue('');
+      setAddOpen(false);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ padding: '8px 8px 4px', flexShrink: 0 }}>
+        <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase', fontFamily: "'JetBrains Mono'", padding: '0 2px 6px' }}>
+          Credentials
+        </div>
+        <button
+          onClick={() => setAddOpen((x) => !x)}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '7px',
+            padding: '6px 10px',
+            background: 'transparent',
+            border: '1px solid var(--border)',
+            borderRadius: '5px',
+            cursor: 'pointer',
+            fontSize: '12px',
+            fontFamily: "'Inter'",
+            fontWeight: 500,
+            color: 'var(--text-secondary)',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Add credential
+        </button>
+
+        {addOpen && (
+          <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Name (e.g. OpenAI key)"
+              style={inputStyle}
+            />
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              style={inputStyle}
+            >
+              {CRED_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <input
+              value={keyValue}
+              onChange={(e) => setKeyValue(e.target.value)}
+              placeholder="API key / value"
+              type="password"
+              style={inputStyle}
+            />
+            {error && <span style={{ fontSize: '11px', color: 'var(--node-error)' }}>{error}</span>}
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button
+                onClick={handleAdd}
+                disabled={saving || !name.trim() || !keyValue.trim()}
+                style={{
+                  flex: 1,
+                  padding: '6px',
+                  background: AMBER,
+                  border: 'none',
+                  borderRadius: '4px',
+                  color: '#fff',
+                  fontFamily: "'Inter'",
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: saving ? 'not-allowed' : 'pointer',
+                  opacity: saving ? 0.6 : 1,
+                }}
+              >
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+              <button
+                onClick={() => setAddOpen(false)}
+                style={{
+                  padding: '6px 10px',
+                  background: 'transparent',
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px',
+                  color: 'var(--text-secondary)',
+                  fontFamily: "'Inter'",
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px 8px' }}>
+        {credentialsLoading && (
+          <div style={{ padding: '16px', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>Loading…</div>
+        )}
+        {!credentialsLoading && credentials.length === 0 && (
+          <div style={{ padding: '16px 12px', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            No credentials yet.<br />Add API keys to use in nodes.
+          </div>
+        )}
+        {credentials.map((cred) => (
+          <div
+            key={cred.id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '7px 8px',
+              borderRadius: '5px',
+              marginBottom: '1px',
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '12.5px', fontWeight: 500, color: 'var(--text-primary)', fontFamily: "'Inter'", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {cred.name}
+              </div>
+              <div style={{ fontSize: '10.5px', color: 'var(--text-muted)', fontFamily: "'JetBrains Mono'", letterSpacing: '0.04em' }}>
+                {cred.type}
+              </div>
+            </div>
+            <button
+              onClick={() => { if (confirm(`Delete "${cred.name}"?`)) deleteCredential(cred.id); }}
+              style={{
+                padding: '3px 5px',
+                background: 'transparent',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                color: 'var(--node-error)',
+                display: 'flex',
+                alignItems: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+              </svg>
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '6px 8px',
+  background: 'var(--bg-input)',
+  border: '1px solid var(--border-input)',
+  borderRadius: '4px',
+  color: 'var(--text-primary)',
+  fontFamily: "'Inter'",
+  fontSize: '12px',
+  outline: 'none',
+  boxSizing: 'border-box',
+};
+
+// ── Main Sidebar ──────────────────────────────────────────────────────────────
 export function Sidebar() {
   const setNodes = useStore((s) => s.setNodes);
   const nodes = useStore((s) => s.nodes);
-  const sidebarOpen = useStore((s) => s.sidebarOpen);
   const activeSidebarTab = useStore((s) => s.activeSidebarTab);
   const setActiveSidebarTab = useStore((s) => s.setActiveSidebarTab);
+  const newWorkflow = useStore((s) => s.newWorkflow);
   const theme = useStore((s) => s.theme);
   const isDark = theme === 'dark';
 
@@ -208,7 +698,10 @@ export function Sidebar() {
         })}
       </div>
 
-      {/* Content area — Node library */}
+      {/* Divider */}
+      <div style={{ height: '1px', background: 'var(--border)', flexShrink: 0 }} />
+
+      {/* Tab content */}
       {activeSidebarTab === 'library' && (
         <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '8px' }}>
           {NODE_CATEGORIES.map((cat) => {
@@ -248,7 +741,7 @@ export function Sidebar() {
                     {cat.label}
                   </span>
                   {!isOpen && (
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 500, letterSpacing: '0.02em' }}>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 500 }}>
                       {items.length}
                     </span>
                   )}
@@ -283,23 +776,22 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* Placeholder for other tabs */}
-      {activeSidebarTab !== 'library' && (
+      {activeSidebarTab === 'workflows' && <WorkflowsTab />}
+      {activeSidebarTab === 'history' && <HistoryTab />}
+      {activeSidebarTab === 'settings' && <SettingsTab />}
+
+      {/* Placeholder tabs */}
+      {['models', 'memory'].includes(activeSidebarTab) && (
         <div style={{
           flex: 1,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          flexDirection: 'column',
-          gap: '8px',
           padding: '24px 16px',
         }}>
           <span style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', letterSpacing: '-0.005em' }}>
-            {activeSidebarTab === 'workflows' && 'Workflows list coming soon'}
-            {activeSidebarTab === 'history' && 'Execution history coming soon'}
             {activeSidebarTab === 'models' && 'Model registry coming soon'}
             {activeSidebarTab === 'memory' && 'Memory explorer coming soon'}
-            {activeSidebarTab === 'settings' && 'Settings coming soon'}
           </span>
         </div>
       )}
@@ -347,9 +839,6 @@ export function Sidebar() {
               fontWeight: 500,
               color: 'var(--text-muted)',
               letterSpacing: '0.02em',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
             }}>
               Pro · 38%
             </span>
@@ -357,6 +846,7 @@ export function Sidebar() {
         </div>
 
         <button
+          onClick={newWorkflow}
           style={{
             display: 'flex',
             alignItems: 'center',

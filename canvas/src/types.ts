@@ -37,3 +37,27 @@ export interface ExecutionDetail {
   execution: Execution;
   nodes: NodeExecution[];
 }
+
+export interface WorkflowListItem {
+  id: string;
+  name: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Credential {
+  id: string;
+  name: string;
+  type: string;
+  created_at: string;
+}
+
+export interface Integration {
+  id: string;
+  name: string;
+  type: string;
+  description: string | null;
+  icon_url: string | null;
+  category: string | null;
+}
