@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NODE_TYPE_DEFS, NODE_CATEGORIES, CATEGORY_COLORS, type NodeTypeDef } from './nodes/nodeConfig';
+import { NODE_TYPE_DEFS, NODE_CATEGORIES, nodeColor, nodeRadius, type NodeTypeDef } from './nodes/nodeConfig';
 import { NodeIcon } from './NodeIcon';
 import { v4 as uuidv4 } from 'uuid';
 import { useStore } from '../store';
@@ -23,6 +23,7 @@ export function Sidebar() {
   const setNodes = useStore((s) => s.setNodes);
   const nodes = useStore((s) => s.nodes);
   const sidebarOpen = useStore((s) => s.sidebarOpen);
+  const theme = useStore((s) => s.theme);
 
   // Accordion: one open at a time, default all collapsed
   const [openCat, setOpenCat] = useState<string | null>(readStorage);
@@ -69,7 +70,7 @@ export function Sidebar() {
         {NODE_CATEGORIES.map((cat) => {
           const items = NODE_TYPE_DEFS.filter((d) => d.category === cat.id);
           const isOpen = openCat === cat.id;
-          const color = CATEGORY_COLORS[cat.id] ?? '#71717a';
+          const color = 'rgba(160,160,170,0.5)';
 
           return (
             <div key={cat.id}>
@@ -173,6 +174,7 @@ export function Sidebar() {
                     <NodeRow
                       key={def.type}
                       def={def}
+                      theme={theme}
                       onDragStart={onDragStart}
                       onClick={addToCanvas}
                     />
@@ -189,14 +191,17 @@ export function Sidebar() {
 
 function NodeRow({
   def,
+  theme,
   onDragStart,
   onClick,
 }: {
   def: NodeTypeDef;
+  theme: 'dark' | 'light';
   onDragStart: (e: React.DragEvent, type: string) => void;
   onClick: (type: string) => void;
 }) {
-  const catColor = CATEGORY_COLORS[def.category] ?? '#64748b';
+  const color = nodeColor(def, theme);
+  const radius = nodeRadius(def);
 
   return (
     <div
@@ -221,7 +226,7 @@ function NodeRow({
         (e.currentTarget as HTMLElement).style.background = 'transparent';
       }}
     >
-      {/* Icon container — 26×26, 6px radius, 10% opacity bg */}
+      {/* Icon container — shape from category, color from tint */}
       <span
         style={{
           flexShrink: 0,
@@ -230,11 +235,12 @@ function NodeRow({
           justifyContent: 'center',
           width: '26px',
           height: '26px',
-          borderRadius: '6px',
-          background: `${catColor}1a`,
+          borderRadius: radius,
+          background: `${color}1a`,
+          border: `1px solid ${color}33`,
         }}
       >
-        <NodeIcon type={def.type} size={14} color={catColor} />
+        <NodeIcon type={def.type} size={14} color={color} />
       </span>
 
       {/* Label — Inter 13px */}
