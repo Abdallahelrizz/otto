@@ -12,7 +12,7 @@ import 'reactflow/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
 import { useStore } from '../store';
 import { OttoNode } from './nodes/OttoNode';
-import { NODE_TYPE_MAP, getNodeDef } from './nodes/nodeConfig';
+import { NODE_TYPE_MAP, getNodeDef, nodeColor } from './nodes/nodeConfig';
 
 const nodeTypes = { ottoNode: OttoNode };
 
@@ -152,7 +152,7 @@ export function Canvas() {
         <Background variant={BackgroundVariant.Dots} color={dotColor} gap={24} size={1.5} style={{ opacity: 0.15 }} />
         <Controls position="bottom-left" showInteractive={false} />
         <MiniMap
-          nodeColor={(n) => getNodeDef(n.data?.nodeType ?? '').color + '90'}
+          nodeColor={(n) => nodeColor(getNodeDef(n.data?.nodeType ?? ''), theme) + '90'}
           maskColor={minimapMask}
           position="bottom-right"
           style={{ width: 156, height: 96 }}
