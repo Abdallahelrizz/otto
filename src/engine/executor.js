@@ -4,6 +4,7 @@ import { getCredential } from './credentials.js';
 import { resolveConfig } from './expressions.js';
 import { getNodeHandler } from '../nodes/index.js';
 import { SKIP } from './skip.js';
+import { emitExecutionEvent } from './events.js';
 
 /**
  * Run a workflow definition to completion.
@@ -23,14 +24,17 @@ import { SKIP } from './skip.js';
  */
 export async function fireWorkflow({ workflowId, workspaceId, definition, input, triggerType }) {
   const executionId = await createExecution({ workflowId, triggerType, input });
+  emitExecutionEvent(executionId, 'execution:start', { workflowId, triggerType });
 
   setImmediate(async () => {
     try {
       const dag = parseDAG(definition);
-      await executeDAG(dag, { executionId, workspaceId, triggerInput: input });
+      await executeDAG(dag, { executionId, workspaceId, workflowId, triggerInput: input });
       await completeExecution(executionId, { status: 'success' });
+      emitExecutionEvent(executionId, 'execution:end', { status: 'success' });
     } catch (err) {
       await completeExecution(executionId, { status: 'error', error: err.message });
+      emitExecutionEvent(executionId, 'execution:end', { status: 'error', error: err.message });
     }
   });
 
@@ -39,14 +43,17 @@ export async function fireWorkflow({ workflowId, workspaceId, definition, input,
 
 export async function runWorkflow({ workflowId, workspaceId, definition, input, triggerType }) {
   const executionId = await createExecution({ workflowId, triggerType, input });
+  emitExecutionEvent(executionId, 'execution:start', { workflowId, triggerType });
 
   try {
     const dag = parseDAG(definition);
-    const outputs = await executeDAG(dag, { executionId, workspaceId, triggerInput: input });
+    const outputs = await executeDAG(dag, { executionId, workspaceId, workflowId, triggerInput: input });
     await completeExecution(executionId, { status: 'success' });
+    emitExecutionEvent(executionId, 'execution:end', { status: 'success' });
     return { executionId, outputs };
   } catch (err) {
     await completeExecution(executionId, { status: 'error', error: err.message });
+    emitExecutionEvent(executionId, 'execution:end', { status: 'error', error: err.message });
     throw err;
   }
 }
@@ -85,6 +92,7 @@ async function executeDAG(dag, ctx) {
 
       if (skipped) {
         await logNodeSkipped({ executionId: ctx.executionId, nodeId, nodeName: node.name, nodeType: node.type });
+        emitExecutionEvent(ctx.executionId, 'node:skipped', { nodeId, nodeType: node.type, nodeName: node.name });
         return SKIP;
       }
 
@@ -146,13 +154,14 @@ async function runNode(node, input, rawInputs, ctx) {
   const { executionId, workspaceId } = ctx;
   const expressionCtx = { input };
 
-  // Resolve any {{ }} expressions in config before the node sees them
   const resolvedConfig = resolveConfig(node.config ?? {}, expressionCtx);
 
-  // Fetch credential if the node references one
   let credential = null;
   if (resolvedConfig.credentialId) {
-    credential = await getCredential(resolvedConfig.credentialId);
+    credential = await getCredential(resolvedConfig.credentialId, {
+      workflowId: ctx.workflowId,
+      nodeId: node.id,
+    });
   }
 
   const logId = await logNodeStart({
@@ -163,15 +172,28 @@ async function runNode(node, input, rawInputs, ctx) {
     input,
   });
 
+  emitExecutionEvent(executionId, 'node:start', { nodeId: node.id, nodeType: node.type, nodeName: node.name });
+
   try {
     const handler = getNodeHandler(node.type);
-    // rawInputs is passed so Merge (and future nodes) can access per-source data
     const output = await handler({ input, rawInputs, config: resolvedConfig, credential, workspaceId });
 
-    await logNodeEnd(logId, { status: 'success', output });
+    // Extract token usage from LLM-style outputs (llm_call, ai_agent)
+    const usage = output?.usage ?? null;
+    const model  = output?.model ?? null;
+
+    await logNodeEnd(logId, { status: 'success', output, usage, model });
+    emitExecutionEvent(executionId, 'node:end', {
+      nodeId: node.id, nodeType: node.type, nodeName: node.name,
+      status: 'success', usage, model,
+    });
     return output;
   } catch (err) {
     await logNodeEnd(logId, { status: 'error', error: err.message });
+    emitExecutionEvent(executionId, 'node:end', {
+      nodeId: node.id, nodeType: node.type, nodeName: node.name,
+      status: 'error', error: err.message,
+    });
     throw err;
   }
 }

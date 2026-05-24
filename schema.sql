@@ -184,3 +184,13 @@ CREATE INDEX IF NOT EXISTS idx_executions_workspace
 
 CREATE INDEX IF NOT EXISTS idx_workflows_workspace_updated
   ON workflows(workspace_id, updated_at DESC);
+
+-- ─────────────────────────────────────────────
+-- Migration 003: LLM token tracking
+-- ─────────────────────────────────────────────
+
+ALTER TABLE node_executions
+  ADD COLUMN IF NOT EXISTS prompt_tokens     INTEGER,
+  ADD COLUMN IF NOT EXISTS completion_tokens INTEGER,
+  ADD COLUMN IF NOT EXISTS total_tokens      INTEGER,
+  ADD COLUMN IF NOT EXISTS model             TEXT;

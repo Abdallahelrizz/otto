@@ -30,7 +30,15 @@ export async function logNodeStart({ executionId, nodeId, nodeName, nodeType, in
   return rows[0].id;
 }
 
-export async function logNodeEnd(logId, { status, output, error, retryCount = 0 }) {
+export async function logNodeEnd(logId, { status, output, error, retryCount = 0, usage, model }) {
+  const params = [logId, status, JSON.stringify(output ?? null), error ?? null, retryCount];
+  let tokenCols = '';
+
+  if (usage) {
+    tokenCols = `, prompt_tokens = $6, completion_tokens = $7, total_tokens = $8, model = $9`;
+    params.push(usage.prompt_tokens ?? null, usage.completion_tokens ?? null, usage.total_tokens ?? null, model ?? null);
+  }
+
   await db.query(
     `UPDATE node_executions
      SET status = $2,
@@ -38,9 +46,9 @@ export async function logNodeEnd(logId, { status, output, error, retryCount = 0 
          duration_ms = EXTRACT(EPOCH FROM (NOW() - started_at)) * 1000,
          output = $3,
          error = $4,
-         retry_count = $5
+         retry_count = $5${tokenCols}
      WHERE id = $1`,
-    [logId, status, JSON.stringify(output ?? null), error ?? null, retryCount]
+    params
   );
 }
 
