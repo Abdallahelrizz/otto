@@ -9,7 +9,10 @@
 import { readFileSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { config } from 'dotenv';
 import pg from 'pg';
+
+config();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const { Pool } = pg;
