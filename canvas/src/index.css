@@ -27,9 +27,6 @@ code, pre, textarea.mono, .mono {
 .font-jbm {
   font-family: 'JetBrains Mono';
 }
-.font-fraunces {
-  font-family: 'Fraunces';
-}
 
 /* ── Easing custom curves (Emil Kowalski) ── */
 :root {
