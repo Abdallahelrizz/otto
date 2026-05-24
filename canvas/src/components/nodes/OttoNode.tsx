@@ -1,7 +1,7 @@
 import { memo, useState, useCallback, Fragment, type CSSProperties } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
 import { useStore } from '../../store';
-import { getNodeDef, CATEGORY_COLORS } from './nodeConfig';
+import { getNodeDef, nodeColor, nodeRadius } from './nodeConfig';
 import { NodeIcon } from '../NodeIcon';
 import type { OttoNodeData } from '../../types';
 
@@ -81,12 +81,12 @@ function RunningSpinner({ color }: { color: string }) {
 export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) => {
   const execution = useStore((s) => s.nodeExecutions[id]);
   const setContextMenu = useStore((s) => s.setContextMenu);
+  const theme = useStore((s) => s.theme);
   const def = getNodeDef(data.nodeType);
   const [hovered, setHovered] = useState(false);
 
   const status = execution?.status ?? 'idle';
-  const cat = def.category;
-  const catColor = CATEGORY_COLORS[cat] ?? '#64748b';
+  const cardColor = nodeColor(def, theme);
 
   const isRunning  = status === 'running';
   const isSuccess  = status === 'success';
@@ -98,20 +98,20 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
   const cardWidth  = def.complex ? 100 : 72;
   const cardHeight = def.complex ? cardHeightFor(inCount, outCount) : 72;
 
-  // Border color per state
+  // Border color per state — neutral hairline, colored only on selection/execution
   const borderColor =
-    isRunning ? '#3b82f6' :
-    isSuccess ? '#22c55e' :
-    isError   ? '#ef4444' :
-    selected  ? hexA(catColor, 0.95) :
-    hovered   ? hexA(catColor, 0.75) :
-                hexA(catColor, 0.55);
+    isRunning ? '#3B82F6' :
+    isSuccess ? 'var(--node-success)' :
+    isError   ? 'var(--node-error)' :
+    selected  ? cardColor :
+    hovered   ? (theme === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(15,15,10,0.20)') :
+                (theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,15,10,0.10)');
 
   // Box-shadow per state
   const boxShadow =
+    selected  ? `0 0 0 3px ${hexA(cardColor, 0.18)}` :
     isSuccess ? '0 0 0 2px rgba(34,197,94,0.14)' :
     isError   ? '0 0 0 2px rgba(239,68,68,0.14)' :
-    selected  ? `0 0 0 3px ${hexA(catColor, 0.15)}` :
     'none';
 
   const executionClass = isRunning ? ' otto-node-running' : isSuccess ? ' otto-node-success' : isError ? ' otto-node-error' : '';
@@ -178,9 +178,17 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
         {/* Running spinner — top-right corner */}
         {isRunning && <RunningSpinner color="#3b82f6" />}
 
-        {/* Icon row — 32px tall */}
-        <div style={{ height: 32, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-          <NodeIcon type={data.nodeType} size={28} color={catColor} />
+        {/* Icon container — shape from category, color from tint */}
+        <div style={{
+          width: 32, height: 32,
+          borderRadius: nodeRadius(def),
+          background: hexA(cardColor, 0.14),
+          border: `1px solid ${hexA(cardColor, 0.28)}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
+          marginTop: 4,
+        }}>
+          <NodeIcon type={data.nodeType} size={18} color={cardColor} />
         </div>
 
         {/* Label */}
@@ -199,7 +207,7 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
       {/* ── Input handles + labels ── */}
       {def.handles.in.map((h, i) => {
         const y = ((i + 1) / (inCount + 1)) * cardHeight;
-        const color = h.color ?? catColor;
+        const color = h.color ?? cardColor;
         return (
           <Fragment key={`in-${h.id}`}>
             <Handle
@@ -227,7 +235,7 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
       {/* ── Output handles + labels ── */}
       {def.handles.out.map((h, i) => {
         const y = ((i + 1) / (outCount + 1)) * cardHeight;
-        const color = h.color ?? catColor;
+        const color = h.color ?? cardColor;
         return (
           <Fragment key={`out-${h.id}`}>
             <Handle
@@ -254,7 +262,7 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
       {/* ── Bottom (extras) handles + labels ── */}
       {extras.map((h, i) => {
         const x = ((i + 1) / (extras.length + 1)) * cardWidth;
-        const color = h.color ?? catColor;
+        const color = h.color ?? cardColor;
         return (
           <Fragment key={`ex-${h.id}`}>
             <Handle
