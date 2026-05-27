@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 
 export async function importRoutes(fastify) {
   fastify.post('/api/v1/import/n8n', async (req, reply) => {
-    const { n8nJson, json, name } = req.body ?? {};
+    const { n8nJson, json, name, save = true } = req.body ?? {};
     const payload = n8nJson ?? json;
     if (!payload) return reply.code(400).send({ error: 'n8nJson is required' });
 
@@ -15,12 +15,16 @@ export async function importRoutes(fastify) {
       return reply.code(422).send({ error: `Failed to parse n8n export: ${err.message}` });
     }
 
-    const { nodes, edges, warnings } = parsed;
+    const { definition, warnings, report } = parsed;
     const workflowName = name
       ?? (typeof payload === 'object' ? payload.name : null)
+      ?? report.workflowName
       ?? 'Imported from n8n';
 
-    const definition = { nodes, edges };
+    if (save === false) {
+      return reply.send({ definition, warnings, report });
+    }
+
     const id = randomUUID();
 
     await db.query(
@@ -29,6 +33,6 @@ export async function importRoutes(fastify) {
       [id, req.auth.workspaceId, workflowName, JSON.stringify(definition)]
     );
 
-    return reply.code(201).send({ id, warnings });
+    return reply.code(201).send({ id, definition, warnings, report });
   });
 }

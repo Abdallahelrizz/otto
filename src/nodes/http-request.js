@@ -1,17 +1,5 @@
-/**
- * HTTP Request node — calls any REST API.
- *
- * Config:
- *   url:     string (required, supports {{ }} expressions)
- *   method:  GET | POST | PUT | PATCH | DELETE  (default: GET)
- *   headers: object
- *   body:    object | string  (sent as JSON if object)
- *   timeout: number (ms, default 30000)
- *
- * Credential (optional):
- *   type: api_key  → { header: 'Authorization', value: 'Bearer ...' }
- *   type: basic    → { username, password }
- */
+import { safeFetch } from '../utils/safe-fetch.js';
+
 export async function httpRequest({ input, config, credential }) {
   const {
     url,
@@ -19,20 +7,35 @@ export async function httpRequest({ input, config, credential }) {
     headers = {},
     body,
     timeout = 30_000,
+    authType = 'none',
+    authKey,
+    authValue,
+    authUsername,
+    authPassword,
   } = config;
 
   if (!url) throw new Error('HTTP Request node: url is required');
 
-  const reqHeaders = { ...headers };
+  const reqHeaders = normalizeHeaders(headers);
 
   if (credential) {
     if (credential.type === 'api_key') {
       const { header = 'Authorization', value } = credential.data;
       reqHeaders[header] = value;
-    } else if (credential.type === 'basic') {
+    } else if (credential.type === 'bearer_token') {
+      reqHeaders['Authorization'] = `Bearer ${credential.data.value}`;
+    } else if (credential.type === 'basic' || credential.type === 'basic_auth') {
       const { username, password } = credential.data;
       reqHeaders['Authorization'] = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
     }
+  } else if (authType === 'api_key' && authKey && authValue) {
+    reqHeaders[authKey] = authValue;
+  } else if (authType === 'bearer' && authValue) {
+    reqHeaders['Authorization'] = String(authValue).startsWith('Bearer ')
+      ? String(authValue)
+      : `Bearer ${authValue}`;
+  } else if (authType === 'basic' && authUsername && authPassword) {
+    reqHeaders['Authorization'] = 'Basic ' + Buffer.from(`${authUsername}:${authPassword}`).toString('base64');
   }
 
   const methodUpper = method.toUpperCase();
@@ -51,7 +54,7 @@ export async function httpRequest({ input, config, credential }) {
 
   let response;
   try {
-    response = await fetch(url, {
+    response = await safeFetch(url, {
       method: methodUpper,
       headers: reqHeaders,
       body: bodyStr,
@@ -81,4 +84,16 @@ export async function httpRequest({ input, config, credential }) {
     headers: Object.fromEntries(response.headers.entries()),
     body: responseBody,
   };
+}
+
+function normalizeHeaders(headers) {
+  if (Array.isArray(headers)) {
+    return Object.fromEntries(
+      headers
+        .map((header) => [header.key ?? header.name ?? '', header.value ?? ''])
+        .filter(([key]) => key)
+    );
+  }
+  if (headers && typeof headers === 'object') return { ...headers };
+  return {};
 }

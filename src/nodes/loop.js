@@ -1,4 +1,5 @@
 import { getByPath } from '../utils/path.js';
+import { makeItem } from '../utils/items.js';
 
 export async function loopNode({ input, config }) {
   const { over = 'input', limit = 100 } = config;
@@ -12,8 +13,12 @@ export async function loopNode({ input, config }) {
 
   // Sequential iteration — return collected results
   const results = [];
-  for (const item of capped) {
-    results.push(item);
+  for (const [index, item] of capped.entries()) {
+    results.push(makeItem(item?.json ?? item, {
+      binary: item?.binary ?? {},
+      pairedItem: { item: index },
+      data: item,
+    }));
   }
 
   return { items: results, count: results.length };

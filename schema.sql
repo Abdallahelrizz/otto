@@ -66,7 +66,10 @@ CREATE TABLE executions (
   status        TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','running','success','error','cancelled')),
   started_at    TIMESTAMPTZ,
   completed_at  TIMESTAMPTZ,
-  trigger_type  TEXT NOT NULL CHECK (trigger_type IN ('webhook','manual','schedule','subworkflow')),
+  trigger_type  TEXT NOT NULL CHECK (trigger_type IN ('webhook','manual','schedule','subworkflow','form','chat')),
+  mode          TEXT NOT NULL DEFAULT 'full' CHECK (mode IN ('full','single_node','to_node','from_node')),
+  focus_node_id TEXT,
+  pinned_data   JSONB NOT NULL DEFAULT '{}'::JSONB,
   input         JSONB,
   error         TEXT
 );
@@ -85,6 +88,16 @@ CREATE TABLE node_executions (
   output        JSONB,
   error         TEXT,
   retry_count   INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE trigger_samples (
+  workflow_id   UUID NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+  workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  node_id       TEXT NOT NULL,
+  trigger_type  TEXT NOT NULL CHECK (trigger_type IN ('webhook','form','chat')),
+  payload       JSONB NOT NULL,
+  received_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (workflow_id, node_id)
 );
 
 -- ─────────────────────────────────────────────
@@ -148,11 +161,23 @@ CREATE TABLE session_summaries (
 -- API keys
 -- ─────────────────────────────────────────────
 
+CREATE TABLE binary_data (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  file_name     TEXT NOT NULL,
+  mime_type     TEXT NOT NULL DEFAULT 'application/octet-stream',
+  size_bytes    INTEGER NOT NULL,
+  data          BYTEA NOT NULL,
+  metadata      JSONB NOT NULL DEFAULT '{}'::JSONB,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE api_keys (
   id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   user_id       UUID REFERENCES users(id) ON DELETE SET NULL,
   key_hash      TEXT NOT NULL UNIQUE,
+  key_prefix    TEXT,
   name          TEXT NOT NULL,
   last_used_at  TIMESTAMPTZ,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -176,8 +201,13 @@ CREATE INDEX idx_workflows_workspace ON workflows(workspace_id);
 CREATE INDEX idx_workflows_active ON workflows(active) WHERE active = true;
 CREATE INDEX idx_executions_workflow ON executions(workflow_id);
 CREATE INDEX idx_executions_status ON executions(status);
+CREATE INDEX idx_executions_mode ON executions(mode);
+CREATE INDEX idx_executions_focus_node_id ON executions(focus_node_id);
 CREATE INDEX idx_node_executions_execution ON node_executions(execution_id);
+CREATE INDEX idx_trigger_samples_workspace ON trigger_samples(workspace_id, received_at DESC);
 CREATE INDEX idx_credentials_workspace ON credentials(workspace_id);
+CREATE INDEX idx_binary_data_workspace ON binary_data(workspace_id, created_at DESC);
+CREATE INDEX idx_api_keys_workspace ON api_keys(workspace_id);
 CREATE INDEX idx_memory_patterns_workspace ON memory_patterns(workspace_id);
 CREATE INDEX idx_memory_interactions_session ON memory_interactions(session_id);
 CREATE INDEX idx_sessions_token_hash ON sessions(token_hash);
@@ -209,6 +239,30 @@ ALTER TABLE node_executions
   ADD COLUMN IF NOT EXISTS completion_tokens INTEGER,
   ADD COLUMN IF NOT EXISTS total_tokens      INTEGER,
   ADD COLUMN IF NOT EXISTS model             TEXT;
+
+-- ─────────────────────────────────────────────────
+-- Migration 009: trigger samples and form/chat trigger execution types
+-- ─────────────────────────────────────────────────
+
+ALTER TABLE executions
+  DROP CONSTRAINT IF EXISTS executions_trigger_type_check;
+
+ALTER TABLE executions
+  ADD CONSTRAINT executions_trigger_type_check
+  CHECK (trigger_type IN ('webhook','manual','schedule','subworkflow','form','chat'));
+
+CREATE TABLE IF NOT EXISTS trigger_samples (
+  workflow_id   UUID NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+  workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  node_id       TEXT NOT NULL,
+  trigger_type  TEXT NOT NULL CHECK (trigger_type IN ('webhook','form','chat')),
+  payload       JSONB NOT NULL,
+  received_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (workflow_id, node_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_trigger_samples_workspace
+  ON trigger_samples(workspace_id, received_at DESC);
 
 -- ─────────────────────────────────────────────
 -- Migration 004: Integrations registry

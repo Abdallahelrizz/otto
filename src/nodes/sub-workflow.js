@@ -9,8 +9,19 @@ export async function subWorkflow({ input, config, workspaceId, ctx }) {
     throw new Error(`Sub-workflow: recursion depth limit (${MAX_RECURSION_DEPTH}) reached`);
   }
 
-  const { workflowId } = config;
+  const { workflowId, inputMode = 'forward', inputMap } = config;
   if (!workflowId) throw new Error('Sub-workflow: workflowId is required');
+
+  let subInput = input;
+  if (inputMode === 'none') {
+    subInput = {};
+  } else if (inputMode === 'map' && inputMap) {
+    try {
+      subInput = typeof inputMap === 'object' ? inputMap : JSON.parse(inputMap);
+    } catch {
+      subInput = {};
+    }
+  }
 
   const { rows } = await db.query(
     'SELECT id, workspace_id, definition FROM workflows WHERE id = $1',
@@ -19,13 +30,30 @@ export async function subWorkflow({ input, config, workspaceId, ctx }) {
   if (!rows.length) throw new Error(`Sub-workflow: workflow ${workflowId} not found`);
 
   const { workspace_id, definition } = rows[0];
-  const { executionId, outputs } = await runWorkflow({
+
+  // Caller policy check
+  const callerPolicy = definition?.settings?.callerPolicy ?? 'any';
+  if (callerPolicy === 'none') {
+    throw new Error(`Sub-workflow: workflow ${workflowId} cannot be called as a sub-workflow (caller policy: none)`);
+  }
+  if (callerPolicy === 'same_workspace') {
+    const callerWorkspaceId = workspaceId ?? null;
+    if (!callerWorkspaceId || callerWorkspaceId !== workspace_id) {
+      throw new Error(`Sub-workflow: workflow ${workflowId} can only be called from the same workspace (caller policy: same_workspace)`);
+    }
+  }
+  const parentNodeId = ctx?.nodeId ?? null;
+  const parentExecutionId = ctx?.executionId ?? null;
+
+  const { executionId: subExecutionId, outputs } = await runWorkflow({
     workflowId,
     workspaceId: workspaceId ?? workspace_id,
     definition,
-    input,
+    input: subInput,
     triggerType: 'subworkflow',
-    _recursionDepth: depth + 1,
+    recursionDepth: depth + 1,
+    parentExecutionId,
+    parentNodeId,
   });
 
   // Collect the final outputs into a single merged object
@@ -37,5 +65,12 @@ export async function subWorkflow({ input, config, workspaceId, ctx }) {
     }
   }
 
-  return { ...finalOutput, _subExecutionId: executionId };
+  const result = { ...finalOutput };
+  Object.defineProperty(result, '_subExecution', {
+    value: { id: subExecutionId },
+    enumerable: false,
+    writable: false,
+    configurable: false,
+  });
+  return result;
 }

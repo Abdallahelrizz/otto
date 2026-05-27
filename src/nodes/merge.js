@@ -12,12 +12,16 @@
  * Skipped branches (inactive sides of IF nodes) are always excluded.
  * Existing wiring using the default mode is unaffected.
  */
+import { makeItem } from '../utils/items.js';
+
 export async function mergeNode({ input, rawInputs, config }) {
   const { mode = 'merge-object' } = config;
 
   if (mode === 'collect-array') {
-    // rawInputs is [{ source: nodeId, data: object }] for each active predecessor
-    return { items: rawInputs.map(({ source, data }) => ({ source, data })) };
+    return {
+      items: rawInputs.map(({ source, data }) => makeItem(data, { source, data })),
+      count: rawInputs.length,
+    };
   }
 
   // merge-object: executor already merged active inputs into `input`

@@ -101,10 +101,13 @@ export async function getAuthContext(req) {
   if (!token) return null;
 
   const { rows } = await db.query(
-    `SELECT s.id AS session_id, s.user_id, s.workspace_id, u.email, u.name, w.name AS workspace_name, w.plan
+    `SELECT s.id AS session_id, s.user_id, s.workspace_id, u.email, u.name,
+            w.name AS workspace_name, w.plan,
+            wm.role AS member_role
      FROM sessions s
      JOIN users u ON u.id = s.user_id
      JOIN workspaces w ON w.id = s.workspace_id
+     LEFT JOIN workspace_members wm ON wm.workspace_id = s.workspace_id AND wm.user_id = s.user_id
      WHERE s.token_hash = $1 AND s.expires_at > NOW()`,
     [hashToken(token)]
   );
@@ -114,9 +117,11 @@ export async function getAuthContext(req) {
   await db.query('UPDATE sessions SET last_seen_at = NOW() WHERE id = $1', [rows[0].session_id]).catch(() => {});
 
   return {
+    authMethod: 'session',
     sessionId: rows[0].session_id,
     userId: rows[0].user_id,
     workspaceId: rows[0].workspace_id,
+    role: rows[0].member_role ?? 'owner',
     user: { id: rows[0].user_id, email: rows[0].email, name: rows[0].name },
     workspace: { id: rows[0].workspace_id, name: rows[0].workspace_name, plan: rows[0].plan },
   };

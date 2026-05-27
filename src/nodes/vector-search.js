@@ -1,29 +1,28 @@
-import OpenAI from 'openai';
 import { db } from '../db/client.js';
+import { clampNumber, embedText, vectorLiteral } from './memory-utils.js';
 
 export async function vectorSearch({ input, config, credential, workspaceId }) {
-  const { query, topK = 5 } = config;
+  const { query, topK = 5, category, minScore } = config;
   const searchQuery = query || String(input?.query ?? input?.text ?? '');
   if (!searchQuery) throw new Error('Vector Search: query is required');
 
-  const apiKey = credential?.data?.value ?? process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error('Vector Search: no OpenAI API key for embeddings');
-
-  const client = new OpenAI({ apiKey });
-  const embeddingRes = await client.embeddings.create({
-    model: 'text-embedding-3-small',
-    input: String(searchQuery),
-  });
-  const embedding = embeddingRes.data[0].embedding;
+  const embedding = await embedText(searchQuery, credential);
+  const limit = clampNumber(topK, 5, 1, 50);
+  const params = [vectorLiteral(embedding), workspaceId, limit];
+  const categoryClause = category ? `AND category = $${params.push(category)}` : '';
+  const minScoreClause = minScore === '' || minScore == null ? '' : `AND 1 - (embedding <=> $1::vector) >= $${params.push(clampNumber(minScore, 0, 0, 1))}`;
 
   const { rows } = await db.query(
     `SELECT id, content, category, confidence, hit_count,
             1 - (embedding <=> $1::vector) AS similarity
      FROM memory_patterns
      WHERE workspace_id = $2
+       AND embedding IS NOT NULL
+       ${categoryClause}
+       ${minScoreClause}
      ORDER BY embedding <=> $1::vector
      LIMIT $3`,
-    [`[${embedding.join(',')}]`, workspaceId, Number(topK)]
+    params
   );
 
   return { results: rows, count: rows.length };

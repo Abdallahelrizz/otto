@@ -1,11 +1,37 @@
 import { db } from '../db/client.js';
+import { randomUUID } from 'crypto';
 
-export async function createExecution({ workflowId, workspaceId, triggerType, input, status = 'running' }) {
+export async function createExecution({
+  workflowId,
+  workspaceId,
+  triggerType,
+  executionType = 'production',
+  input,
+  status = 'running',
+  mode = 'full',
+  focusNodeId = null,
+  pinnedData = {},
+  parentExecutionId = null,
+  parentNodeId = null,
+}) {
   const { rows } = await db.query(
-    `INSERT INTO executions (workflow_id, workspace_id, status, started_at, trigger_type, input)
-     VALUES ($1, $2, $3, CASE WHEN $3 = 'running' THEN NOW() ELSE NULL END, $4, $5)
+    `INSERT INTO executions
+       (workflow_id, workspace_id, status, started_at, trigger_type, execution_type, mode, focus_node_id, pinned_data, input, parent_execution_id, parent_node_id)
+     VALUES ($1, $2, $3, CASE WHEN $3 = 'running' THEN NOW() ELSE NULL END, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING id`,
-    [workflowId, workspaceId, status, triggerType, JSON.stringify(input)]
+    [
+      workflowId,
+      workspaceId,
+      status,
+      triggerType,
+      executionType,
+      mode,
+      focusNodeId,
+      JSON.stringify(pinnedData ?? {}),
+      JSON.stringify(input ?? {}),
+      parentExecutionId ?? null,
+      parentNodeId ?? null,
+    ]
   );
   return rows[0].id;
 }
@@ -31,15 +57,15 @@ export async function completeExecution(executionId, { status, error } = {}) {
   );
 }
 
-export async function logNodeStart({ executionId, nodeId, nodeName, nodeType, input }) {
-  const { rows } = await db.query(
+export async function logNodeStart({ id, executionId, nodeId, nodeName, nodeType, input }) {
+  const logId = id ?? randomUUID();
+  await db.query(
     `INSERT INTO node_executions
-       (execution_id, node_id, node_name, node_type, status, started_at, input)
-     VALUES ($1, $2, $3, $4, 'running', NOW(), $5)
-     RETURNING id`,
-    [executionId, nodeId, nodeName ?? nodeId, nodeType, JSON.stringify(input)]
+       (id, execution_id, node_id, node_name, node_type, status, started_at, input)
+     VALUES ($1, $2, $3, $4, $5, 'running', NOW(), $6)`,
+    [logId, executionId, nodeId, nodeName ?? nodeId, nodeType, JSON.stringify(input)]
   );
-  return rows[0].id;
+  return logId;
 }
 
 export async function logNodeEnd(logId, { status, output, error, retryCount = 0, usage, model }) {
@@ -70,5 +96,31 @@ export async function logNodeSkipped({ executionId, nodeId, nodeName, nodeType }
        (execution_id, node_id, node_name, node_type, status, started_at, completed_at, duration_ms)
      VALUES ($1, $2, $3, $4, 'skipped', NOW(), NOW(), 0)`,
     [executionId, nodeId, nodeName ?? nodeId, nodeType]
+  );
+}
+
+export async function logNodeWait(logId, { waitType }) {
+  await db.query(
+    `UPDATE node_executions SET status = 'waiting', completed_at = NULL WHERE id = $1`,
+    [logId]
+  );
+}
+
+export async function deleteExecution(executionId) {
+  await db.query('DELETE FROM executions WHERE id = $1', [executionId]);
+}
+
+export async function suspendExecution(executionId, { waitNodeId, waitType, waitUntil, resumeToken, nodeOutputs }) {
+  await db.query(
+    `UPDATE executions
+     SET status = 'waiting',
+         wait_node_id  = $2,
+         wait_type     = $3,
+         wait_until    = $4,
+         resume_token  = $5,
+         resume_payload = $6,
+         suspended_at  = NOW()
+     WHERE id = $1`,
+    [executionId, waitNodeId, waitType, waitUntil ?? null, resumeToken, JSON.stringify(nodeOutputs ?? {})]
   );
 }

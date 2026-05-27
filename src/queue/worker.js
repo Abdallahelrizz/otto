@@ -2,30 +2,64 @@ import { Worker } from 'bullmq';
 import { redis } from './client.js';
 import { runWorkflow } from '../engine/executor.js';
 import { db } from '../db/client.js';
+import { context, propagation } from '@opentelemetry/api';
 
 export function startWorker() {
   const worker = new Worker(
     'executions',
     async (job) => {
-      const { executionId, workflowId, workspaceId, triggerType } = job.data;
+      // Handle pruning jobs before workflow execution
+      if (job.name === 'prune-old-executions' || job.data?.type === 'prune') {
+        const { runPruning } = await import('./pruning-job.js');
+        const retentionDays = Number(process.env.EXECUTION_RETENTION_DAYS ?? 30);
+        const result = await runPruning({ retentionDays });
+        console.log(`[pruning] Deleted ${result.deletedExecutions} executions older than ${result.retentionDays} days`);
+        return result;
+      }
+
+      const { executionId, workflowId, workspaceId, triggerType, mode, nodeId, pinnedData } = job.data;
+
+      // For time-based resume jobs, verify the execution is still waiting (not cancelled)
+      if (job.name === 'resume' && executionId) {
+        const { rows: statusRows } = await db.query(
+          'SELECT status FROM executions WHERE id = $1',
+          [executionId]
+        );
+        if (!statusRows.length || statusRows[0].status !== 'waiting') return;
+      }
       const input = job.data.input?.schedule?.firedAt === '{{ scheduled_at }}'
         ? { ...job.data.input, schedule: { ...job.data.input.schedule, firedAt: new Date().toISOString() } }
         : (job.data.input ?? {});
 
-      // Fetch the latest workflow definition
-      const { rows } = await db.query(
-        'SELECT definition FROM workflows WHERE id = $1',
-        [workflowId]
-      );
-      if (!rows.length) throw new Error(`Workflow ${workflowId} not found`);
+      let definition = job.data.definition;
+      if (!definition) {
+        const { rows } = await db.query(
+          'SELECT definition FROM workflows WHERE id = $1',
+          [workflowId]
+        );
+        if (!rows.length) throw new Error(`Workflow ${workflowId} not found`);
+        definition = rows[0].definition;
+      }
 
-      const definition = rows[0].definition;
-
-      await runWorkflow({ executionId, workflowId, workspaceId, definition, input, triggerType });
+      const parentCtx = job.data?.traceparent
+        ? propagation.extract(context.active(), { traceparent: job.data.traceparent })
+        : context.active();
+      await context.with(parentCtx, () => runWorkflow({
+        executionId,
+        workflowId,
+        workspaceId,
+        definition,
+        input,
+        triggerType,
+        mode,
+        nodeId,
+        pinnedData,
+      }));
     },
     {
       connection: redis,
-      concurrency: 10,
+      concurrency: Number(process.env.WORKER_CONCURRENCY ?? 10),
+      drainDelay: 1,
     }
   );
 

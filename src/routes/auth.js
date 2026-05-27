@@ -3,6 +3,7 @@ import {
   clearSessionCookie,
   createSession,
   destroySession,
+  getAuthContext,
   hashPassword,
   hasConfiguredOwner,
   readSessionToken,
@@ -53,14 +54,37 @@ async function createOwnerWorkspace(client, userId, workspaceName) {
   return rows[0].id;
 }
 
+function authDependencyError(err) {
+  return {
+    error: 'Database unavailable',
+    code: err?.code ?? 'AUTH_DEPENDENCY_UNAVAILABLE',
+    setupRequired: null,
+    authenticated: false,
+  };
+}
+
 export async function authRoutes(fastify) {
   fastify.get('/api/v1/auth/status', async (req, reply) => {
-    const setupRequired = !(await hasConfiguredOwner());
+    let setupRequired;
+    try {
+      setupRequired = !(await hasConfiguredOwner());
+    } catch (err) {
+      req.log.warn({ err }, 'auth status dependency check failed');
+      return reply.code(503).send(authDependencyError(err));
+    }
+
     if (setupRequired) {
       return reply.send({ setupRequired, authenticated: false });
     }
 
-    const auth = req.auth ?? null;
+    let auth = null;
+    try {
+      auth = await getAuthContext(req);
+    } catch (err) {
+      req.log.warn({ err }, 'auth status session lookup failed');
+      return reply.code(503).send(authDependencyError(err));
+    }
+
     return reply.send({
       setupRequired,
       authenticated: Boolean(auth),
@@ -137,7 +161,9 @@ export async function authRoutes(fastify) {
   });
 
   fastify.post('/api/v1/auth/logout', async (req, reply) => {
-    await destroySession(readSessionToken(req));
+    await destroySession(readSessionToken(req)).catch((err) => {
+      req.log.warn({ err }, 'session destroy failed during logout');
+    });
     clearSessionCookie(reply);
     return reply.send({ ok: true });
   });

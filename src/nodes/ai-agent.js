@@ -27,7 +27,7 @@ function getApiKey(provider, credential) {
 }
 
 async function runTool(toolDef, toolArgs, workspaceId) {
-  const handler = getNodeHandler(toolDef.handler ?? 'http_request');
+  const handler = getNodeHandler(toolDef.handler ?? toolDef.type ?? 'http_request');
   const config = { ...(toolDef.config ?? {}), ...toolArgs };
   return handler({ input: toolArgs, rawInputs: [], config, credential: null, workspaceId });
 }

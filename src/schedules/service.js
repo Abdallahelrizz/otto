@@ -1,5 +1,6 @@
 import { executionQueue } from '../queue/client.js';
 import { db } from '../db/client.js';
+import { validateFormFields } from '../triggers/runtime.js';
 
 const SCHEDULER_PREFIX = 'workflow-schedule';
 
@@ -22,8 +23,26 @@ export function validateWorkflowActivation(definition) {
   const nodes = definition?.nodes ?? [];
 
   for (const node of nodes) {
-    if (node.type === 'webhook_trigger' && !String(node.config?.path ?? '').trim()) {
-      errors.push(`Webhook trigger "${node.name ?? node.id}" needs a path`);
+    if (node.type === 'webhook_trigger') {
+      if (!String(node.config?.path ?? '').trim()) {
+        errors.push(`Webhook trigger "${node.name ?? node.id}" needs a path`);
+      }
+      if (!String(node.config?.method ?? '').trim()) {
+        errors.push(`Webhook trigger "${node.name ?? node.id}" needs a method`);
+      }
+    }
+
+    if (node.type === 'form_trigger') {
+      if (!String(node.config?.path ?? '').trim()) {
+        errors.push(`Form trigger "${node.name ?? node.id}" needs a path`);
+      }
+      errors.push(...validateFormFields(node.config?.fieldsJson ?? []).map((err) => `Form trigger "${node.name ?? node.id}": ${err}`));
+    }
+
+    if (node.type === 'chat_trigger') {
+      if (!String(node.config?.path ?? '').trim()) {
+        errors.push(`Chat trigger "${node.name ?? node.id}" needs a path`);
+      }
     }
 
     if (node.type === 'schedule_trigger') {

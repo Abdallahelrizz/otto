@@ -26,7 +26,7 @@ export async function getCredential(credentialId, { workflowId, nodeId, workspac
   }
 
   const { rows } = await db.query(
-    `SELECT id, name, type, data FROM credentials WHERE id = $1${workspaceClause}`,
+    `SELECT id, name, type, data, external_secret_ref FROM credentials WHERE id = $1${workspaceClause}`,
     params
   );
   if (!rows.length) throw new Error(`Credential ${credentialId} not found`);
@@ -38,6 +38,15 @@ export async function getCredential(credentialId, { workflowId, nodeId, workspac
      VALUES ($1, $2, $3)`,
     [credentialId, workflowId ?? null, nodeId ?? null]
   ).catch(() => {});
+
+  // If credential references an external secret provider, resolve at runtime
+  if (cred.external_secret_ref) {
+    const ref = JSON.parse(cred.external_secret_ref);
+    const { resolveExternalSecret } = await import('../utils/external-secrets.js');
+    const resolvedWorkspaceId = workspaceId ?? null;
+    const value = await resolveExternalSecret(resolvedWorkspaceId, ref);
+    return { id: cred.id, name: cred.name, type: cred.type, data: typeof value === 'string' ? { value } : value };
+  }
 
   return { id: cred.id, name: cred.name, type: cred.type, data: decrypt(cred.data) };
 }

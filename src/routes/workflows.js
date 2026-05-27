@@ -1,26 +1,31 @@
 import { db } from '../db/client.js';
 import { randomUUID } from 'crypto';
 import { reconcileWorkflowSchedule, validateWorkflowActivation } from '../schedules/service.js';
+import {
+  hasBlockingIssues,
+  hasSaveBlockingIssues,
+  validateWorkflowDefinition,
+} from '../utils/workflow-validation.js';
 
 export async function workflowRoutes(fastify) {
   fastify.get('/api/v1/workflows', async (req, reply) => {
-    const { limit = 50, offset = 0 } = req.query;
+    const { limit = 50, offset = 0, tag } = req.query;
     const { workspaceId } = req.auth;
 
     const { rows } = await db.query(
-      `SELECT id, name, active, created_at, updated_at
+      `SELECT id, name, active, tags, created_at, updated_at
        FROM workflows
-       WHERE workspace_id = $1
+       WHERE workspace_id = $1 AND ($2::text IS NULL OR $2 = ANY(tags))
        ORDER BY updated_at DESC
-       LIMIT $2 OFFSET $3`,
-      [workspaceId, Number(limit), Number(offset)]
+       LIMIT $3 OFFSET $4`,
+      [workspaceId, tag ?? null, Number(limit), Number(offset)]
     );
     return reply.send({ workflows: rows });
   });
 
   fastify.get('/api/v1/workflows/:id', async (req, reply) => {
     const { rows } = await db.query(
-      `SELECT id, workspace_id, name, definition, active, created_at, updated_at
+      `SELECT id, workspace_id, name, definition, active, tags, created_at, updated_at
        FROM workflows
        WHERE id = $1 AND workspace_id = $2`,
       [req.params.id, req.auth.workspaceId]
@@ -30,8 +35,17 @@ export async function workflowRoutes(fastify) {
   });
 
   fastify.post('/api/v1/workflows', async (req, reply) => {
-    const { name, definition = { nodes: [], edges: [] }, active = false } = req.body ?? {};
+    const { name, definition = { nodes: [], edges: [] }, active = false, tags = [] } = req.body ?? {};
     if (!name) return reply.code(400).send({ error: 'name is required' });
+
+    const validation = validateWorkflowDefinition(definition);
+    if (hasSaveBlockingIssues(validation)) {
+      return reply.code(422).send({ error: 'Workflow definition is invalid', details: validation.issues, validation });
+    }
+
+    if (active && hasBlockingIssues(validation)) {
+      return reply.code(422).send({ error: 'Workflow cannot be activated', details: validation.issues, validation });
+    }
 
     if (active) {
       const errors = validateWorkflowActivation(definition);
@@ -40,21 +54,21 @@ export async function workflowRoutes(fastify) {
 
     const id = randomUUID();
     await db.query(
-      `INSERT INTO workflows (id, workspace_id, name, definition, active)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [id, req.auth.workspaceId, name, JSON.stringify(definition), active]
+      `INSERT INTO workflows (id, workspace_id, name, definition, active, tags)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [id, req.auth.workspaceId, name, JSON.stringify(definition), active, tags]
     );
 
     if (active) {
       await reconcileWorkflowSchedule({ id, workspace_id: req.auth.workspaceId, definition, active });
     }
 
-    return reply.code(201).send({ id });
+    return reply.code(201).send({ id, validation });
   });
 
   fastify.put('/api/v1/workflows/:id', async (req, reply) => {
     const { id } = req.params;
-    const { name, definition, active } = req.body ?? {};
+    const { name, definition, active, tags } = req.body ?? {};
 
     const { rows: existing } = await db.query(
       `SELECT id, workspace_id, name, definition, active
@@ -66,6 +80,14 @@ export async function workflowRoutes(fastify) {
 
     const nextDefinition = definition ?? existing[0].definition;
     const nextActive = active ?? existing[0].active;
+    const validation = validateWorkflowDefinition(nextDefinition);
+    if (hasSaveBlockingIssues(validation)) {
+      return reply.code(422).send({ error: 'Workflow definition is invalid', details: validation.issues, validation });
+    }
+    if (nextActive && hasBlockingIssues(validation)) {
+      return reply.code(422).send({ error: 'Workflow cannot be activated', details: validation.issues, validation });
+    }
+
     if (nextActive) {
       const errors = validateWorkflowActivation(nextDefinition);
       if (errors.length) return reply.code(422).send({ error: 'Workflow cannot be activated', details: errors });
@@ -77,6 +99,7 @@ export async function workflowRoutes(fastify) {
     if (name !== undefined) { params.push(name); setParts.push(`name = $${params.length}`); }
     if (definition !== undefined) { params.push(JSON.stringify(definition)); setParts.push(`definition = $${params.length}`); }
     if (active !== undefined) { params.push(active); setParts.push(`active = $${params.length}`); }
+    if (tags !== undefined) { params.push(tags); setParts.push(`tags = $${params.length}`); }
 
     params.push(id, req.auth.workspaceId);
     const { rows: updatedRows } = await db.query(
@@ -102,7 +125,7 @@ export async function workflowRoutes(fastify) {
 
     await reconcileWorkflowSchedule(updatedRows[0]);
 
-    return reply.send({ ok: true, id });
+    return reply.send({ ok: true, id, validation });
   });
 
   fastify.delete('/api/v1/workflows/:id', async (req, reply) => {
@@ -116,6 +139,50 @@ export async function workflowRoutes(fastify) {
     if (!rows.length) return reply.code(404).send({ error: 'Workflow not found' });
     await reconcileWorkflowSchedule(rows[0]);
     return reply.send({ ok: true });
+  });
+
+  fastify.get('/api/v1/workflows/:id/versions', async (req, reply) => {
+    const { rows } = await db.query(
+      `SELECT v.version_number, v.created_at, u.email AS created_by_email
+       FROM workflow_versions v
+       LEFT JOIN users u ON u.id = v.created_by
+       WHERE v.workflow_id = $1
+         AND EXISTS (SELECT 1 FROM workflows w WHERE w.id = $1 AND w.workspace_id = $2)
+       ORDER BY v.version_number DESC
+       LIMIT 50`,
+      [req.params.id, req.auth.workspaceId]
+    );
+    return reply.send({ versions: rows });
+  });
+
+  fastify.post('/api/v1/workflows/:id/versions/:vnum/restore', async (req, reply) => {
+    const { id, vnum } = req.params;
+    const { rows: vRows } = await db.query(
+      `SELECT v.definition
+       FROM workflow_versions v
+       WHERE v.workflow_id = $1 AND v.version_number = $2
+         AND EXISTS (SELECT 1 FROM workflows w WHERE w.id = $1 AND w.workspace_id = $3)`,
+      [id, parseInt(vnum, 10), req.auth.workspaceId]
+    );
+    if (!vRows.length) return reply.code(404).send({ error: 'Version not found' });
+
+    const definition = vRows[0].definition;
+    await db.query(
+      `UPDATE workflows SET definition = $1, updated_at = NOW() WHERE id = $2 AND workspace_id = $3`,
+      [JSON.stringify(definition), id, req.auth.workspaceId]
+    );
+
+    const { rows: versionRows } = await db.query(
+      'SELECT COALESCE(MAX(version_number), 0) AS max_v FROM workflow_versions WHERE workflow_id = $1',
+      [id]
+    );
+    const nextVersion = (versionRows[0]?.max_v ?? 0) + 1;
+    await db.query(
+      `INSERT INTO workflow_versions (workflow_id, version_number, definition, created_by) VALUES ($1, $2, $3, $4)`,
+      [id, nextVersion, JSON.stringify(definition), req.auth.userId]
+    );
+
+    return reply.send({ ok: true, restoredFrom: parseInt(vnum, 10), newVersion: nextVersion });
   });
 
   fastify.post('/api/v1/workflows/:id/duplicate', async (req, reply) => {

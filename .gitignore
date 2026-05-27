@@ -13,6 +13,28 @@ canvas/dist/
 # Logs
 *.log
 npm-debug.log*
+.codex-*.log
+
+# Runtime file storage
+files/
+
+# Local agent/tooling state
+.agents/
+.claude/
+.external/
+.playwright-cli/
+graphify-out/
+AGENTS.md
+CLAUDE.md
+skills-lock.json
+_gfy_audit.py
+
+# Local design/reference handoffs
+design_handoff_node_cards_p1/
+otto_handoff/
+otto_handoff_phase2/
+Testing for Otto.docx
+cortex_orchestrator_product_idea.pdf
 
 # OS
 .DS_Store
@@ -24,4 +46,3 @@ Thumbs.db
 
 # Claude Code local settings (personal, not project)
 .claude/settings.local.json
-CLAUDE.md
