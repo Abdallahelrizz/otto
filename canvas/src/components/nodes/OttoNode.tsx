@@ -44,6 +44,8 @@ function RunningSpinner({ color }: { color: string }) {
 
 export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) => {
   const execution = useStore((s) => s.nodeExecutions[id]);
+  const isPinned = useStore((s) => Object.prototype.hasOwnProperty.call(s.pinnedData, id));
+  const validationIssue = useStore((s) => s.validationIssues.find((issue) => issue.nodeId === id));
   const setContextMenu = useStore((s) => s.setContextMenu);
   const theme = useStore((s) => s.theme);
   const def = getNodeDef(data.nodeType);
@@ -54,15 +56,24 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
   const isRunning = status === 'running';
   const isSuccess = status === 'success';
   const isError   = status === 'error';
+  const isValidationError = validationIssue?.severity === 'error';
+  const isValidationWarning = validationIssue?.severity === 'warning';
+  const isDisabled = Boolean(data.disabled);
+  const noteText = String(data.notes ?? '').trim();
+  const showNote = Boolean(data.displayNote && noteText);
 
   const inCount  = def.handles.in.length;
   const outCount = def.handles.out.length;
   const h = cardHeight(inCount, outCount);
+  const noteHeight = showNote ? 46 : 0;
 
   const borderColor =
     isRunning ? 'var(--node-running)' :
     isSuccess ? 'var(--node-success)' :
     isError   ? 'var(--node-error)' :
+    isValidationError ? 'var(--node-error)' :
+    isValidationWarning ? 'var(--node-running)' :
+    isDisabled ? 'var(--border)' :
     selected  ? cardColor :
     hovered   ? 'var(--border-input)' :
                 'var(--border-node)';
@@ -104,7 +115,7 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
 
   return (
     <div
-      style={{ position: 'relative', width: NODE_W, height: h, overflow: 'visible', cursor: 'pointer', userSelect: 'none' }}
+      style={{ position: 'relative', width: NODE_W, height: h + noteHeight, overflow: 'visible', cursor: 'pointer', userSelect: 'none' }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onContextMenu={onContextMenu}
@@ -114,11 +125,16 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
         className={`otto-node-card${executionClass}`}
         style={{
           position: 'absolute',
-          inset: 0,
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: h,
           background: 'var(--bg-node-card)',
           border: `1px solid ${borderColor}`,
           borderRadius: '6px',
           boxShadow,
+          opacity: isDisabled ? 0.58 : 1,
+          filter: isDisabled ? 'grayscale(0.25)' : 'none',
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
@@ -129,6 +145,61 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
         }}
       >
         {isRunning && <RunningSpinner color="var(--node-running)" />}
+        {isDisabled && (
+          <span title="Node disabled" style={{
+            position: 'absolute',
+            top: tagText ? 27 : 7,
+            right: 10,
+            fontFamily: "'JetBrains Mono'",
+            fontSize: '8.5px',
+            fontWeight: 800,
+            color: 'var(--text-muted)',
+            background: 'rgba(120,115,110,0.10)',
+            border: '1px solid rgba(120,115,110,0.22)',
+            borderRadius: '3px',
+            padding: '1px 4px',
+            lineHeight: 1.1,
+          }}>
+            OFF
+          </span>
+        )}
+        {isPinned && (
+          <span title="Pinned data" style={{
+            position: 'absolute',
+            right: 8,
+            bottom: 6,
+            fontFamily: "'JetBrains Mono'",
+            fontSize: '8.5px',
+            fontWeight: 800,
+            color: OTTO_AMBER,
+            background: hexA(OTTO_AMBER, 0.12),
+            border: `1px solid ${hexA(OTTO_AMBER, 0.22)}`,
+            borderRadius: '3px',
+            padding: '1px 4px',
+            lineHeight: 1.1,
+          }}>
+            PIN
+          </span>
+        )}
+
+        {validationIssue && (
+          <span title={validationIssue.message} style={{
+            position: 'absolute',
+            left: 8,
+            bottom: 6,
+            fontFamily: "'JetBrains Mono'",
+            fontSize: '8.5px',
+            fontWeight: 800,
+            color: isValidationError ? 'var(--node-error)' : 'var(--node-running)',
+            background: isValidationError ? 'rgba(239,68,68,0.10)' : 'rgba(245,158,11,0.10)',
+            border: `1px solid ${isValidationError ? 'rgba(239,68,68,0.22)' : 'rgba(245,158,11,0.22)'}`,
+            borderRadius: '3px',
+            padding: '1px 4px',
+            lineHeight: 1.1,
+          }}>
+            {isValidationError ? 'ERR' : 'WARN'}
+          </span>
+        )}
 
         {/* Tag — top right */}
         {tagText && (
@@ -198,6 +269,32 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
           )}
         </div>
       </div>
+
+      {showNote && (
+        <div style={{
+          position: 'absolute',
+          top: h + 6,
+          left: 0,
+          width: NODE_W,
+          minHeight: 34,
+          maxHeight: 40,
+          boxSizing: 'border-box',
+          overflow: 'hidden',
+          border: '1px solid var(--border)',
+          borderRadius: '5px',
+          background: 'var(--bg-node-lift)',
+          color: 'var(--text-secondary)',
+          fontFamily: "'Inter'",
+          fontSize: '10.5px',
+          lineHeight: 1.35,
+          padding: '5px 7px',
+          boxShadow: 'var(--shadow)',
+          whiteSpace: 'normal',
+          wordBreak: 'break-word',
+        }}>
+          {noteText}
+        </div>
+      )}
 
       {/* Input handles */}
       {def.handles.in.map((h_, i) => {

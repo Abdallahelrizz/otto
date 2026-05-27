@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -10,7 +10,10 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
+import { Ban, Clipboard, CopyPlus, Trash2 } from 'lucide-react';
 import { useStore } from '../store';
+import { api } from '../api';
+import type { Execution } from '../types';
 import { OttoNode } from './nodes/OttoNode';
 import { AgentNode } from './nodes/AgentNode';
 import { NODE_TYPE_MAP, getNodeDef, nodeColor } from './nodes/nodeConfig';
@@ -20,9 +23,20 @@ const nodeTypes = {
   agentNode: AgentNode,
 };
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName.toLowerCase();
+  return tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable;
+}
+
 function CanvasTabs() {
-  const [active, setActive] = useState(0);
-  const tabs = ['Editor', 'Executions', 'Test'];
+  const active = useStore((s) => s.activeCanvasTab);
+  const setActive = useStore((s) => s.setActiveCanvasTab);
+  const tabs = [
+    { id: 'editor' as const, label: 'Editor' },
+    { id: 'executions' as const, label: 'Executions' },
+    { id: 'test' as const, label: 'Test' },
+  ];
 
   return (
     <div style={{
@@ -39,16 +53,16 @@ function CanvasTabs() {
       zIndex: 10,
       pointerEvents: 'all',
     }}>
-      {tabs.map((label, i) => (
+      {tabs.map((tab) => (
         <button
-          key={label}
-          onClick={() => setActive(i)}
+          key={tab.id}
+          onClick={() => setActive(tab.id)}
           style={{
             padding: '5px 13px',
             fontSize: '12px',
-            fontWeight: active === i ? 600 : 500,
-            color: active === i ? 'var(--text-primary)' : 'var(--text-secondary)',
-            background: active === i ? 'var(--bg-node-lift)' : 'transparent',
+            fontWeight: active === tab.id ? 600 : 500,
+            color: active === tab.id ? 'var(--text-primary)' : 'var(--text-secondary)',
+            background: active === tab.id ? 'var(--bg-node-lift)' : 'transparent',
             border: 'none',
             borderRadius: '4px',
             letterSpacing: '-0.005em',
@@ -57,11 +71,396 @@ function CanvasTabs() {
             transition: 'background 100ms ease, color 100ms ease',
           }}
         >
-          {label}
+          {tab.label}
         </button>
       ))}
     </div>
   );
+}
+
+function SelectionActionBar({
+  count,
+  allDisabled,
+  canPaste,
+  onCopy,
+  onPaste,
+  onDuplicate,
+  onToggleDisabled,
+  onDelete,
+}: {
+  count: number;
+  allDisabled: boolean;
+  canPaste: boolean;
+  onCopy: () => void;
+  onPaste: () => void;
+  onDuplicate: () => void;
+  onToggleDisabled: () => void;
+  onDelete: () => void;
+}) {
+  if (count <= 1) return null;
+
+  const buttonStyle: React.CSSProperties = {
+    height: 28,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    border: '1px solid var(--border)',
+    borderRadius: '5px',
+    background: 'var(--bg-input)',
+    color: 'var(--text-primary)',
+    cursor: 'pointer',
+    fontFamily: "'Inter'",
+    fontSize: '11.5px',
+    fontWeight: 650,
+    padding: '0 9px',
+  };
+
+  return (
+    <div style={{
+      position: 'absolute',
+      bottom: 18,
+      left: '50%',
+      transform: 'translateX(-50%)',
+      zIndex: 12,
+      pointerEvents: 'all',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6,
+      padding: '6px',
+      border: '1px solid var(--border)',
+      borderRadius: '8px',
+      background: 'var(--bg-panel)',
+      boxShadow: 'var(--shadow-main)',
+    }}>
+      <span style={{
+        fontFamily: 'Geist Mono',
+        fontSize: '10px',
+        fontWeight: 800,
+        letterSpacing: '0.08em',
+        color: 'var(--text-muted)',
+        padding: '0 7px',
+        textTransform: 'uppercase',
+        whiteSpace: 'nowrap',
+      }}>
+        {count} selected
+      </span>
+      <button type="button" title="Copy selection" style={buttonStyle} onClick={onCopy}>
+        <Clipboard size={13} strokeWidth={1.8} />
+        Copy
+      </button>
+      <button type="button" title="Paste copied nodes" style={{ ...buttonStyle, opacity: canPaste ? 1 : 0.45, cursor: canPaste ? 'pointer' : 'not-allowed' }} disabled={!canPaste} onClick={onPaste}>
+        <Clipboard size={13} strokeWidth={1.8} />
+        Paste
+      </button>
+      <button type="button" title="Duplicate selection" style={buttonStyle} onClick={onDuplicate}>
+        <CopyPlus size={13} strokeWidth={1.8} />
+        Duplicate
+      </button>
+      <button type="button" title={allDisabled ? 'Enable selection' : 'Disable selection'} style={buttonStyle} onClick={onToggleDisabled}>
+        <Ban size={13} strokeWidth={1.8} />
+        {allDisabled ? 'Enable' : 'Disable'}
+      </button>
+      <button type="button" title="Delete selection" style={{ ...buttonStyle, color: 'var(--node-error)' }} onClick={onDelete}>
+        <Trash2 size={13} strokeWidth={1.8} />
+        Delete
+      </button>
+    </div>
+  );
+}
+
+function ImportCompatibilityBanner() {
+  const report = useStore((s) => s.workflowImportReport);
+  const setActiveSidebarTab = useStore((s) => s.setActiveSidebarTab);
+  if (!report) return null;
+
+  const partial = report.summary.partial ?? 0;
+  const risky = (report.summary.placeholder ?? 0) + (report.summary.unsupported ?? 0);
+  const color = risky > 0 ? 'var(--node-error)' : partial > 0 ? 'var(--node-running)' : 'var(--node-success)';
+
+  return (
+    <button
+      type="button"
+      onClick={() => setActiveSidebarTab('workflows')}
+      style={{
+        position: 'absolute',
+        top: 58,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 8,
+        pointerEvents: 'all',
+        border: `1px solid ${color}`,
+        background: 'var(--bg-panel)',
+        color,
+        borderRadius: '5px',
+        padding: '6px 10px',
+        fontFamily: 'Geist Mono',
+        fontSize: '10.5px',
+        fontWeight: 700,
+        cursor: 'pointer',
+        boxShadow: 'var(--shadow)',
+      }}
+    >
+      n8n import: {report.summary.exact ?? 0} exact / {partial} partial / {risky} blocked
+    </button>
+  );
+}
+
+function TestPanel() {
+  const testInputText = useStore((s) => s.testInputText);
+  const setTestInputText = useStore((s) => s.setTestInputText);
+  const runExecution = useStore((s) => s.runExecution);
+  const selectedNodeId = useStore((s) => s.selectedNodeId);
+  const executionPhase = useStore((s) => s.executionPhase);
+  const disabled = executionPhase === 'running';
+
+  return (
+    <div style={{
+      position: 'absolute',
+      top: 58,
+      left: '50%',
+      transform: 'translateX(-50%)',
+      width: 'min(520px, calc(100vw - 48px))',
+      background: 'var(--bg-panel)',
+      border: '1px solid var(--border)',
+      borderRadius: '7px',
+      boxShadow: 'var(--shadow-main)',
+      zIndex: 9,
+      pointerEvents: 'all',
+      overflow: 'hidden',
+    }}>
+      <div style={{
+        height: 34,
+        display: 'flex',
+        alignItems: 'center',
+        padding: '0 12px',
+        borderBottom: '1px solid var(--border)',
+        gap: 8,
+      }}>
+        <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--text-primary)' }}>Test input</span>
+        <div style={{ flex: 1 }} />
+        <button
+          disabled={disabled}
+          onClick={() => void runExecution('full')}
+          style={testButtonStyle(disabled)}
+        >
+          Run workflow
+        </button>
+        <button
+          disabled={disabled || !selectedNodeId}
+          onClick={() => void runExecution('single_node', selectedNodeId)}
+          style={testButtonStyle(disabled || !selectedNodeId)}
+        >
+          Run node
+        </button>
+      </div>
+      <textarea
+        value={testInputText}
+        onChange={(e) => setTestInputText(e.target.value)}
+        spellCheck={false}
+        style={{
+          width: '100%',
+          height: 180,
+          resize: 'vertical',
+          background: 'var(--bg-input)',
+          color: 'var(--text-primary)',
+          border: 'none',
+          outline: 'none',
+          padding: '12px',
+          fontFamily: 'Geist Mono',
+          fontSize: '12px',
+          lineHeight: 1.55,
+          display: 'block',
+        }}
+      />
+    </div>
+  );
+}
+
+function testButtonStyle(disabled: boolean): React.CSSProperties {
+  return {
+    height: 24,
+    padding: '0 9px',
+    borderRadius: '4px',
+    border: '1px solid var(--border-input)',
+    background: disabled ? 'var(--bg-hover)' : 'var(--bg-input)',
+    color: disabled ? 'var(--text-muted)' : 'var(--text-primary)',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    fontFamily: "'Inter'",
+    fontSize: '11px',
+    fontWeight: 600,
+  };
+}
+
+function ExecutionsPanel() {
+  const savedWorkflowId = useStore((s) => s.savedWorkflowId);
+  const executionId = useStore((s) => s.executionId);
+  const loadExecutionDetail = useStore((s) => s.loadExecutionDetail);
+  const retryExecution = useStore((s) => s.retryExecution);
+  const setBottomPanelsOpen = useStore((s) => s.setBottomPanelsOpen);
+  const [rows, setRows] = useState<Execution[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!savedWorkflowId) {
+      setRows([]);
+      return;
+    }
+
+    setLoading(true);
+    api.listExecutions(savedWorkflowId, 1, 20)
+      .then((res) => { if (!cancelled) setRows(res.executions); })
+      .catch(() => { if (!cancelled) setRows([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [savedWorkflowId, executionId]);
+
+  return (
+    <div style={{
+      position: 'absolute',
+      top: 58,
+      left: '50%',
+      transform: 'translateX(-50%)',
+      width: 'min(560px, calc(100vw - 48px))',
+      maxHeight: 'min(420px, calc(100vh - 160px))',
+      background: 'var(--bg-panel)',
+      border: '1px solid var(--border)',
+      borderRadius: '7px',
+      boxShadow: 'var(--shadow-main)',
+      zIndex: 9,
+      pointerEvents: 'all',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+    }}>
+      <div style={{
+        height: 34,
+        display: 'flex',
+        alignItems: 'center',
+        padding: '0 12px',
+        borderBottom: '1px solid var(--border)',
+        gap: 8,
+      }}>
+        <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--text-primary)' }}>Workflow executions</span>
+        <div style={{ flex: 1 }} />
+        <span style={{ fontFamily: 'Geist Mono', fontSize: '10px', color: 'var(--text-muted)' }}>
+          {loading ? 'loading' : `${rows.length} runs`}
+        </span>
+      </div>
+
+      <div style={{ overflow: 'auto', padding: 8 }}>
+        {!savedWorkflowId && (
+          <div style={emptyPanelStyle}>Save or run the workflow once to create execution history.</div>
+        )}
+        {savedWorkflowId && !loading && rows.length === 0 && (
+          <div style={emptyPanelStyle}>No executions for this workflow yet.</div>
+        )}
+        {rows.map((row) => (
+          <div
+            role="button"
+            tabIndex={0}
+            key={row.id}
+            onClick={() => {
+              setBottomPanelsOpen(true);
+              void loadExecutionDetail(row.id);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setBottomPanelsOpen(true);
+                void loadExecutionDetail(row.id);
+              }
+            }}
+            style={{
+              width: '100%',
+              display: 'grid',
+              gridTemplateColumns: '86px 1fr 80px 74px 58px',
+              alignItems: 'center',
+              gap: 8,
+              padding: '8px 9px',
+              marginBottom: 4,
+              border: '1px solid transparent',
+              borderRadius: '5px',
+              background: row.id === executionId ? 'var(--bg-hover)' : 'transparent',
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+              textAlign: 'left',
+              fontFamily: "'Inter'",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = row.id === executionId ? 'var(--bg-hover)' : 'transparent'; }}
+          >
+            <span style={{ ...statusPillStyle(row.status), justifySelf: 'start' }}>{row.status}</span>
+            <span style={{ fontFamily: 'Geist Mono', fontSize: '11px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {row.id}
+            </span>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{modeLabel(row.mode)}</span>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'right' }}>{formatTime(row.started_at)}</span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                void retryExecution(row.id);
+              }}
+              style={{
+                height: 24,
+                borderRadius: '4px',
+                border: '1px solid var(--border-input)',
+                background: 'var(--bg-input)',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                fontSize: '11px',
+                fontWeight: 600,
+                fontFamily: "'Inter'",
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const emptyPanelStyle: React.CSSProperties = {
+  padding: '22px 12px',
+  color: 'var(--text-secondary)',
+  fontSize: '12px',
+  textAlign: 'center',
+};
+
+function statusPillStyle(status: Execution['status']): React.CSSProperties {
+  const color = status === 'success'
+    ? 'var(--node-success)'
+    : status === 'error'
+      ? 'var(--node-error)'
+      : status === 'running'
+        ? 'var(--node-running)'
+        : 'var(--text-muted)';
+  return {
+    color,
+    border: `1px solid ${color}`,
+    borderRadius: '100px',
+    padding: '2px 7px',
+    fontFamily: 'Geist Mono',
+    fontSize: '9.5px',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+  };
+}
+
+function modeLabel(mode?: Execution['mode']) {
+  if (mode === 'single_node') return 'node';
+  if (mode === 'to_node') return 'to node';
+  if (mode === 'from_node') return 'from node';
+  return 'full';
+}
+
+function formatTime(value: string | null) {
+  if (!value) return '--';
+  return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 export function Canvas() {
@@ -78,17 +477,49 @@ export function Canvas() {
   const selectedNodeId = useStore((s) => s.selectedNodeId);
   const executionPhase = useStore((s) => s.executionPhase);
   const theme = useStore((s) => s.theme);
-  const duplicateNode = useStore((s) => s.duplicateNode);
-  const deleteNode = useStore((s) => s.deleteNode);
+  const copyNodes = useStore((s) => s.copyNodes);
+  const pasteNodes = useStore((s) => s.pasteNodes);
+  const duplicateNodes = useStore((s) => s.duplicateNodes);
+  const deleteNodes = useStore((s) => s.deleteNodes);
+  const toggleNodesDisabled = useStore((s) => s.toggleNodesDisabled);
+  const selectAllNodes = useStore((s) => s.selectAllNodes);
+  const nodeClipboard = useStore((s) => s.nodeClipboard);
   const setContextMenu = useStore((s) => s.setContextMenu);
+  const activeCanvasTab = useStore((s) => s.activeCanvasTab);
 
   const dotColor = theme === 'dark' ? 'rgba(255,255,255,0.035)' : 'rgba(15,15,10,0.06)';
   const minimapMask = theme === 'dark' ? 'rgba(10,9,8,0.75)' : 'rgba(244,243,240,0.75)';
+  const selectedNodes = useMemo(
+    () => {
+      const selected = nodes.filter((node) => node.selected);
+      if (selected.length > 0) return selected;
+      const fallback = selectedNodeId ? nodes.find((node) => node.id === selectedNodeId) : null;
+      return fallback ? [fallback] : [];
+    },
+    [nodes, selectedNodeId]
+  );
+  const selectedNodeIds = useMemo(() => selectedNodes.map((node) => node.id), [selectedNodes]);
+  const selectedCount = selectedNodes.length;
+  const selectedAllDisabled = selectedCount > 0 && selectedNodes.every((node) => Boolean(node.data.disabled));
+  const canPaste = Boolean(nodeClipboard?.nodes.length);
 
   const displayEdges = useMemo(
     () => executionPhase === 'running' ? edges.map((e) => ({ ...e, animated: true })) : edges,
     [edges, executionPhase]
   );
+
+  const prevPhaseRef = useRef(executionPhase);
+  useEffect(() => {
+    const prev = prevPhaseRef.current;
+    prevPhaseRef.current = executionPhase;
+    if (prev === 'running' && (executionPhase === 'success' || executionPhase === 'error')) {
+      fitView({ padding: 0.15, duration: 400 });
+    }
+  }, [executionPhase, fitView]);
+
+  const focusCanvas = useCallback(() => {
+    reactFlowWrapper.current?.focus({ preventScroll: true });
+  }, []);
 
   const onNodeDragStop: NodeMouseHandler = useCallback((_e, node) => {
     const el = document.querySelector(`.react-flow__node[data-id="${node.id}"]`);
@@ -107,14 +538,19 @@ export function Canvas() {
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      if (isEditableTarget(e.target)) return;
       const meta = e.metaKey || e.ctrlKey;
-      if (meta && e.key === 'd') { e.preventDefault(); if (selectedNodeId) duplicateNode(selectedNodeId); }
+      const key = e.key.toLowerCase();
+      if (meta && key === 'a') { e.preventDefault(); selectAllNodes(); }
+      if (meta && key === 'c') { e.preventDefault(); copyNodes(); }
+      if (meta && key === 'v') { e.preventDefault(); pasteNodes(); }
+      if (meta && key === 'd') { e.preventDefault(); duplicateNodes(); }
       if (meta && e.shiftKey && e.key === 'f') { e.preventDefault(); fitView({ padding: 0.15 }); }
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedNodeId) deleteNode(selectedNodeId);
+        deleteNodes();
       }
     },
-    [selectedNodeId, duplicateNode, deleteNode, fitView]
+    [copyNodes, pasteNodes, duplicateNodes, deleteNodes, selectAllNodes, fitView]
   );
 
   const onDragOver = useCallback((e: React.DragEvent) => {
@@ -140,13 +576,18 @@ export function Canvas() {
   );
 
   const onNodeClick: NodeMouseHandler = useCallback(
-    (_e, node) => selectNode(node.id), [selectNode]
+    (_e, node) => {
+      focusCanvas();
+      selectNode(node.id);
+    },
+    [focusCanvas, selectNode]
   );
 
   const onPaneClick = useCallback(() => {
+    focusCanvas();
     selectNode(null);
     setContextMenu(null);
-  }, [selectNode, setContextMenu]);
+  }, [focusCanvas, selectNode, setContextMenu]);
 
   const onNodeContextMenu = useCallback(
     (e: React.MouseEvent, node: Node) => {
@@ -246,6 +687,21 @@ export function Canvas() {
 
       {/* Floating canvas tabs */}
       <CanvasTabs />
+      {activeCanvasTab === 'editor' && <ImportCompatibilityBanner />}
+      {activeCanvasTab === 'editor' && (
+        <SelectionActionBar
+          count={selectedCount}
+          allDisabled={selectedAllDisabled}
+          canPaste={canPaste}
+          onCopy={() => copyNodes(selectedNodeIds)}
+          onPaste={() => pasteNodes()}
+          onDuplicate={() => duplicateNodes(selectedNodeIds)}
+          onToggleDisabled={() => toggleNodesDisabled(selectedNodeIds)}
+          onDelete={() => deleteNodes(selectedNodeIds)}
+        />
+      )}
+      {activeCanvasTab === 'test' && <TestPanel />}
+      {activeCanvasTab === 'executions' && <ExecutionsPanel />}
     </div>
   );
 }

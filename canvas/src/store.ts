@@ -2,15 +2,50 @@ import { create } from 'zustand';
 import { applyNodeChanges, applyEdgeChanges, addEdge } from 'reactflow';
 import type { Node, Edge, NodeChange, EdgeChange, Connection } from 'reactflow';
 import { v4 as uuidv4 } from 'uuid';
-import type { NodeExecution, ExecutionPhase, WorkflowListItem, Credential, ExecutionDetail } from './types';
+import type {
+  NodeExecution,
+  ExecutionPhase,
+  ExecutionMode,
+  WorkflowListItem,
+  Credential,
+  ExecutionDetail,
+  ApiKey,
+  ImportCompatibilityReport,
+  WorkflowValidationIssue,
+  OttoNodeData,
+  WorkflowSettings,
+} from './types';
+import { DEFAULT_WORKFLOW_SETTINGS } from './types';
 import { getNodeDef, EDGE_COLOR_DARK, EDGE_COLOR_LIGHT } from './components/nodes/nodeConfig';
 import { api } from './api';
+import { hasBlockingValidationIssues, validateCanvasWorkflow } from './utils/workflowValidation';
+
+/** Normalize a raw API execution detail: maps execution_type → executionType */
+function normalizeExecutionDetail(detail: ExecutionDetail): ExecutionDetail {
+  const raw = detail.execution as ExecutionDetail['execution'] & { execution_type?: string };
+  if (raw.execution_type && !raw.executionType) {
+    return {
+      ...detail,
+      execution: {
+        ...raw,
+        executionType: raw.executionType ?? raw.execution_type,
+      },
+    };
+  }
+  return detail;
+}
 
 interface ContextMenuState {
   x: number;
   y: number;
   nodeId: string;
 }
+
+type NodeClipboard = {
+  nodes: Node[];
+  edges: Edge[];
+  pasteCount: number;
+};
 
 interface OttoStore {
   // React Flow state
@@ -29,8 +64,18 @@ interface OttoStore {
   // Node config editing
   updateNodeConfig: (id: string, config: Record<string, unknown>) => void;
   updateNodeLabel: (id: string, label: string) => void;
+  updateNodeControls: (id: string, patch: Partial<OttoNodeData>) => void;
+  toggleNodeDisabled: (id: string) => void;
 
   // Node actions
+  nodeClipboard: NodeClipboard | null;
+  copyNodes: (ids?: string[]) => number;
+  pasteNodes: () => number;
+  duplicateNodes: (ids?: string[]) => number;
+  deleteNodes: (ids?: string[]) => void;
+  toggleNodesDisabled: (ids?: string[], disabled?: boolean) => void;
+  selectNodes: (ids: string[]) => void;
+  selectAllNodes: () => void;
   duplicateNode: (id: string) => void;
   deleteNode: (id: string) => void;
 
@@ -40,6 +85,13 @@ interface OttoStore {
   workflowVersion: string;
   workflowActive: boolean;
   setWorkflowActive: (active: boolean) => void;
+  workflowImportReport: ImportCompatibilityReport | null;
+  setWorkflowImportReport: (report: ImportCompatibilityReport | null) => void;
+  workflowSettings: WorkflowSettings;
+  updateWorkflowSettings: (patch: Partial<WorkflowSettings>) => void;
+  validationIssues: WorkflowValidationIssue[];
+  setValidationIssues: (issues: WorkflowValidationIssue[]) => void;
+  validateCurrentWorkflow: (mode?: ExecutionMode, nodeId?: string | null) => WorkflowValidationIssue[];
 
   // Saved workflow persistence
   savedWorkflowId: string | null;
@@ -59,13 +111,35 @@ interface OttoStore {
   credentialsLoading: boolean;
   fetchCredentials: () => Promise<void>;
   createCredential: (name: string, type: string, data: Record<string, string>) => Promise<void>;
+  updateCredential: (id: string, patch: { name?: string; type?: string; data?: Record<string, string> }) => Promise<void>;
+  testCredential: (id: string, testUrl?: string) => Promise<{ ok: boolean; checked: string; status?: number; error?: string }>;
   deleteCredential: (id: string) => Promise<void>;
+
+  // API keys
+  apiKeys: ApiKey[];
+  apiKeysLoading: boolean;
+  fetchApiKeys: () => Promise<void>;
+  createApiKey: (name: string) => Promise<string>;
+  deleteApiKey: (id: string) => Promise<void>;
 
   // Sidebar
   sidebarOpen: boolean;
   toggleSidebar: () => void;
   activeSidebarTab: string;
   setActiveSidebarTab: (tab: string) => void;
+
+  // Canvas mode tabs + test input
+  activeCanvasTab: 'editor' | 'executions' | 'test';
+  setActiveCanvasTab: (tab: 'editor' | 'executions' | 'test') => void;
+  testInputText: string;
+  setTestInputText: (text: string) => void;
+
+  // Pinned node data
+  pinnedData: Record<string, unknown>;
+  setPinnedDataForNode: (nodeId: string, data: unknown) => void;
+  pinNodeOutput: (nodeId: string) => boolean;
+  clearPinnedDataForNode: (nodeId: string) => void;
+  clearAllPinnedData: () => void;
 
   // Bottom panels
   bottomPanelsOpen: boolean;
@@ -87,6 +161,9 @@ interface OttoStore {
   executionDetailLoading: boolean;
   setExecutionStarted: (executionId: string) => void;
   setNodeExecutions: (executions: NodeExecution[]) => void;
+  runExecution: (mode?: ExecutionMode, nodeId?: string | null) => Promise<void>;
+  cancelExecution: () => Promise<void>;
+  retryExecution: (executionId?: string | null) => Promise<void>;
   loadExecutionDetail: (executionId: string) => Promise<void>;
   setExecutionPhase: (phase: ExecutionPhase) => void;
   resetExecution: () => void;
@@ -109,6 +186,79 @@ function writeLastWorkflowId(id: string | null) {
   } catch {
     // Browser storage can be disabled.
   }
+}
+
+function parseJsonObject(text: string): Record<string, unknown> {
+  const trimmed = text.trim();
+  if (!trimmed) return {};
+  const parsed = JSON.parse(trimmed);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Test input must be a JSON object');
+  }
+  return parsed as Record<string, unknown>;
+}
+
+function cloneValue<T>(value: T): T {
+  if (typeof structuredClone === 'function') return structuredClone(value);
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function resolveNodeIds(nodes: Node[], selectedNodeId: string | null, ids?: string[]): string[] {
+  const existing = new Set(nodes.map((node) => node.id));
+  const explicit = ids?.filter((id, index, all) => existing.has(id) && all.indexOf(id) === index) ?? [];
+  if (explicit.length > 0) return explicit;
+
+  const selected = nodes
+    .filter((node) => node.selected)
+    .map((node) => node.id);
+  if (selected.length > 0) return selected;
+
+  return selectedNodeId && existing.has(selectedNodeId) ? [selectedNodeId] : [];
+}
+
+function cloneCanvasNode(node: Node, overrides: Partial<Node> = {}): Node {
+  return {
+    ...node,
+    data: cloneValue(node.data ?? {}),
+    position: { ...node.position },
+    positionAbsolute: node.positionAbsolute ? { ...node.positionAbsolute } : undefined,
+    selected: false,
+    dragging: false,
+    ...overrides,
+  };
+}
+
+function cloneCanvasEdge(edge: Edge, overrides: Partial<Edge> = {}): Edge {
+  return {
+    ...edge,
+    data: edge.data ? cloneValue(edge.data) : edge.data,
+    style: edge.style ? { ...edge.style } : edge.style,
+    selected: false,
+    ...overrides,
+  };
+}
+
+function cloneGraphSelection(sourceNodes: Node[], sourceEdges: Edge[], offset: number): { nodes: Node[]; edges: Edge[] } {
+  const idMap = new Map<string, string>();
+  const nodes = sourceNodes.map((node) => {
+    const nextId = uuidv4();
+    idMap.set(node.id, nextId);
+    return cloneCanvasNode(node, {
+      id: nextId,
+      position: { x: node.position.x + offset, y: node.position.y + offset },
+      selected: true,
+    });
+  });
+
+  const edges: Edge[] = [];
+  for (const edge of sourceEdges) {
+    const source = idMap.get(edge.source);
+    const target = idMap.get(edge.target);
+    if (!source || !target) continue;
+    edges.push(cloneCanvasEdge(edge, { id: uuidv4(), source, target }));
+  }
+
+  return { nodes, edges };
 }
 
 export const useStore = create<OttoStore>((set, get) => ({
@@ -148,30 +298,167 @@ export const useStore = create<OttoStore>((set, get) => ({
       ),
     })),
 
-  duplicateNode: (id) => {
-    const node = get().nodes.find((n) => n.id === id);
-    if (!node) return;
-    const newNode: Node = {
-      ...node,
-      id: uuidv4(),
-      position: { x: node.position.x + 32, y: node.position.y + 32 },
-      selected: false,
-    };
-    set((s) => ({ nodes: [...s.nodes, newNode] }));
+  updateNodeControls: (id, patch) =>
+    set((s) => ({
+      nodes: s.nodes.map((n) =>
+        n.id === id ? { ...n, data: { ...n.data, ...patch } } : n
+      ),
+    })),
+
+  toggleNodeDisabled: (id) =>
+    set((s) => ({
+      nodes: s.nodes.map((n) =>
+        n.id === id ? { ...n, data: { ...n.data, disabled: !n.data.disabled } } : n
+      ),
+    })),
+
+  nodeClipboard: null,
+
+  copyNodes: (ids) => {
+    const { nodes, edges, selectedNodeId } = get();
+    const nodeIds = resolveNodeIds(nodes, selectedNodeId, ids);
+    if (nodeIds.length === 0) return 0;
+    const selectedSet = new Set(nodeIds);
+    const copiedNodes = nodes
+      .filter((node) => selectedSet.has(node.id))
+      .map((node) => cloneCanvasNode(node));
+    const copiedEdges = edges
+      .filter((edge) => selectedSet.has(edge.source) && selectedSet.has(edge.target))
+      .map((edge) => cloneCanvasEdge(edge));
+
+    set({ nodeClipboard: { nodes: copiedNodes, edges: copiedEdges, pasteCount: 1 } });
+    return copiedNodes.length;
   },
 
-  deleteNode: (id) =>
+  pasteNodes: () => {
+    const { nodeClipboard } = get();
+    if (!nodeClipboard || nodeClipboard.nodes.length === 0) return 0;
+
+    const offset = 40 * Math.max(1, nodeClipboard.pasteCount);
+    const graph = cloneGraphSelection(nodeClipboard.nodes, nodeClipboard.edges, offset);
+    const firstNodeId = graph.nodes[0]?.id ?? null;
+
     set((s) => ({
-      nodes: s.nodes.filter((n) => n.id !== id),
-      edges: s.edges.filter((e) => e.source !== id && e.target !== id),
-      selectedNodeId: s.selectedNodeId === id ? null : s.selectedNodeId,
+      nodes: [
+        ...s.nodes.map((node) => ({ ...node, selected: false })),
+        ...graph.nodes,
+      ],
+      edges: [
+        ...s.edges.map((edge) => ({ ...edge, selected: false })),
+        ...graph.edges,
+      ],
+      selectedNodeId: firstNodeId,
+      nodeClipboard: s.nodeClipboard
+        ? { ...s.nodeClipboard, pasteCount: s.nodeClipboard.pasteCount + 1 }
+        : s.nodeClipboard,
+      validationIssues: [],
+    }));
+
+    return graph.nodes.length;
+  },
+
+  duplicateNodes: (ids) => {
+    const { nodes, edges, selectedNodeId } = get();
+    const nodeIds = resolveNodeIds(nodes, selectedNodeId, ids);
+    if (nodeIds.length === 0) return 0;
+    const selectedSet = new Set(nodeIds);
+    const sourceNodes = nodes.filter((node) => selectedSet.has(node.id));
+    const sourceEdges = edges.filter((edge) => selectedSet.has(edge.source) && selectedSet.has(edge.target));
+    const graph = cloneGraphSelection(sourceNodes, sourceEdges, 36);
+    const firstNodeId = graph.nodes[0]?.id ?? null;
+
+    set((s) => ({
+      nodes: [
+        ...s.nodes.map((node) => ({ ...node, selected: false })),
+        ...graph.nodes,
+      ],
+      edges: [
+        ...s.edges.map((edge) => ({ ...edge, selected: false })),
+        ...graph.edges,
+      ],
+      selectedNodeId: firstNodeId,
+      validationIssues: [],
+    }));
+
+    return graph.nodes.length;
+  },
+
+  deleteNodes: (ids) => {
+    const { nodes, selectedNodeId } = get();
+    const nodeIds = resolveNodeIds(nodes, selectedNodeId, ids);
+    if (nodeIds.length === 0) return;
+    const selectedSet = new Set(nodeIds);
+
+    set((s) => ({
+      nodes: s.nodes.filter((node) => !selectedSet.has(node.id)),
+      edges: s.edges.filter((edge) => !selectedSet.has(edge.source) && !selectedSet.has(edge.target)),
+      selectedNodeId: s.selectedNodeId && selectedSet.has(s.selectedNodeId) ? null : s.selectedNodeId,
       contextMenu: null,
-    })),
+      pinnedData: Object.fromEntries(Object.entries(s.pinnedData).filter(([nodeId]) => !selectedSet.has(nodeId))),
+      validationIssues: s.validationIssues.filter((issue) => !issue.nodeId || !selectedSet.has(issue.nodeId)),
+    }));
+  },
+
+  toggleNodesDisabled: (ids, disabled) => {
+    const { nodes, selectedNodeId } = get();
+    const nodeIds = resolveNodeIds(nodes, selectedNodeId, ids);
+    if (nodeIds.length === 0) return;
+    const selectedSet = new Set(nodeIds);
+    const nextDisabled = disabled ?? !nodes
+      .filter((node) => selectedSet.has(node.id))
+      .every((node) => Boolean(node.data.disabled));
+
+    set((s) => ({
+      nodes: s.nodes.map((node) =>
+        selectedSet.has(node.id)
+          ? { ...node, data: { ...node.data, disabled: nextDisabled } }
+          : node
+      ),
+      validationIssues: nextDisabled
+        ? s.validationIssues.filter((issue) => !issue.nodeId || !selectedSet.has(issue.nodeId))
+        : s.validationIssues,
+    }));
+  },
+
+  selectNodes: (ids) => {
+    const selectedSet = new Set(ids);
+    const first = ids[0] ?? null;
+    set((s) => ({
+      nodes: s.nodes.map((node) => ({ ...node, selected: selectedSet.has(node.id) })),
+      selectedNodeId: first,
+    }));
+  },
+
+  selectAllNodes: () => {
+    const { nodes } = get();
+    set({
+      nodes: nodes.map((node) => ({ ...node, selected: true })),
+      selectedNodeId: nodes[0]?.id ?? null,
+    });
+  },
+
+  duplicateNode: (id) => {
+    get().duplicateNodes([id]);
+  },
+
+  deleteNode: (id) => get().deleteNodes([id]),
 
   workflowName: 'Untitled Workflow',
   setWorkflowName: (name) => set({ workflowName: name }),
   workflowVersion: 'v1.0.0',
   workflowActive: false,
+  workflowImportReport: null,
+  setWorkflowImportReport: (report) => set({ workflowImportReport: report }),
+  workflowSettings: { ...DEFAULT_WORKFLOW_SETTINGS },
+  updateWorkflowSettings: (patch) => set((s) => ({ workflowSettings: { ...s.workflowSettings, ...patch } })),
+  validationIssues: [],
+  setValidationIssues: (issues) => set({ validationIssues: issues }),
+  validateCurrentWorkflow: (mode = 'full', nodeId = null) => {
+    const { nodes, edges } = get();
+    const issues = validateCanvasWorkflow(nodes, edges, { mode, nodeId });
+    set({ validationIssues: issues });
+    return issues;
+  },
   setWorkflowActive: async (active) => {
     const prev = get().workflowActive;
     set({ workflowActive: active });
@@ -184,6 +471,8 @@ export const useStore = create<OttoStore>((set, get) => ({
         await api.updateWorkflow(savedWorkflowId, { active });
       }
     } catch (err) {
+      const validation = (err as { validation?: { issues?: WorkflowValidationIssue[] } })?.validation;
+      if (validation?.issues) set({ validationIssues: validation.issues });
       set({ workflowActive: prev });
       throw err;
     }
@@ -197,19 +486,25 @@ export const useStore = create<OttoStore>((set, get) => ({
   isSaving: false,
 
   saveWorkflow: async () => {
-    const { nodes, edges, workflowName, savedWorkflowId } = get();
-    const definition = buildDefinition(nodes, edges);
+    const { nodes, edges, workflowName, savedWorkflowId, pinnedData, workflowImportReport, workflowSettings } = get();
+    const definition = buildDefinition(nodes, edges, pinnedData, workflowImportReport, workflowSettings);
+    const validationIssues = get().validateCurrentWorkflow('full', null);
     set({ isSaving: true });
     try {
       if (savedWorkflowId) {
-        await api.updateWorkflow(savedWorkflowId, { name: workflowName, definition });
+        const res = await api.updateWorkflow(savedWorkflowId, { name: workflowName, definition });
+        if (res.validation?.issues) set({ validationIssues: res.validation.issues });
       } else {
-        const { id } = await api.createWorkflow(workflowName, definition);
+        const { id, validation } = await api.createWorkflow(workflowName, definition);
         set({ savedWorkflowId: id });
+        if (validation?.issues) set({ validationIssues: validation.issues });
         writeLastWorkflowId(id);
       }
       if (savedWorkflowId) writeLastWorkflowId(savedWorkflowId);
       get().fetchWorkflows();
+      if (validationIssues.some((issue) => issue.severity === 'warning')) {
+        console.warn('Workflow saved with validation warnings', validationIssues);
+      }
     } finally {
       set({ isSaving: false });
     }
@@ -217,18 +512,44 @@ export const useStore = create<OttoStore>((set, get) => ({
 
   loadWorkflow: async (id) => {
     const wf = await api.getWorkflow(id);
-    const def = wf.definition ?? { nodes: [], edges: [] };
+    const def = wf.definition ?? { nodes: [], edges: [], pinnedData: {} };
 
-    const loadedNodes = (def.nodes as Array<{ id: string; type: string; name: string; config: Record<string, unknown>; position?: { x: number; y: number } }>).map((n) => {
-      const nodeDef = getNodeDef(n.type);
+    const loadedNodes = (def.nodes as Array<{
+      id: string;
+      type: string;
+      name?: string;
+      config?: Record<string, unknown>;
+      position?: { x: number; y: number };
+      disabled?: boolean;
+      notes?: string;
+      displayNote?: boolean;
+      continueOnError?: boolean;
+      retryOnFail?: boolean;
+      maxTries?: number;
+      retryDelayMs?: number;
+      alwaysOutputData?: boolean;
+      data?: Partial<OttoNodeData>;
+    }>).map((n) => {
+      const nodeType = n.type === 'ottoNode' || n.type === 'agentNode'
+        ? (n.data?.nodeType ?? n.type)
+        : n.type;
+      const nodeDef = getNodeDef(nodeType);
       return {
         id: n.id,
-        type: n.type === 'ai_agent' ? 'agentNode' : 'ottoNode',
+        type: nodeType === 'ai_agent' ? 'agentNode' : 'ottoNode',
         position: n.position ?? { x: 100, y: 100 },
         data: {
-          label: n.name,
-          nodeType: n.type,
-          config: n.config ?? (nodeDef?.defaultConfig ?? {}),
+          label: n.name ?? n.data?.label ?? nodeDef.label,
+          nodeType,
+          config: n.config ?? n.data?.config ?? (nodeDef?.defaultConfig ?? {}),
+          disabled: n.disabled ?? n.data?.disabled ?? false,
+          notes: n.notes ?? n.data?.notes ?? '',
+          displayNote: n.displayNote ?? n.data?.displayNote ?? false,
+          continueOnError: n.continueOnError ?? n.data?.continueOnError ?? false,
+          retryOnFail: n.retryOnFail ?? n.data?.retryOnFail ?? false,
+          maxTries: n.maxTries ?? n.data?.maxTries ?? 2,
+          retryDelayMs: n.retryDelayMs ?? n.data?.retryDelayMs ?? 1000,
+          alwaysOutputData: n.alwaysOutputData ?? n.data?.alwaysOutputData ?? false,
         },
       };
     });
@@ -243,12 +564,17 @@ export const useStore = create<OttoStore>((set, get) => ({
       style: { strokeWidth: 1.4, stroke: get().theme === 'dark' ? EDGE_COLOR_DARK : EDGE_COLOR_LIGHT },
     }));
 
+    const savedSettings = (def as { settings?: WorkflowSettings }).settings;
     set({
       savedWorkflowId: id,
       workflowName: wf.name,
       workflowActive: wf.active,
       nodes: loadedNodes,
       edges: loadedEdges,
+      pinnedData: (def as { pinnedData?: Record<string, unknown> }).pinnedData ?? {},
+      workflowImportReport: def.importReport ?? null,
+      workflowSettings: savedSettings ? { ...DEFAULT_WORKFLOW_SETTINGS, ...savedSettings } : { ...DEFAULT_WORKFLOW_SETTINGS },
+      validationIssues: [],
       selectedNodeId: null,
     });
     writeLastWorkflowId(id);
@@ -280,7 +606,15 @@ export const useStore = create<OttoStore>((set, get) => ({
     await api.deleteWorkflow(id);
     const { savedWorkflowId } = get();
     if (savedWorkflowId === id) {
-      set({ savedWorkflowId: null, workflowName: 'Untitled Workflow', nodes: [], edges: [], workflowActive: false });
+      set({
+        savedWorkflowId: null,
+        workflowName: 'Untitled Workflow',
+        nodes: [],
+        edges: [],
+        workflowActive: false,
+        pinnedData: {},
+        workflowImportReport: null,
+      });
       writeLastWorkflowId(null);
     }
     get().fetchWorkflows();
@@ -293,6 +627,10 @@ export const useStore = create<OttoStore>((set, get) => ({
       workflowActive: false,
       nodes: [],
       edges: [],
+      pinnedData: {},
+      workflowImportReport: null,
+      workflowSettings: { ...DEFAULT_WORKFLOW_SETTINGS },
+      validationIssues: [],
       selectedNodeId: null,
     });
     writeLastWorkflowId(null);
@@ -317,15 +655,70 @@ export const useStore = create<OttoStore>((set, get) => ({
     get().fetchCredentials();
   },
 
+  updateCredential: async (id, patch) => {
+    const updated = await api.updateCredential(id, patch);
+    set((s) => ({ credentials: s.credentials.map((c) => (c.id === id ? updated : c)) }));
+  },
+
+  testCredential: async (id, testUrl) => {
+    return api.testCredential(id, testUrl);
+  },
+
   deleteCredential: async (id) => {
     await api.deleteCredential(id);
     set((s) => ({ credentials: s.credentials.filter((c) => c.id !== id) }));
+  },
+
+  apiKeys: [],
+  apiKeysLoading: false,
+
+  fetchApiKeys: async () => {
+    set({ apiKeysLoading: true });
+    try {
+      const list = await api.listApiKeys();
+      set({ apiKeys: list });
+    } finally {
+      set({ apiKeysLoading: false });
+    }
+  },
+
+  createApiKey: async (name) => {
+    const { apiKey, key } = await api.createApiKey(name);
+    set((s) => ({ apiKeys: [apiKey, ...s.apiKeys] }));
+    return key;
+  },
+
+  deleteApiKey: async (id) => {
+    await api.deleteApiKey(id);
+    set((s) => ({ apiKeys: s.apiKeys.filter((key) => key.id !== id) }));
   },
 
   sidebarOpen: true,
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   activeSidebarTab: 'library',
   setActiveSidebarTab: (tab) => set({ activeSidebarTab: tab }),
+
+  activeCanvasTab: 'editor',
+  setActiveCanvasTab: (tab) => set({ activeCanvasTab: tab }),
+  testInputText: '{}',
+  setTestInputText: (text) => set({ testInputText: text }),
+
+  pinnedData: {},
+  setPinnedDataForNode: (nodeId, data) =>
+    set((s) => ({ pinnedData: { ...s.pinnedData, [nodeId]: data } })),
+  pinNodeOutput: (nodeId) => {
+    const current = get();
+    const execution = current.nodeExecutions[nodeId]
+      ?? current.selectedExecutionDetail?.nodes.find((ne) => ne.node_id === nodeId);
+    if (!execution || execution.output == null) return false;
+    current.setPinnedDataForNode(nodeId, execution.output);
+    return true;
+  },
+  clearPinnedDataForNode: (nodeId) =>
+    set((s) => ({
+      pinnedData: Object.fromEntries(Object.entries(s.pinnedData).filter(([id]) => id !== nodeId)),
+    })),
+  clearAllPinnedData: () => set({ pinnedData: {} }),
 
   bottomPanelsOpen: true,
   setBottomPanelsOpen: (open) => set({ bottomPanelsOpen: open }),
@@ -351,10 +744,148 @@ export const useStore = create<OttoStore>((set, get) => ({
       nodeExecutions: Object.fromEntries(executions.map((e) => [e.node_id, e])),
     }),
 
+  runExecution: async (mode = 'full', nodeId = null) => {
+    const {
+      nodes,
+      edges,
+      workflowName,
+      savedWorkflowId,
+      workflowActive,
+      selectedNodeId,
+      pinnedData,
+      workflowImportReport,
+      workflowSettings,
+      testInputText,
+      executionPhase,
+    } = get();
+
+    if (executionPhase === 'running') return;
+    if (workflowActive) {
+      alert('Deactivate the workflow before running it manually.');
+      return;
+    }
+    if (nodes.length === 0) {
+      alert('Add some nodes first.');
+      return;
+    }
+
+    const focusNodeId = mode === 'full' ? null : (nodeId ?? selectedNodeId);
+    if (mode !== 'full' && !focusNodeId) {
+      alert('Select a node first.');
+      return;
+    }
+    if (focusNodeId && !nodes.some((n) => n.id === focusNodeId)) {
+      alert('The selected node no longer exists.');
+      return;
+    }
+
+    const validationIssues = get().validateCurrentWorkflow(mode, focusNodeId);
+    const blockingIssues = validationIssues.filter((issue) => issue.severity === 'error');
+    if (hasBlockingValidationIssues(validationIssues)) {
+      alert(`Fix ${blockingIssues.length} validation error${blockingIssues.length === 1 ? '' : 's'} before running.`);
+      return;
+    }
+
+    const riskyImportCount = workflowImportReport
+      ? (workflowImportReport.summary.placeholder ?? 0) + (workflowImportReport.summary.unsupported ?? 0)
+      : 0;
+    if (riskyImportCount > 0) {
+      const ok = confirm(
+        `This imported n8n workflow still has ${riskyImportCount} placeholder/unsupported item${riskyImportCount === 1 ? '' : 's'}. ` +
+        'Those nodes can fail at runtime until replaced. Continue running?'
+      );
+      if (!ok) return;
+    }
+
+    let input: Record<string, unknown>;
+    try {
+      input = parseJsonObject(testInputText);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : String(err));
+      return;
+    }
+
+    get().resetExecution();
+    set({ bottomPanelsOpen: true });
+
+    try {
+      const definition = buildDefinition(nodes, edges, pinnedData, workflowImportReport, workflowSettings);
+      const res = await api.execute(definition, input, workflowName, {
+        savedWorkflowId,
+        mode,
+        nodeId: focusNodeId,
+        pinnedData,
+      });
+
+      if (!savedWorkflowId && res.workflowId) {
+        set({ savedWorkflowId: res.workflowId });
+        writeLastWorkflowId(res.workflowId);
+      }
+
+      get().setExecutionStarted(res.executionId);
+      get().startSSE(res.executionId);
+
+      setTimeout(async () => {
+        try {
+          const detail = normalizeExecutionDetail(await api.getExecution(res.executionId));
+          set({
+            selectedExecutionDetail: detail,
+            nodeExecutions: Object.fromEntries(detail.nodes.map((ne) => [ne.node_id, ne])),
+          });
+        } catch {
+          // SSE remains the primary live update path.
+        }
+      }, 3000);
+    } catch (err: unknown) {
+      const validation = (err as { validation?: { issues?: WorkflowValidationIssue[] } })?.validation;
+      if (validation?.issues) set({ validationIssues: validation.issues });
+      set({ executionPhase: 'error' });
+      alert(`Run failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  },
+
+  cancelExecution: async () => {
+    const executionId = get().executionId;
+    if (!executionId) return;
+    try {
+      await api.cancelExecution(executionId);
+      get().stopSSE();
+      await get().loadExecutionDetail(executionId).catch(() => null);
+    } catch (err: unknown) {
+      alert(`Cancel failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  },
+
+  retryExecution: async (executionId = get().executionId) => {
+    if (!executionId) return;
+    get().resetExecution();
+    set({ bottomPanelsOpen: true });
+    try {
+      const res = await api.retryExecution(executionId);
+      get().setExecutionStarted(res.executionId);
+      get().startSSE(res.executionId);
+
+      setTimeout(async () => {
+        try {
+          const detail = normalizeExecutionDetail(await api.getExecution(res.executionId));
+          set({
+            selectedExecutionDetail: detail,
+            nodeExecutions: Object.fromEntries(detail.nodes.map((ne) => [ne.node_id, ne])),
+          });
+        } catch {
+          // SSE remains the primary live update path.
+        }
+      }, 3000);
+    } catch (err: unknown) {
+      set({ executionPhase: 'error' });
+      alert(`Retry failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  },
+
   loadExecutionDetail: async (executionId) => {
     set({ executionDetailLoading: true });
     try {
-      const detail = await api.getExecution(executionId);
+      const detail = normalizeExecutionDetail(await api.getExecution(executionId));
       set({
         selectedExecutionDetail: detail,
         executionId,
@@ -406,7 +937,7 @@ export const useStore = create<OttoStore>((set, get) => ({
 
     source.addEventListener('snapshot', (e: MessageEvent) => {
       try {
-        const data = JSON.parse(e.data) as ExecutionDetail;
+        const data = normalizeExecutionDetail(JSON.parse(e.data) as ExecutionDetail);
         const phase = data.execution.status === 'success'
           ? 'success'
           : data.execution.status === 'error'
@@ -444,7 +975,8 @@ export const useStore = create<OttoStore>((set, get) => ({
         const data = JSON.parse(e.data) as { status: string };
         const phase = data.status === 'success' ? 'success' : 'error';
         set({ executionPhase: phase });
-        api.getExecution(executionId).then((detail) => {
+        api.getExecution(executionId).then((rawDetail) => {
+          const detail = normalizeExecutionDetail(rawDetail);
           set({
             selectedExecutionDetail: detail,
             nodeExecutions: Object.fromEntries(detail.nodes.map((ne) => [ne.node_id, ne])),
@@ -474,15 +1006,52 @@ export const useStore = create<OttoStore>((set, get) => ({
   },
 }));
 
-export function buildDefinition(nodes: Node[], edges: Edge[]) {
-  return {
-    nodes: nodes.map((n) => ({
-      id: n.id,
-      type: n.data.nodeType as string,
-      name: n.data.label as string,
-      config: (n.data.config as Record<string, unknown>) ?? {},
-      position: n.position,
-    })),
+export function buildDefinition(
+  nodes: Node[],
+  edges: Edge[],
+  pinnedData: Record<string, unknown> = {},
+  importReport: ImportCompatibilityReport | null = null,
+  settings?: WorkflowSettings
+) {
+  const definition: {
+    nodes: Array<{
+      id: string;
+      type: string;
+      name: string;
+      config: Record<string, unknown>;
+      position: Node['position'];
+      disabled?: boolean;
+      notes?: string;
+      displayNote?: boolean;
+      continueOnError?: boolean;
+      retryOnFail?: boolean;
+      maxTries?: number;
+      retryDelayMs?: number;
+      alwaysOutputData?: boolean;
+    }>;
+    edges: Array<{ id: string; source: string; target: string; sourceHandle: string | null; targetHandle: string | null }>;
+    pinnedData: Record<string, unknown>;
+    importReport?: ImportCompatibilityReport;
+    settings?: WorkflowSettings;
+  } = {
+    nodes: nodes.map((n) => {
+      const data = n.data as OttoNodeData;
+      return {
+        id: n.id,
+        type: data.nodeType,
+        name: data.label,
+        config: data.config ?? {},
+        position: n.position,
+        disabled: Boolean(data.disabled),
+        notes: String(data.notes ?? ''),
+        displayNote: Boolean(data.displayNote),
+        continueOnError: Boolean(data.continueOnError),
+        retryOnFail: Boolean(data.retryOnFail),
+        maxTries: Math.max(1, Number(data.maxTries ?? 2) || 2),
+        retryDelayMs: Math.max(0, Number(data.retryDelayMs ?? 1000) || 0),
+        alwaysOutputData: Boolean(data.alwaysOutputData),
+      };
+    }),
     edges: edges.map((e) => ({
       id: e.id,
       source: e.source,
@@ -490,5 +1059,9 @@ export function buildDefinition(nodes: Node[], edges: Edge[]) {
       sourceHandle: e.sourceHandle ?? null,
       targetHandle: e.targetHandle ?? null,
     })),
+    pinnedData,
   };
+  if (importReport) definition.importReport = importReport;
+  if (settings) definition.settings = settings;
+  return definition;
 }

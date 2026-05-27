@@ -36,6 +36,8 @@ function toolColor(type: string, isDark: boolean): string {
 
 export const AgentNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) => {
   const execution = useStore((s) => s.nodeExecutions[id]);
+  const isPinned = useStore((s) => Object.prototype.hasOwnProperty.call(s.pinnedData, id));
+  const validationIssue = useStore((s) => s.validationIssues.find((issue) => issue.nodeId === id));
   const setContextMenu = useStore((s) => s.setContextMenu);
   const theme = useStore((s) => s.theme);
   const def = getNodeDef(data.nodeType);
@@ -46,6 +48,11 @@ export const AgentNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) 
   const isRunning = status === 'running';
   const isSuccess = status === 'success';
   const isError   = status === 'error';
+  const isValidationError = validationIssue?.severity === 'error';
+  const isValidationWarning = validationIssue?.severity === 'warning';
+  const isDisabled = Boolean(data.disabled);
+  const noteText = String(data.notes ?? '').trim();
+  const showNote = Boolean(data.displayNote && noteText);
 
   const tools: AgentTool[] = Array.isArray(data.config?.tools)
     ? (data.config.tools as AgentTool[])
@@ -55,6 +62,9 @@ export const AgentNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) 
     isRunning ? 'var(--node-running)' :
     isSuccess ? 'var(--node-success)' :
     isError   ? 'var(--node-error)' :
+    isValidationError ? 'var(--node-error)' :
+    isValidationWarning ? 'var(--node-running)' :
+    isDisabled ? 'var(--border)' :
     selected  ? OTTO_AMBER :
     hovered   ? 'var(--border-input)' :
                 'var(--border-input)';
@@ -101,10 +111,70 @@ export const AgentNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) 
           border: `1.5px solid ${borderColor}`,
           borderRadius: '8px',
           boxShadow,
+          opacity: isDisabled ? 0.58 : 1,
+          filter: isDisabled ? 'grayscale(0.25)' : 'none',
           overflow: 'hidden',
           transition: 'border-color 130ms ease-out, box-shadow 130ms ease-out',
         }}
       >
+        {isDisabled && (
+          <span title="Node disabled" style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            zIndex: 2,
+            fontFamily: "'JetBrains Mono'",
+            fontSize: '8.5px',
+            fontWeight: 800,
+            color: 'var(--text-muted)',
+            background: 'rgba(120,115,110,0.10)',
+            border: '1px solid rgba(120,115,110,0.22)',
+            borderRadius: '3px',
+            padding: '1px 4px',
+            lineHeight: 1.1,
+          }}>
+            OFF
+          </span>
+        )}
+        {isPinned && (
+          <span title="Pinned data" style={{
+            position: 'absolute',
+            right: 8,
+            bottom: 8,
+            zIndex: 2,
+            fontFamily: "'JetBrains Mono'",
+            fontSize: '8.5px',
+            fontWeight: 800,
+            color: OTTO_AMBER,
+            background: hexA(OTTO_AMBER, 0.12),
+            border: `1px solid ${hexA(OTTO_AMBER, 0.22)}`,
+            borderRadius: '3px',
+            padding: '1px 4px',
+            lineHeight: 1.1,
+          }}>
+            PIN
+          </span>
+        )}
+        {validationIssue && (
+          <span title={validationIssue.message} style={{
+            position: 'absolute',
+            left: 8,
+            bottom: 8,
+            zIndex: 2,
+            fontFamily: "'JetBrains Mono'",
+            fontSize: '8.5px',
+            fontWeight: 800,
+            color: isValidationError ? 'var(--node-error)' : 'var(--node-running)',
+            background: isValidationError ? 'rgba(239,68,68,0.10)' : 'rgba(245,158,11,0.10)',
+            border: `1px solid ${isValidationError ? 'rgba(239,68,68,0.22)' : 'rgba(245,158,11,0.22)'}`,
+            borderRadius: '3px',
+            padding: '1px 4px',
+            lineHeight: 1.1,
+          }}>
+            {isValidationError ? 'ERR' : 'WARN'}
+          </span>
+        )}
+
         {/* Header */}
         <div style={{
           padding: '14px 14px 12px',
@@ -271,6 +341,31 @@ export const AgentNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) 
       </div>
 
       {/* Input handle — left center */}
+      {showNote && (
+        <div style={{
+          position: 'absolute',
+          top: 'calc(100% + 6px)',
+          left: 0,
+          width: 336,
+          minHeight: 34,
+          maxHeight: 48,
+          boxSizing: 'border-box',
+          overflow: 'hidden',
+          border: '1px solid var(--border)',
+          borderRadius: '5px',
+          background: 'var(--bg-node-lift)',
+          color: 'var(--text-secondary)',
+          fontFamily: "'Inter'",
+          fontSize: '10.5px',
+          lineHeight: 1.35,
+          padding: '5px 7px',
+          boxShadow: 'var(--shadow-main)',
+          wordBreak: 'break-word',
+        }}>
+          {noteText}
+        </div>
+      )}
+
       <Handle
         type="target"
         position={Position.Left}

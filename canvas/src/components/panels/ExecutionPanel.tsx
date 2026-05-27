@@ -1,4 +1,16 @@
+import { useEffect, useState } from 'react';
 import { useStore } from '../../store';
+import { DataInspector } from '../DataInspector';
+
+const EXEC_TYPE_LABELS: Record<string, string> = {
+  manual: 'Manual',
+  api: 'API',
+  scheduled: 'Scheduled',
+  sub_workflow: 'Sub-workflow',
+  error_workflow: 'Error handler',
+  resume: 'Resumed',
+  production: 'Production',
+};
 
 function hexA(hex: string, a: number): string {
   if (hex.startsWith('rgba(')) return hex.replace(/rgba\(([^)]+),\s*[\d.]+\)/, `rgba($1, ${a})`);
@@ -9,27 +21,14 @@ function hexA(hex: string, a: number): string {
   return `rgba(${r},${g},${b},${a})`;
 }
 
-function SyntaxJson({ text, isDark }: { text: string; isDark: boolean }) {
-  const keyC  = isDark ? '#FFB870' : '#B85A12';
-  const strC  = isDark ? '#86EFAC' : '#15803D';
-  const numC  = isDark ? '#7DD3FC' : '#0369A1';
-  const boolC = isDark ? '#FBBF24' : '#A16207';
+type InspectTab = 'output' | 'input' | 'error' | 'full';
 
-  const parts = text.split(/("[^"]*"\s*:|"[^"]*"|true|false|null|-?\d+\.?\d*)/g);
-  return (
-    <>
-      {parts.map((p, i) => {
-        if (!p) return null;
-        if (/^"[^"]*"\s*:$/.test(p)) return <span key={i} style={{ color: keyC }}>{p}</span>;
-        if (/^"[^"]*"$/.test(p)) return <span key={i} style={{ color: strC }}>{p}</span>;
-        if (p === 'true' || p === 'false') return <span key={i} style={{ color: boolC }}>{p}</span>;
-        if (p === 'null') return <span key={i} style={{ color: 'var(--text-muted)' }}>{p}</span>;
-        if (/^-?\d+\.?\d*$/.test(p)) return <span key={i} style={{ color: numC }}>{p}</span>;
-        return <span key={i}>{p}</span>;
-      })}
-    </>
-  );
-}
+const INSPECT_TABS: Array<{ id: InspectTab; label: string }> = [
+  { id: 'output', label: 'Output' },
+  { id: 'input', label: 'Input' },
+  { id: 'error', label: 'Error' },
+  { id: 'full', label: 'Full' },
+];
 
 export function ExecutionPanel() {
   const nodeExecutions = useStore((s) => s.nodeExecutions);
@@ -39,6 +38,8 @@ export function ExecutionPanel() {
   const executionPhase = useStore((s) => s.executionPhase);
   const theme = useStore((s) => s.theme);
   const isDark = theme === 'dark';
+  const [inspectedNodeId, setInspectedNodeId] = useState<string | null>(null);
+  const [inspectTab, setInspectTab] = useState<InspectTab>('output');
 
   const live = isDark ? '#22C55E' : '#16A34A';
   const liveSoft = isDark ? 'rgba(34,197,94,0.15)' : 'rgba(22,163,74,0.10)';
@@ -52,27 +53,50 @@ export function ExecutionPanel() {
   const rows = selectedExecutionDetail?.nodes?.length
     ? selectedExecutionDetail.nodes
     : Object.values(nodeExecutions);
-  const inspectedNode = [...rows].reverse().find((ne) => ne.output != null || ne.error) ?? rows[0] ?? null;
-  const outputText = inspectedNode
-    ? JSON.stringify({
-        execution: selectedExecutionDetail?.execution ?? { id: executionId, phase: executionPhase },
-        node: {
-          id: inspectedNode.node_id,
-          name: inspectedNode.node_name,
-          type: inspectedNode.node_type,
-          status: inspectedNode.status,
-          duration_ms: inspectedNode.duration_ms,
-          model: inspectedNode.model,
-          total_tokens: inspectedNode.total_tokens,
-        },
-        input: inspectedNode.input,
-        output: inspectedNode.output,
-        error: inspectedNode.error,
-      }, null, 2)
-    : JSON.stringify({
-        executionId,
-        status: executionDetailLoading ? 'loading' : execLabel.toLowerCase(),
-      }, null, 2);
+  useEffect(() => {
+    if (inspectedNodeId && !rows.some((ne) => ne.node_id === inspectedNodeId)) {
+      setInspectedNodeId(null);
+    }
+  }, [inspectedNodeId, rows]);
+
+  const inspectedNode = (inspectedNodeId ? rows.find((ne) => ne.node_id === inspectedNodeId) : null)
+    ?? [...rows].reverse().find((ne) => ne.output != null || ne.error)
+    ?? rows[0]
+    ?? null;
+  useEffect(() => {
+    setInspectTab('output');
+  }, [inspectedNode?.node_id]);
+
+  const fullData = inspectedNode
+    ? {
+      execution: selectedExecutionDetail?.execution ?? { id: executionId, phase: executionPhase },
+      node: {
+        id: inspectedNode.node_id,
+        name: inspectedNode.node_name,
+        type: inspectedNode.node_type,
+        status: inspectedNode.status,
+        duration_ms: inspectedNode.duration_ms,
+        model: inspectedNode.model,
+        total_tokens: inspectedNode.total_tokens,
+      },
+      input: inspectedNode.input,
+      output: inspectedNode.output,
+      error: inspectedNode.error,
+    }
+    : {
+      executionId,
+      status: executionDetailLoading ? 'loading' : execLabel.toLowerCase(),
+    };
+
+  const inspectedData = inspectedNode
+    ? inspectTab === 'input'
+      ? inspectedNode.input
+      : inspectTab === 'error'
+        ? { error: inspectedNode.error }
+        : inspectTab === 'full'
+          ? fullData
+          : inspectedNode.output
+    : fullData;
 
   const statusColor = (status: string) => {
     if (status === 'success') return 'var(--node-success)';
@@ -124,6 +148,26 @@ export function ExecutionPanel() {
         }}>
           {execLabel}
         </span>
+        {(() => {
+          const execType = selectedExecutionDetail?.execution?.executionType;
+          if (!execType) return null;
+          const label = EXEC_TYPE_LABELS[execType] ?? execType;
+          return (
+            <span style={{
+              fontFamily: "'JetBrains Mono'",
+              fontSize: '9.5px',
+              color: 'var(--node-running)',
+              letterSpacing: '0.04em',
+              fontWeight: 600,
+              padding: '2px 7px',
+              background: 'rgba(245,158,11,0.10)',
+              border: '1px solid rgba(245,158,11,0.25)',
+              borderRadius: '3px',
+            }}>
+              {label}
+            </span>
+          );
+        })()}
         <div style={{ flex: 1 }} />
         {executionId && (
           <span style={{
@@ -151,16 +195,20 @@ export function ExecutionPanel() {
         }}>
           {(rows.length ? rows : [{ node_id: 'waiting', node_name: executionDetailLoading ? 'Loading run...' : 'Waiting for run...', status: 'pending', duration_ms: null }]).map((step, i) => {
             const c = statusColor(step.status);
+            const selected = inspectedNode?.node_id === step.node_id;
             const active = step.status === 'running';
             return (
-              <div key={`${step.node_id}-${i}`} style={{
+              <button type="button" key={`${step.node_id}-${i}`} onClick={() => setInspectedNodeId(step.node_id)} style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '9px',
                 padding: '6px 8px',
-                background: active ? liveSoft : 'transparent',
-                border: active ? `1px solid ${hexA(live, 0.22)}` : '1px solid transparent',
+                background: selected || active ? liveSoft : 'transparent',
+                border: selected || active ? `1px solid ${hexA(live, 0.22)}` : '1px solid transparent',
                 borderRadius: '4px',
+                cursor: step.node_id === 'waiting' ? 'default' : 'pointer',
+                textAlign: 'left',
+                fontFamily: "'Inter'",
               }}>
                 <span style={{
                   width: 7,
@@ -195,7 +243,7 @@ export function ExecutionPanel() {
                     {step.duration_ms > 999 ? `${(step.duration_ms / 1000).toFixed(1)}s` : `${step.duration_ms}ms`}
                   </span>
                 )}
-              </div>
+              </button>
             );
           })}
         </div>
@@ -208,28 +256,57 @@ export function ExecutionPanel() {
           minWidth: 0,
         }}>
           <div style={{
-            fontFamily: "'JetBrains Mono'",
-            fontSize: '9.5px',
-            fontWeight: 600,
-            color: 'var(--text-muted)',
-            letterSpacing: '0.10em',
-            marginBottom: '8px',
-            textTransform: 'uppercase',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '10px',
           }}>
-            {inspectedNode ? `${inspectedNode.node_name || inspectedNode.node_id} output` : 'Output'}
+            <div style={{
+              flex: 1,
+              fontFamily: "'JetBrains Mono'",
+              fontSize: '9.5px',
+              fontWeight: 600,
+              color: 'var(--text-muted)',
+              letterSpacing: '0.10em',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              textTransform: 'uppercase',
+              whiteSpace: 'nowrap',
+            }}>
+              {inspectedNode ? inspectedNode.node_name || inspectedNode.node_id : 'Output'}
+            </div>
+            <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+              {INSPECT_TABS.map((tab) => (
+                <button
+                  type="button"
+                  key={tab.id}
+                  onClick={() => setInspectTab(tab.id)}
+                  style={{
+                    border: '1px solid var(--border)',
+                    borderRadius: '4px',
+                    background: inspectTab === tab.id ? 'var(--bg-hover)' : 'transparent',
+                    color: inspectTab === tab.id ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    fontFamily: 'Geist Mono',
+                    fontSize: '9.5px',
+                    fontWeight: 700,
+                    letterSpacing: '0.05em',
+                    padding: '4px 7px',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <pre style={{
-            margin: 0,
-            fontFamily: "'JetBrains Mono'",
-            fontSize: '11.5px',
-            fontWeight: 400,
-            color: 'var(--text-primary)',
-            lineHeight: 1.55,
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-          }}>
-            <SyntaxJson text={outputText} isDark={isDark} />
-          </pre>
+          <DataInspector
+            label={inspectTab}
+            data={inspectedData}
+            defaultOpen
+            defaultTab="json"
+            maxHeight={360}
+          />
         </div>
       </div>
     </div>
