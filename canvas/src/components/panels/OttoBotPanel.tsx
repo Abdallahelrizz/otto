@@ -3,7 +3,7 @@ import { useStore } from '../../store';
 import { getNodeDef } from '../nodes/nodeConfig';
 import type { Node, Edge } from 'reactflow';
 
-const AMBER = '#FF6F1A';
+const AMBER = '#A13C3F';
 const OTTOBOT_KEY_STORAGE = 'otto_ottobot_openai_key';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -471,9 +471,9 @@ Formatting: use **bold** for node names. Keep responses under 150 words unless t
             padding: '2px 6px',
             fontSize: '10px',
             fontWeight: 500,
-            color: hasKey ? '#22c55e' : 'var(--text-muted)',
+            color: hasKey ? 'var(--node-success)' : 'var(--text-muted)',
             background: 'transparent',
-            border: `1px solid ${hasKey ? 'rgba(34,197,94,0.25)' : 'var(--border)'}`,
+            border: `1px solid ${hasKey ? 'var(--brand-ring)' : 'var(--border)'}`,
             borderRadius: '3px',
             cursor: 'pointer',
             fontFamily: "'Inter'",

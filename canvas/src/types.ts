@@ -38,6 +38,7 @@ export interface NodeExecution {
 export interface Execution {
   id: string;
   workflow_id: string;
+  workflow_name?: string | null;
   status: 'pending' | 'running' | 'success' | 'error' | 'cancelled';
   started_at: string | null;
   completed_at: string | null;
@@ -55,6 +56,18 @@ export interface ExecutionDetail {
   nodes: NodeExecution[];
 }
 
+export interface WorkflowNodePreview {
+  id: string;
+  type: string;
+  position: { x: number; y: number };
+}
+
+export interface WorkflowEdgePreview {
+  id: string;
+  source: string;
+  target: string;
+}
+
 export interface WorkflowListItem {
   id: string;
   name: string;
@@ -62,6 +75,10 @@ export interface WorkflowListItem {
   tags?: string[];
   created_at: string;
   updated_at: string;
+  definition?: {
+    nodes: WorkflowNodePreview[];
+    edges: WorkflowEdgePreview[];
+  };
 }
 
 export type ImportCompatibilityStatus = 'exact' | 'partial' | 'placeholder' | 'unsupported';
@@ -186,6 +203,30 @@ export interface ObservabilitySummary {
   }>;
 }
 
+export interface UsageByModel {
+  model: string;
+  totalTokens: number;
+}
+
+export interface UsageByWorkflow {
+  workflowId: string | null;
+  name: string | null;
+  runs: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  byModel: UsageByModel[];
+}
+
+export interface UsageSummary {
+  period: { from: string; to: string; label: string; isCurrentMonth: boolean };
+  retention: { cutoff: string; beyondRetention: boolean };
+  totals: { promptTokens: number; completionTokens: number; totalTokens: number; runs: number };
+  byWorkflow: UsageByWorkflow[];
+  daily: Array<{ day: string; totalTokens: number }>;
+  models: string[];
+}
+
 export interface Credential {
   id: string;
   name: string;
@@ -197,7 +238,11 @@ export interface ApiKey {
   id: string;
   name: string;
   key_prefix: string | null;
+  scopes: string[];
+  expires_at: string | null;
   last_used_at: string | null;
+  last_used_ip: string | null;
+  revoked_at: string | null;
   created_at: string;
 }
 
@@ -266,4 +311,16 @@ export interface AuthStatus {
   authenticated?: boolean;
   user?: AuthUser | null;
   workspace?: AuthWorkspace | null;
+}
+
+export interface AuditEvent {
+  id: string;
+  action: string;
+  resourceType: string | null;
+  resourceId: string | null;
+  metadata: Record<string, unknown> | null;
+  userId: string | null;
+  createdAt: string;
+  ipAddress: string | null;
+  userAgent: string | null;
 }

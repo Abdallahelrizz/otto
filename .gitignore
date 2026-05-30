@@ -30,11 +30,18 @@ skills-lock.json
 _gfy_audit.py
 
 # Local design/reference handoffs
+forClaudeDesign/
 design_handoff_node_cards_p1/
 otto_handoff/
 otto_handoff_phase2/
 Testing for Otto.docx
 cortex_orchestrator_product_idea.pdf
+
+# Scratch / one-off scrape artifacts (never commit)
+_*.json
+_*.txt
+_n8n_creds/
+ERROR.png
 
 # OS
 .DS_Store

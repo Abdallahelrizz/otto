@@ -12,15 +12,6 @@ const EXEC_TYPE_LABELS: Record<string, string> = {
   production: 'Production',
 };
 
-function hexA(hex: string, a: number): string {
-  if (hex.startsWith('rgba(')) return hex.replace(/rgba\(([^)]+),\s*[\d.]+\)/, `rgba($1, ${a})`);
-  const h = hex.replace('#', '');
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  return `rgba(${r},${g},${b},${a})`;
-}
-
 type InspectTab = 'output' | 'input' | 'error' | 'full';
 
 const INSPECT_TABS: Array<{ id: InspectTab; label: string }> = [
@@ -36,16 +27,14 @@ export function ExecutionPanel() {
   const executionDetailLoading = useStore((s) => s.executionDetailLoading);
   const executionId = useStore((s) => s.executionId);
   const executionPhase = useStore((s) => s.executionPhase);
-  const theme = useStore((s) => s.theme);
-  const isDark = theme === 'dark';
   const [inspectedNodeId, setInspectedNodeId] = useState<string | null>(null);
   const [inspectTab, setInspectTab] = useState<InspectTab>('output');
 
-  const live = isDark ? '#22C55E' : '#16A34A';
-  const liveSoft = isDark ? 'rgba(34,197,94,0.15)' : 'rgba(22,163,74,0.10)';
   const isRunning = executionPhase === 'running';
   const isSuccess = executionPhase === 'success';
   const isError = executionPhase === 'error';
+  const live = isRunning ? 'var(--node-running)' : 'var(--node-success)';
+  const liveSoft = isRunning ? 'var(--accent-dim)' : 'var(--live-soft)';
   const execLabel = isRunning ? 'RUNNING' : isSuccess ? 'DONE' : isError ? 'FAILED' : 'IDLE';
   const execColor = (isRunning || isSuccess) ? live : isError ? 'var(--node-error)' : 'var(--text-muted)';
   const execSoft = (isRunning || isSuccess) ? liveSoft : isError ? 'rgba(239,68,68,0.12)' : 'var(--bg-hover)';
@@ -142,7 +131,7 @@ export function ExecutionPanel() {
           fontWeight: 700,
           padding: '2px 7px',
           background: execSoft,
-          border: `1px solid ${hexA(execColor === 'var(--node-error)' ? '#EF4444' : live, isDark ? 0.30 : 0.22)}`,
+          border: isError ? '1px solid var(--node-error)' : '1px solid var(--brand-ring)',
           borderRadius: '3px',
           textTransform: 'uppercase',
         }}>
@@ -204,7 +193,7 @@ export function ExecutionPanel() {
                 gap: '9px',
                 padding: '6px 8px',
                 background: selected || active ? liveSoft : 'transparent',
-                border: selected || active ? `1px solid ${hexA(live, 0.22)}` : '1px solid transparent',
+                border: selected || active ? '1px solid var(--brand-ring)' : '1px solid transparent',
                 borderRadius: '4px',
                 cursor: step.node_id === 'waiting' ? 'default' : 'pointer',
                 textAlign: 'left',
@@ -251,7 +240,7 @@ export function ExecutionPanel() {
         <div style={{
           flex: 1,
           padding: '12px 14px',
-          background: isDark ? 'var(--bg-canvas)' : 'var(--bg-sidebar)',
+          background: 'var(--bg-canvas)',
           overflow: 'auto',
           minWidth: 0,
         }}>

@@ -21,7 +21,7 @@ function sanitizeProvider(row) {
 
 export async function externalSecretRoutes(fastify) {
   // GET /api/v1/external-secrets/providers — list providers (no secrets in response)
-  fastify.get('/external-secrets/providers', async (req, reply) => {
+  fastify.get('/api/v1/external-secrets/providers', async (req, reply) => {
     const workspaceId = req.auth.workspaceId;
     const { rows } = await db.query(
       'SELECT id, workspace_id, name, provider_type, config, is_active, created_at, updated_at FROM external_secret_providers WHERE workspace_id = $1 ORDER BY name',
@@ -31,7 +31,7 @@ export async function externalSecretRoutes(fastify) {
   });
 
   // POST /api/v1/external-secrets/providers — create provider
-  fastify.post('/external-secrets/providers', async (req, reply) => {
+  fastify.post('/api/v1/external-secrets/providers', async (req, reply) => {
     const workspaceId = req.auth.workspaceId;
     const { name, provider_type, config = {} } = req.body ?? {};
 
@@ -54,7 +54,7 @@ export async function externalSecretRoutes(fastify) {
   });
 
   // PUT /api/v1/external-secrets/providers/:id — update provider
-  fastify.put('/external-secrets/providers/:id', async (req, reply) => {
+  fastify.put('/api/v1/external-secrets/providers/:id', async (req, reply) => {
     const workspaceId = req.auth.workspaceId;
     const providerId = parseInt(req.params.id, 10);
     if (!Number.isFinite(providerId)) return reply.status(400).send({ error: 'Invalid provider id' });
@@ -107,7 +107,7 @@ export async function externalSecretRoutes(fastify) {
   });
 
   // DELETE /api/v1/external-secrets/providers/:id — delete provider
-  fastify.delete('/external-secrets/providers/:id', async (req, reply) => {
+  fastify.delete('/api/v1/external-secrets/providers/:id', async (req, reply) => {
     const workspaceId = req.auth.workspaceId;
     const providerId = parseInt(req.params.id, 10);
     if (!Number.isFinite(providerId)) return reply.status(400).send({ error: 'Invalid provider id' });
@@ -128,7 +128,7 @@ export async function externalSecretRoutes(fastify) {
   });
 
   // POST /api/v1/external-secrets/providers/:id/test — test connection
-  fastify.post('/external-secrets/providers/:id/test', async (req, reply) => {
+  fastify.post('/api/v1/external-secrets/providers/:id/test', async (req, reply) => {
     const workspaceId = req.auth.workspaceId;
     const providerId = parseInt(req.params.id, 10);
     if (!Number.isFinite(providerId)) return reply.status(400).send({ error: 'Invalid provider id' });

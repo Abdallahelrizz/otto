@@ -28,8 +28,15 @@ import { templateRoutes } from './routes/templates.js';
 import { approvalRoutes } from './routes/approvals.js';
 import { evaluationRoutes } from './routes/evaluations.js';
 import { externalSecretRoutes } from './routes/external-secrets.js';
+import { nodeRoutes } from './routes/nodes.js';
+import { tagRoutes } from './routes/tags.js';
+import { exportRoutes } from './routes/export.js';
+import { usageRoutes } from './routes/usage.js';
+import { resolveScope } from './auth/scopes.js';
+import { auditLog } from './utils/audit.js';
 import { startWorker } from './queue/worker.js';
 import { db } from './db/client.js';
+import { runMigrations } from '../migrations/run.js';
 import { redis, executionQueue } from './queue/client.js';
 import { cleanupExpiredSessions, getAuthContext } from './auth/session.js';
 import { getApiKeyAuthContext } from './auth/api-key.js';
@@ -40,6 +47,15 @@ import { seedIntegrations } from './seed/integrations.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(__dirname, '../public');
+
+// Required env vars — fail fast so misconfigured deploys don't start silently
+const REQUIRED_ENV = ['CREDENTIAL_ENCRYPTION_KEY', 'API_KEY_PEPPER'];
+for (const key of REQUIRED_ENV) {
+  if (!process.env[key] || process.env[key].length < 32) {
+    console.error(`[otto] FATAL: env var ${key} is missing or shorter than 32 chars. Generate with: openssl rand -hex 32`);
+    process.exit(1);
+  }
+}
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim())
@@ -142,6 +158,25 @@ fastify.addHook('onRequest', async (req, reply) => {
     if (sensitiveWrite && !['owner', 'admin'].includes(role)) {
       return reply.code(403).send({ error: 'Credential and member management requires admin role or above' });
     }
+
+    // Scope gate — only applies to API key auth; sessions carry full role-based access
+    if (req.auth.authMethod === 'api_key') {
+      const requiredScope = resolveScope(pathname, method);
+      const grantedScopes = req.auth.scopes ?? ['*'];
+      if (requiredScope && !grantedScopes.includes('*') && !grantedScopes.includes(requiredScope)) {
+        auditLog({
+          workspaceId: req.auth.workspaceId,
+          userId: req.auth.userId,
+          action: 'api_key.scope_denied',
+          resourceType: 'api_key',
+          resourceId: req.auth.apiKeyId,
+          metadata: { requiredScope, grantedScopes, path: pathname, method },
+          ip,
+          userAgent: req.headers['user-agent'],
+        });
+        return reply.code(403).send({ error: `Missing scope: ${requiredScope}` });
+      }
+    }
   }
 });
 
@@ -167,6 +202,10 @@ await fastify.register(templateRoutes);
 await fastify.register(approvalRoutes);
 await fastify.register(evaluationRoutes);
 await fastify.register(externalSecretRoutes);
+await fastify.register(nodeRoutes);
+await fastify.register(tagRoutes);
+await fastify.register(exportRoutes);
+await fastify.register(usageRoutes);
 
 // Health check
 fastify.get('/health', async () => ({ status: 'ok', version: '0.1.0' }));
@@ -280,6 +319,20 @@ fastify.get('/*', async (req, reply) => {
   reply.header('Content-Type', contentTypes[ext] ?? 'application/octet-stream');
   return reply.send(await readFile(finalPath));
 });
+
+// Build/upgrade the database schema before anything touches it (n8n-style auto-migrate).
+// Idempotent + advisory-locked, so it's safe across replicas and restarts. This is also
+// why the seed/reconcile steps below can assume their tables exist on a fresh database.
+// Opt out (e.g. to run migrations as a separate release step) with RUN_MIGRATIONS_ON_BOOT=false.
+if (process.env.RUN_MIGRATIONS_ON_BOOT !== 'false') {
+  try {
+    const { applied, skipped } = await runMigrations({ pool: db.pool, log: (m) => fastify.log.info(m) });
+    fastify.log.info(`Migrations: ${applied} applied, ${skipped} already current`);
+  } catch (err) {
+    fastify.log.error({ err }, 'database migration failed — refusing to start');
+    process.exit(1);
+  }
+}
 
 // Start BullMQ worker in the same process (split to separate process for scale)
 startWorker();

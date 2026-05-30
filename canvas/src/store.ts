@@ -35,6 +35,25 @@ function normalizeExecutionDetail(detail: ExecutionDetail): ExecutionDetail {
   return detail;
 }
 
+export interface OttoNotification {
+  id: string;
+  type: 'error';
+  title: string;
+  workflowName?: string | null;
+  executionId: string;
+  timestamp: string;
+  urgent: boolean; // true = new/unacknowledged; false = dismissed but kept
+}
+
+const NOTIF_KEY = 'otto-notifications-v1';
+function loadStoredNotifications(): OttoNotification[] {
+  try { return JSON.parse(localStorage.getItem(NOTIF_KEY) ?? '[]') as OttoNotification[]; }
+  catch { return []; }
+}
+function persistNotifications(list: OttoNotification[]): void {
+  try { localStorage.setItem(NOTIF_KEY, JSON.stringify(list)); } catch { /* ignore */ }
+}
+
 interface ContextMenuState {
   x: number;
   y: number;
@@ -152,6 +171,15 @@ interface OttoStore {
   // Theme
   theme: 'dark' | 'light';
   toggleTheme: () => void;
+
+  // Notifications
+  notifications: OttoNotification[];
+  unreadCount: number;
+  addNotifications: (items: OttoNotification[]) => void;
+  dismissNotification: (id: string) => void;
+  removeNotification: (id: string) => void;
+  markAllRead: () => void;
+  clearNotifications: () => void;
 
   // Execution state
   executionPhase: ExecutionPhase;
@@ -1003,6 +1031,37 @@ export const useStore = create<OttoStore>((set, get) => ({
       _sseSource.close();
       set({ _sseSource: null });
     }
+  },
+
+  // Notifications — bootstrapped from localStorage
+  notifications: loadStoredNotifications(),
+  unreadCount: loadStoredNotifications().filter((n) => n.urgent).length,
+  addNotifications: (items) => set((s) => {
+    const existingIds = new Set(s.notifications.map((n) => n.id));
+    const fresh = items.filter((n) => !existingIds.has(n.id));
+    if (!fresh.length) return s;
+    const all = [...fresh, ...s.notifications].slice(0, 100);
+    persistNotifications(all);
+    return { notifications: all, unreadCount: all.filter((n) => n.urgent).length };
+  }),
+  dismissNotification: (id) => set((s) => {
+    const next = s.notifications.map((n) => n.id === id ? { ...n, urgent: false } : n);
+    persistNotifications(next);
+    return { notifications: next, unreadCount: next.filter((n) => n.urgent).length };
+  }),
+  removeNotification: (id) => set((s) => {
+    const next = s.notifications.filter((n) => n.id !== id);
+    persistNotifications(next);
+    return { notifications: next, unreadCount: next.filter((n) => n.urgent).length };
+  }),
+  markAllRead: () => set((s) => {
+    const next = s.notifications.map((n) => ({ ...n, urgent: false }));
+    persistNotifications(next);
+    return { notifications: next, unreadCount: 0 };
+  }),
+  clearNotifications: () => {
+    persistNotifications([]);
+    set({ notifications: [], unreadCount: 0 });
   },
 }));
 

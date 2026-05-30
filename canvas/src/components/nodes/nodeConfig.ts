@@ -47,10 +47,10 @@ export type FieldDef =
   | (FieldBase & { type: 'conditions' })
   | (FieldBase & { type: 'code' });
 
-// ─── v5 amber brand system ────────────────────────────────────────────────────
+// ─── Otto wine brand system ───────────────────────────────────────────────────
 
-export const OTTO_AMBER       = '#FF6F1A';
-export const OTTO_AMBER_HOVER = '#FF8A47';
+export const OTTO_AMBER       = '#A13C3F';
+export const OTTO_AMBER_HOVER = '#B74D51';
 
 // Shape encodes what a node DOES — driven by category
 export const CATEGORY_SHAPE: Record<string, 'rounded' | 'circle' | 'square-soft' | 'square-tight'> = {
@@ -320,7 +320,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
     handles: {
       in: [{ id: 'input' }],
       out: [
-        { id: 'true',  label: 'true',  color: '#22c55e' },
+        { id: 'true',  label: 'true',  color: '#0f766e' },
         { id: 'false', label: 'false', color: '#ef4444' },
       ],
     },

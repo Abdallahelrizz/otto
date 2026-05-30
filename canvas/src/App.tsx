@@ -1,97 +1,50 @@
 import { useEffect } from 'react';
-import { ReactFlowProvider } from 'reactflow';
-import { Toolbar } from './components/Toolbar';
-import { Sidebar } from './components/Sidebar';
-import { Canvas } from './components/Canvas';
-import { ConfigPanel } from './components/ConfigPanel';
-import { ContextMenu } from './components/ContextMenu';
-import { BottomPanels } from './components/panels/BottomPanels';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { Landing } from './pages/Landing';
+import { CanvasApp } from './pages/CanvasApp';
+import { WorkflowsDashboard } from './pages/WorkflowsDashboard';
+import { ExecutionHistory } from './pages/ExecutionHistory';
+import { CredentialsPage } from './pages/CredentialsPage';
+import { UsagePage } from './pages/UsagePage';
+import { SettingsGeneral } from './pages/settings/SettingsGeneral';
+import { SettingsApiKeys } from './pages/settings/SettingsApiKeys';
+import { SettingsVariables } from './pages/settings/SettingsVariables';
+import { SettingsAuditLog } from './pages/settings/SettingsAuditLog';
+import { SettingsAbout } from './pages/settings/SettingsAbout';
 import { AuthGate } from './components/AuthGate';
-import { ErrorBoundary } from './components/ErrorBoundary';
 import { useStore } from './store';
+
+function AppRoute({ children }: { children: React.ReactNode }) {
+  return <AuthGate>{children}</AuthGate>;
+}
 
 export function App() {
   const theme = useStore((s) => s.theme);
-  const selectedNodeId = useStore((s) => s.selectedNodeId);
-  const sidebarOpen = useStore((s) => s.sidebarOpen);
-  const toggleSidebar = useStore((s) => s.toggleSidebar);
-
-  const panelOpen = !!selectedNodeId;
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
-        e.preventDefault();
-        toggleSidebar();
-      }
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [toggleSidebar]);
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   return (
-    <AuthGate>
-      <ReactFlowProvider>
-        <div
-          className={`flex flex-col h-screen overflow-hidden theme-${theme}`}
-          style={{ background: 'var(--bg-canvas)', color: 'var(--text-primary)' }}
-        >
-          <Toolbar />
+    <Routes>
+      <Route path="/" element={<Landing />} />
 
-        <div className="flex flex-1 overflow-hidden" style={{ position: 'relative', minHeight: 0 }}>
-          {/* Sidebar — 216px, slides in/out */}
-          <div
-            className="sidebar-wrap"
-            style={{ width: sidebarOpen ? '216px' : '0px' }}
-          >
-            <Sidebar />
-          </div>
+      {/* App pages — all auth-gated */}
+      <Route path="/app" element={<Navigate to="/app/workflows" replace />} />
+      <Route path="/app/workflows" element={<AppRoute><WorkflowsDashboard /></AppRoute>} />
+      <Route path="/app/editor" element={<CanvasApp />} />
+      <Route path="/app/editor/:id" element={<CanvasApp />} />
+      <Route path="/app/executions" element={<AppRoute><ExecutionHistory /></AppRoute>} />
+      <Route path="/app/credentials" element={<AppRoute><CredentialsPage /></AppRoute>} />
+      <Route path="/app/observability" element={<AppRoute><UsagePage /></AppRoute>} />
+      <Route path="/app/settings" element={<Navigate to="/app/settings/general" replace />} />
+      <Route path="/app/settings/general" element={<AppRoute><SettingsGeneral /></AppRoute>} />
+      <Route path="/app/settings/api-keys" element={<AppRoute><SettingsApiKeys /></AppRoute>} />
+      <Route path="/app/settings/variables" element={<AppRoute><SettingsVariables /></AppRoute>} />
+      <Route path="/app/settings/audit" element={<AppRoute><SettingsAuditLog /></AppRoute>} />
+      <Route path="/app/settings/about" element={<AppRoute><SettingsAbout /></AppRoute>} />
 
-          {/* Chevron toggle at sidebar edge */}
-          <button
-            className="sidebar-chevron"
-            onClick={toggleSidebar}
-            title={sidebarOpen ? 'Hide sidebar (Ctrl+B)' : 'Show sidebar (Ctrl+B)'}
-            style={{ left: sidebarOpen ? '216px' : '0px' }}
-          >
-            <svg
-              width="8"
-              height="12"
-              viewBox="0 0 8 12"
-              fill="none"
-              style={{
-                transform: sidebarOpen ? 'rotate(0deg)' : 'rotate(180deg)',
-                transition: 'transform 200ms var(--ease-out)',
-              }}
-            >
-              <path d="M6 1L1 6L6 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-
-          {/* Main column: Canvas + BottomPanels */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-            <ErrorBoundary>
-              <Canvas />
-              <BottomPanels />
-            </ErrorBoundary>
-          </div>
-
-          {/* Config panel — 320px, slides in 200ms ease-out via CSS */}
-          <div
-            className="config-panel-wrap"
-            style={{ width: panelOpen ? '320px' : '0px' }}
-          >
-            <div style={{ width: '320px', height: '100%' }}>
-              <ErrorBoundary>
-                <ConfigPanel />
-              </ErrorBoundary>
-            </div>
-          </div>
-        </div>
-      </div>
-
-        <ContextMenu />
-      </ReactFlowProvider>
-    </AuthGate>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }

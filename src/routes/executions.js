@@ -196,37 +196,61 @@ export async function executionRoutes(fastify) {
     return reply.send({ executionId, workflowId: original.workflow_id, status: 'pending' });
   });
 
+  fastify.post('/api/v1/executions/:id/stop', async (req, reply) => {
+    // Alias of /cancel with n8n naming convention
+    const { id } = req.params;
+    const { rows } = await db.query(
+      `SELECT id, status FROM executions WHERE id = $1 AND workspace_id = $2`,
+      [id, req.auth.workspaceId]
+    );
+    if (!rows.length) return reply.code(404).send({ error: 'Execution not found' });
+    if (['success', 'error', 'cancelled'].includes(rows[0].status)) {
+      return reply.send({ ok: true, status: rows[0].status });
+    }
+
+    const job = await executionQueue.getJob(id);
+    if (job) {
+      const state = await job.getState();
+      if (['waiting', 'delayed', 'prioritized'].includes(state)) await job.remove();
+    }
+
+    await completeExecution(id, { status: 'cancelled', error: 'Stopped by user' });
+    return reply.send({ ok: true, status: 'cancelled' });
+  });
+
   fastify.get('/api/v1/executions', async (req, reply) => {
     const { workflowId, status, page = 1, limit = 50 } = req.query;
     const parsedLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
     const parsedPage = Math.max(Number(page) || 1, 1);
     const offset = (parsedPage - 1) * parsedLimit;
 
-    const conditions = ['workspace_id = $1'];
+    const conditions = ['e.workspace_id = $1'];
     const params = [req.auth.workspaceId];
 
     if (workflowId) {
       params.push(workflowId);
-      conditions.push(`workflow_id = $${params.length}`);
+      conditions.push(`e.workflow_id = $${params.length}`);
     }
     if (status) {
       params.push(status);
-      conditions.push(`status = $${params.length}`);
+      conditions.push(`e.status = $${params.length}`);
     }
 
     const whereClause = conditions.join(' AND ');
     const countResult = await db.query(
-      `SELECT COUNT(*)::INT AS total FROM executions WHERE ${whereClause}`,
+      `SELECT COUNT(*)::INT AS total FROM executions e WHERE ${whereClause}`,
       params
     );
 
     params.push(parsedLimit, offset);
     const { rows } = await db.query(
-      `SELECT id, workflow_id, status, started_at, completed_at, trigger_type,
-              mode, focus_node_id, error
-       FROM executions
+      `SELECT e.id, e.workflow_id, e.status, e.started_at, e.completed_at, e.trigger_type,
+              e.mode, e.focus_node_id, e.error,
+              w.name AS workflow_name
+       FROM executions e
+       LEFT JOIN workflows w ON w.id = e.workflow_id AND w.workspace_id = $1
        WHERE ${whereClause}
-       ORDER BY COALESCE(started_at, completed_at, NOW()) DESC, id DESC
+       ORDER BY COALESCE(e.started_at, e.completed_at, NOW()) DESC, e.id DESC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );

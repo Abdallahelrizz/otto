@@ -13,7 +13,19 @@ export async function workflowRoutes(fastify) {
     const { workspaceId } = req.auth;
 
     const { rows } = await db.query(
-      `SELECT id, name, active, tags, created_at, updated_at
+      `SELECT id, name, active, tags, created_at, updated_at,
+         jsonb_build_object(
+           'nodes', COALESCE(
+             (SELECT jsonb_agg(jsonb_build_object('id', n->>'id', 'type', n->>'type', 'position', n->'position'))
+              FROM jsonb_array_elements(COALESCE(definition->'nodes', '[]'::jsonb)) n),
+             '[]'::jsonb
+           ),
+           'edges', COALESCE(
+             (SELECT jsonb_agg(jsonb_build_object('id', e->>'id', 'source', e->>'source', 'target', e->>'target'))
+              FROM jsonb_array_elements(COALESCE(definition->'edges', '[]'::jsonb)) e),
+             '[]'::jsonb
+           )
+         ) AS definition
        FROM workflows
        WHERE workspace_id = $1 AND ($2::text IS NULL OR $2 = ANY(tags))
        ORDER BY updated_at DESC
@@ -130,14 +142,22 @@ export async function workflowRoutes(fastify) {
 
   fastify.delete('/api/v1/workflows/:id', async (req, reply) => {
     const { rows } = await db.query(
-      `UPDATE workflows
-       SET active = false, updated_at = NOW()
-       WHERE id = $1 AND workspace_id = $2
-       RETURNING id, workspace_id, definition, active`,
+      `SELECT id, workspace_id, definition, active
+       FROM workflows
+       WHERE id = $1 AND workspace_id = $2`,
       [req.params.id, req.auth.workspaceId]
     );
     if (!rows.length) return reply.code(404).send({ error: 'Workflow not found' });
-    await reconcileWorkflowSchedule(rows[0]);
+
+    if (rows[0].active) {
+      await reconcileWorkflowSchedule({ ...rows[0], active: false });
+    }
+
+    await db.query(
+      `DELETE FROM workflows WHERE id = $1 AND workspace_id = $2`,
+      [req.params.id, req.auth.workspaceId]
+    );
+
     return reply.send({ ok: true });
   });
 
@@ -183,6 +203,53 @@ export async function workflowRoutes(fastify) {
     );
 
     return reply.send({ ok: true, restoredFrom: parseInt(vnum, 10), newVersion: nextVersion });
+  });
+
+  fastify.post('/api/v1/workflows/:id/activate', async (req, reply) => {
+    const { rows } = await db.query(
+      `UPDATE workflows SET active = true, updated_at = NOW()
+       WHERE id = $1 AND workspace_id = $2 AND archived_at IS NULL
+       RETURNING id, workspace_id, definition, active`,
+      [req.params.id, req.auth.workspaceId]
+    );
+    if (!rows.length) return reply.code(404).send({ error: 'Workflow not found' });
+    await reconcileWorkflowSchedule(rows[0]);
+    return reply.send({ ok: true, active: true });
+  });
+
+  fastify.post('/api/v1/workflows/:id/deactivate', async (req, reply) => {
+    const { rows } = await db.query(
+      `UPDATE workflows SET active = false, updated_at = NOW()
+       WHERE id = $1 AND workspace_id = $2
+       RETURNING id, workspace_id, definition, active`,
+      [req.params.id, req.auth.workspaceId]
+    );
+    if (!rows.length) return reply.code(404).send({ error: 'Workflow not found' });
+    await reconcileWorkflowSchedule(rows[0]);
+    return reply.send({ ok: true, active: false });
+  });
+
+  fastify.post('/api/v1/workflows/:id/archive', async (req, reply) => {
+    const { rows } = await db.query(
+      `UPDATE workflows SET active = false, archived_at = NOW(), updated_at = NOW()
+       WHERE id = $1 AND workspace_id = $2 AND archived_at IS NULL
+       RETURNING id, workspace_id, definition, active`,
+      [req.params.id, req.auth.workspaceId]
+    );
+    if (!rows.length) return reply.code(404).send({ error: 'Workflow not found or already archived' });
+    await reconcileWorkflowSchedule({ ...rows[0], active: false });
+    return reply.send({ ok: true, archived: true });
+  });
+
+  fastify.post('/api/v1/workflows/:id/unarchive', async (req, reply) => {
+    const { rows } = await db.query(
+      `UPDATE workflows SET archived_at = NULL, updated_at = NOW()
+       WHERE id = $1 AND workspace_id = $2 AND archived_at IS NOT NULL
+       RETURNING id`,
+      [req.params.id, req.auth.workspaceId]
+    );
+    if (!rows.length) return reply.code(404).send({ error: 'Workflow not found or not archived' });
+    return reply.send({ ok: true, archived: false });
   });
 
   fastify.post('/api/v1/workflows/:id/duplicate', async (req, reply) => {

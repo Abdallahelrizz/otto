@@ -15,6 +15,8 @@ import type {
   WorkflowValidationResult,
   ObservabilitySummary,
   TriggerSample,
+  UsageSummary,
+  AuditEvent,
 } from './types';
 
 const metaEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
@@ -241,10 +243,10 @@ export const api = {
     return res.apiKeys;
   },
 
-  async createApiKey(name: string) {
+  async createApiKey(name: string, opts: { scopes?: string[]; expiresInDays?: number | null } = {}) {
     return req<{ apiKey: ApiKey; key: string }>('/api-keys', {
       method: 'POST',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, scopes: opts.scopes, expiresInDays: opts.expiresInDays }),
     });
   },
 
@@ -257,6 +259,28 @@ export const api = {
     const params = new URLSearchParams({ days: String(options.days ?? 7) });
     if (options.workflowId) params.set('workflowId', options.workflowId);
     return req<ObservabilitySummary>(`/observability/summary?${params}`);
+  },
+
+  // Usage (token usage by workflow — Otto does not price model usage)
+  async getUsageSummary(params: { from?: string; to?: string } = {}) {
+    const qs = new URLSearchParams();
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    const suffix = qs.toString() ? `?${qs}` : '';
+    return req<UsageSummary>(`/usage/summary${suffix}`);
+  },
+
+  // Audit log (owner/admin only)
+  async getAuditLog(params: { limit?: number; action?: string } = {}) {
+    const qs = new URLSearchParams();
+    if (params.limit) qs.set('limit', String(params.limit));
+    if (params.action) qs.set('action', params.action);
+    const suffix = qs.toString() ? `?${qs}` : '';
+    return req<{ events: AuditEvent[] }>(`/audit${suffix}`);
+  },
+
+  async getAuditSummary() {
+    return req<{ summary: Array<{ action: string; count: number }> }>(`/audit/summary`);
   },
 
   async pruneExecutions(payload: {

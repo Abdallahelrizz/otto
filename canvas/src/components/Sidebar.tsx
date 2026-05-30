@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { NODE_TYPE_DEFS, NODE_CATEGORIES, nodeColor, nodeRadius, OTTO_AMBER, type NodeTypeDef } from './nodes/nodeConfig';
+import { NODE_TYPE_DEFS, NODE_CATEGORIES, nodeColor, nodeRadius, OTTO_AMBER, OTTO_AMBER_HOVER, type NodeTypeDef } from './nodes/nodeConfig';
 import { NodeIcon } from './NodeIcon';
 import { v4 as uuidv4 } from 'uuid';
 import { useStore } from '../store';
@@ -1435,7 +1435,7 @@ function VariablesSection() {
   const typeColor: Record<string, string> = {
     string: 'var(--text-secondary)',
     number: '#6366f1',
-    boolean: '#22c55e',
+    boolean: '#0f766e',
     json: '#f59e0b',
   };
 
@@ -1939,7 +1939,7 @@ const PROVIDER_TYPES = [
 const PROVIDER_TYPE_COLOR: Record<string, string> = {
   aws_secrets_manager: '#f59e0b',
   azure_key_vault: '#6366f1',
-  hashicorp_vault: '#22c55e',
+  hashicorp_vault: '#0f766e',
   gcp_secret_manager: '#06b6d4',
 };
 
@@ -3017,7 +3017,7 @@ export function Sidebar() {
             width: 26,
             height: 26,
             borderRadius: '13px',
-            background: `linear-gradient(135deg, ${AMBER}, #FF8A47)`,
+            background: `linear-gradient(135deg, ${AMBER}, ${OTTO_AMBER_HOVER})`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -3071,7 +3071,7 @@ export function Sidebar() {
             borderRadius: '5px',
             cursor: 'pointer',
           }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#FF8A47'; }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = OTTO_AMBER_HOVER; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = AMBER; }}
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">

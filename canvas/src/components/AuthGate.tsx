@@ -97,7 +97,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
         boxShadow: 'var(--shadow-main)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 2 }}>
-          <span style={{ width: 24, height: 24, borderRadius: 5, background: '#FF6F1A', display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 800 }}>o</span>
+          <span style={{ width: 24, height: 24, borderRadius: 5, background: 'var(--accent-strong)', display: 'grid', placeItems: 'center', color: 'var(--accent-strong-contrast)', fontWeight: 800 }}>o</span>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.012em' }}>
               {mode === 'setup' ? 'Create owner account' : mode === 'loading' ? 'Opening Otto' : mode === 'unavailable' ? 'Service unavailable' : 'Sign in'}
@@ -131,8 +131,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
               height: 36,
               borderRadius: 5,
               border: 'none',
-              background: '#FF6F1A',
-              color: '#fff',
+              background: 'var(--accent-strong)',
+              color: 'var(--accent-strong-contrast)',
               fontFamily: "'Inter'",
               fontSize: 13,
               fontWeight: 700,
@@ -149,8 +149,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
               height: 36,
               borderRadius: 5,
               border: 'none',
-              background: '#FF6F1A',
-              color: '#fff',
+              background: 'var(--accent-strong)',
+              color: 'var(--accent-strong-contrast)',
               fontFamily: "'Inter'",
               fontSize: 13,
               fontWeight: 700,

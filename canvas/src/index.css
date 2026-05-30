@@ -17,12 +17,50 @@
   font-style: normal;
   font-display: swap;
 }
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/Geist-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/GeistMono-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
+html {
+  background: #0e0e14;
+}
+html[data-theme="light"] {
+  background: #f5f3ee;
+}
+
+body {
+  background: transparent;
+}
+
+#root {
+  min-height: 100dvh;
+}
 
 body, * {
-  font-family: 'Inter';
+  font-family: 'Geist', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  letter-spacing: 0;
 }
 code, pre, textarea.mono, .mono {
-  font-family: 'JetBrains Mono';
+  font-family: 'Geist Mono', 'SFMono-Regular', Consolas, monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Easing custom curves (Emil Kowalski) ── */
@@ -36,88 +74,118 @@ code, pre, textarea.mono, .mono {
 ───────────────────────────────────────── */
 :root,
 .theme-dark {
-  --bg-canvas:    #0A0908;
-  --bg-sidebar:   #0E0D0C;
-  --bg-toolbar:   #100F0E;
-  --bg-node:      #16151A;
-  --bg-node-card: #16151A;
-  --bg-node-lift: #1B1A1F;
-  --bg-panel:     #100F0E;
-  --bg-input:     #0F0E0D;
-  --bg-hover:     rgba(255,255,255,0.04);
+  --surface: #200e0f;
+  --surface-container-lowest: #1a090a;
+  --surface-container-low: #2a1617;
+  --surface-container: #2e1a1b;
+  --surface-container-high: #3a2425;
+  --surface-container-highest: #452f30;
+  --surface-glass: rgba(69,47,48,0.42);
+  --terminal-black: #1a090a;
+  --status-stable: #aeeef2;
+  --status-running: #ee9800;
 
-  --border:       rgba(255,255,255,0.07);
-  --border-node:  rgba(255,255,255,0.07);
-  --border-input: rgba(255,255,255,0.13);
+  --bg-canvas:    var(--surface);
+  --bg-sidebar:   var(--surface-container-low);
+  --bg-toolbar:   rgba(42,22,23,0.92);
+  --bg-node:      var(--surface-container);
+  --bg-node-card: var(--surface-container);
+  --bg-node-lift: var(--surface-container-high);
+  --bg-panel:     var(--surface-container-low);
+  --bg-input:     var(--surface-container-lowest);
+  --bg-hover:     rgba(255,217,219,0.07);
 
-  --text-primary:   rgba(247,245,242,0.96);
-  --text-secondary: rgba(170,165,160,0.72);
-  --text-muted:     rgba(120,115,110,0.55);
+  --border:       rgba(158,141,141,0.24);
+  --border-node:  rgba(248,181,186,0.20);
+  --border-input: rgba(158,141,141,0.34);
 
-  --accent:       #FF6F1A;
-  --accent-hover: #FF8A47;
-  --accent-dim:   rgba(255,111,26,0.12);
+  --text-primary:   #fedada;
+  --text-secondary: #d6c2c2;
+  --text-muted:     rgba(214,194,194,0.58);
 
-  --brand-soft:   rgba(255,111,26,0.13);
-  --brand-ring:   rgba(255,111,26,0.34);
+  --accent:       #f8b5ba;
+  --accent-hover: #ffd9db;
+  --accent-dim:   rgba(248,181,186,0.14);
+  --accent-contrast: #4e2328;
+  --accent-strong: #a13c3f;
+  --accent-strong-hover: #b74d51;
+  --accent-strong-contrast: #ffffff;
 
-  --live:         #22C55E;
-  --live-soft:    rgba(34,197,94,0.15);
+  --brand-soft:   rgba(248,181,186,0.13);
+  --brand-ring:   rgba(248,181,186,0.36);
 
-  --node-success: #22C55E;
-  --node-error:   #EF4444;
-  --node-running: #22C55E;
-  --node-pending: rgba(120,115,110,0.55);
+  --live:         var(--status-stable);
+  --live-soft:    rgba(174,238,242,0.13);
 
-  --dot-color:    rgba(255,255,255,0.035);
-  --edge-idle:    rgba(255,255,255,0.13);
+  --node-success: var(--status-stable);
+  --node-error:   #ffb4ab;
+  --node-running: var(--status-running);
+  --node-pending: rgba(214,194,194,0.46);
 
-  --shadow:       none;
-  --shadow-main:  0 16px 48px rgba(0,0,0,0.55);
+  --dot-color:    rgba(255,217,219,0.12);
+  --edge-idle:    rgba(214,194,194,0.22);
+
+  --shadow:       0 1px 0 rgba(255,217,219,0.05), 0 16px 44px rgba(26,9,10,0.38);
+  --shadow-main:  0 18px 64px rgba(26,9,10,0.62);
 }
 
 /* ─────────────────────────────────────────
    Color tokens — Light
 ───────────────────────────────────────── */
 .theme-light {
-  --bg-canvas:    #FAFAF8;
-  --bg-sidebar:   #F4F3F0;
-  --bg-toolbar:   #FFFFFF;
-  --bg-node:      #FFFFFF;
-  --bg-node-card: #FFFFFF;
-  --bg-node-lift: #FAFAF8;
-  --bg-panel:     #FFFFFF;
-  --bg-input:     #FAFAF8;
-  --bg-hover:     rgba(15,15,10,0.04);
+  --surface: #faf9f7;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #f4f3f1;
+  --surface-container: #efeeec;
+  --surface-container-high: #e9e8e6;
+  --surface-container-highest: #e3e2e0;
+  --surface-glass: rgba(255,255,255,0.78);
+  --terminal-black: #2f3130;
+  --status-stable: #0f766e;
+  --status-running: #b36b00;
 
-  --border:       rgba(15,15,10,0.08);
-  --border-node:  rgba(15,15,10,0.08);
-  --border-input: rgba(15,15,10,0.14);
+  --bg-canvas:    var(--surface);
+  --bg-sidebar:   var(--surface-container-lowest);
+  --bg-toolbar:   rgba(255,255,255,0.94);
+  --bg-node:      var(--surface-container-lowest);
+  --bg-node-card: var(--surface-container-lowest);
+  --bg-node-lift: var(--surface-container-low);
+  --bg-panel:     var(--surface-container-lowest);
+  --bg-input:     var(--surface);
+  --bg-hover:     rgba(99,13,22,0.06);
 
-  --text-primary:   #0A0908;
-  --text-secondary: #525050;
-  --text-muted:     #A3A09C;
+  --border:       rgba(137,113,112,0.24);
+  --border-node:  rgba(99,13,22,0.16);
+  --border-input: rgba(137,113,112,0.34);
 
-  --accent:       #FF6F1A;
-  --accent-hover: #FF8A47;
-  --accent-dim:   rgba(255,111,26,0.10);
+  --text-primary:   #1a1c1b;
+  --text-secondary: #564241;
+  --text-muted:     rgba(86,66,65,0.62);
 
-  --brand-soft:   rgba(255,111,26,0.08);
-  --brand-ring:   rgba(255,111,26,0.28);
+  --accent:       #630d16;
+  --accent-hover: #82252a;
+  --accent-dim:   rgba(99,13,22,0.10);
+  --accent-contrast: #ffffff;
+  --accent-strong: #630d16;
+  --accent-strong-hover: #82252a;
+  --accent-strong-contrast: #ffffff;
 
-  --live:         #16A34A;
-  --live-soft:    rgba(22,163,74,0.10);
+  --brand-soft:   rgba(99,13,22,0.08);
+  --brand-ring:   rgba(99,13,22,0.28);
 
-  --node-success: #16A34A;
-  --node-error:   #DC2626;
-  --node-running: #16A34A;
-  --node-pending: #A3A09C;
+  --live:         var(--status-stable);
+  --live-soft:    rgba(15,118,110,0.10);
 
-  --dot-color:    rgba(15,15,10,0.06);
-  --edge-idle:    rgba(15,15,10,0.14);
+  --node-success: var(--status-stable);
+  --node-error:   #ba1a1a;
+  --node-running: var(--status-running);
+  --node-pending: rgba(86,66,65,0.44);
 
-  --shadow:       0 1px 2px rgba(15,15,10,0.04), 0 3px 12px rgba(15,15,10,0.05);
-  --shadow-main:  0 4px 12px rgba(15,15,10,0.06), 0 18px 48px rgba(15,15,10,0.10);
+  --dot-color:    rgba(99,13,22,0.08);
+  --edge-idle:    rgba(86,66,65,0.22);
+
+  --shadow:       0 1px 2px rgba(65,0,7,0.04), 0 8px 24px rgba(65,0,7,0.06);
+  --shadow-main:  0 4px 16px rgba(65,0,7,0.07), 0 24px 54px rgba(65,0,7,0.10);
 }
 
 /* ── React Flow: handles — always visible ── */
@@ -172,10 +240,10 @@ code, pre, textarea.mono, .mono {
 /* ── Node execution state — border pulse animations ── */
 @keyframes node-running-pulse {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+    box-shadow: 0 0 0 0 rgba(238, 152, 0, 0);
   }
   50% {
-    box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.16);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--node-running) 24%, transparent);
   }
 }
 
@@ -191,13 +259,13 @@ code, pre, textarea.mono, .mono {
 
 .otto-node-success {
   border-color: var(--node-success) !important;
-  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.14) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--node-success) 18%, transparent) !important;
   transition: border-color 0.1s ease, box-shadow 0.1s ease !important;
 }
 
 .otto-node-error {
   border-color: var(--node-error) !important;
-  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.14) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--node-error) 18%, transparent) !important;
   transition: border-color 0.1s ease, box-shadow 0.1s ease !important;
 }
 
@@ -339,3 +407,2603 @@ input[type="range"]::-moz-range-thumb {
 ::-webkit-scrollbar-thumb { background: var(--border-input); border-radius: 2px; }
 
 * { box-sizing: border-box; }
+
+/* ── Stitch design system classes ── */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  font-family: 'Material Symbols Outlined';
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'liga';
+  user-select: none;
+}
+
+.dot-grid {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+.workflow-card {
+  background-color: #121414;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+.workflow-card:hover {
+  border-color: #a13c3f;
+  transform: translateY(-2px);
+}
+
+.status-pill-active {
+  background-color: rgba(129, 215, 177, 0.15);
+  border: 1px solid #81d7b1;
+  color: #81d7b1;
+}
+.status-pill-inactive {
+  background-color: rgba(220, 192, 191, 0.15);
+  border: 1px solid #dcc0bf;
+  color: #dcc0bf;
+}
+
+.node-line {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.technical-card {
+  background-color: #1e2020;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: border-color 0.2s ease;
+}
+.technical-card:hover {
+  border-color: rgba(161, 60, 63, 0.5);
+}
+
+.execution-row {
+  transition: background-color 0.1s ease;
+}
+.execution-row:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.log-line:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.focus-ring:focus {
+  outline: none;
+  border-color: #a13c3f;
+  box-shadow: 0 0 0 2px rgba(161, 60, 63, 0.2);
+}
+
+/* Stitch app layout */
+.stitch-sidebar {
+  background-color: #121414;
+  border-right: 1px solid #564241;
+}
+.stitch-topbar {
+  background-color: #121414;
+  border-bottom: 1px solid #564241;
+}
+.stitch-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 2px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  color: #dcc0bf;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  cursor: pointer;
+  text-decoration: none;
+}
+.stitch-nav-item:hover {
+  background-color: #282a2b;
+  color: #e2e2e2;
+}
+.stitch-nav-item.active {
+  color: #ffb3b1;
+  font-weight: 700;
+  border-left: 2px solid #ffb3b1;
+  padding-left: 10px;
+  background-color: #282a2b;
+}
+
+/* Dashboard shell - first page slice */
+.otto-dashboard {
+  --dash-bg: #0e0e14;
+  --dash-bg-elevated: #13131b;
+  --dash-panel: #181821;
+  --dash-panel-soft: #1d1d28;
+  --dash-panel-strong: #242432;
+  --dash-border: rgba(238, 221, 224, 0.095);
+  --dash-border-strong: rgba(238, 221, 224, 0.18);
+  --dash-text: #f4eef0;
+  --dash-muted: rgba(244, 238, 240, 0.62);
+  --dash-faint: rgba(244, 238, 240, 0.36);
+  --dash-accent: #eaa2a6;
+  --dash-accent-strong: #a94d56;
+  --dash-accent-soft: rgba(234, 162, 166, 0.12);
+  --dash-green: #78d8aa;
+  --dash-green-soft: rgba(120, 216, 170, 0.12);
+  --dash-amber: #d8b36f;
+  --dash-shadow: 0 20px 60px rgba(0, 0, 0, 0.34);
+  /* surface tokens */
+  --dash-sidebar-bg: rgba(14, 14, 20, 0.94);
+  --dash-topbar-bg: rgba(14, 14, 20, 0.84);
+  --dash-glass-bg: rgba(19, 19, 27, 0.72);
+  --dash-input-bg: rgba(10, 10, 15, 0.62);
+  --dash-field-bg: rgba(10, 10, 15, 0.72);
+  --dash-subtle: rgba(255, 255, 255, 0.025);
+  --dash-raise: rgba(255, 255, 255, 0.035);
+  --dash-raise-med: rgba(255, 255, 255, 0.05);
+  --dash-raise-strong: rgba(255, 255, 255, 0.055);
+  --dash-menu-bg: #171720;
+  --dash-menu-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  --dash-minimap-bg: #0d0d13;
+  --dash-minimap-dot: rgba(244, 238, 240, 0.09);
+  --dash-modal-scrim: rgba(3, 3, 6, 0.72);
+  --dash-grid-a: rgba(255, 255, 255, 0.025);
+  --dash-grid-b: rgba(255, 255, 255, 0.018);
+  --dash-shimmer: rgba(255, 255, 255, 0.05);
+
+  min-height: 100dvh;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 256px 1fr;
+  background:
+    linear-gradient(90deg, var(--dash-grid-a) 1px, transparent 1px),
+    linear-gradient(180deg, var(--dash-grid-b) 1px, transparent 1px),
+    var(--dash-bg);
+  background-size: 72px 72px;
+  color: var(--dash-text);
+}
+
+/* ── Kill transitions during theme switch ── */
+.otto-no-transition,
+.otto-no-transition * {
+  transition: none !important;
+}
+
+/* ── Dashboard light theme ── */
+.theme-light.otto-dashboard {
+  --dash-bg: #f5f3ee;
+  --dash-bg-elevated: #faf9f6;
+  --dash-panel: #ede9e3;
+  --dash-panel-soft: #e8e3dc;
+  --dash-panel-strong: #dedad2;
+  --dash-border: rgba(60, 45, 30, 0.11);
+  --dash-border-strong: rgba(60, 45, 30, 0.22);
+  --dash-text: #1a1612;
+  --dash-muted: rgba(26, 22, 18, 0.58);
+  --dash-faint: rgba(26, 22, 18, 0.34);
+  --dash-accent: #8b2228;
+  --dash-accent-strong: #6e1a1e;
+  --dash-accent-soft: rgba(139, 34, 40, 0.10);
+  --dash-green: #15694b;
+  --dash-green-soft: rgba(21, 105, 75, 0.10);
+  --dash-amber: #886010;
+  --dash-shadow: 0 4px 24px rgba(16, 10, 4, 0.09);
+  --dash-sidebar-bg: rgba(250, 249, 246, 0.97);
+  --dash-topbar-bg: rgba(250, 249, 246, 0.90);
+  --dash-glass-bg: rgba(237, 233, 227, 0.80);
+  --dash-input-bg: rgba(245, 243, 238, 0.90);
+  --dash-field-bg: rgba(245, 243, 238, 0.95);
+  --dash-subtle: rgba(0, 0, 0, 0.03);
+  --dash-raise: rgba(0, 0, 0, 0.04);
+  --dash-raise-med: rgba(0, 0, 0, 0.05);
+  --dash-raise-strong: rgba(0, 0, 0, 0.065);
+  --dash-menu-bg: #f5f3ee;
+  --dash-menu-shadow: 0 8px 24px rgba(16, 10, 4, 0.14);
+  --dash-minimap-bg: #e8e3dc;
+  --dash-minimap-dot: rgba(26, 22, 18, 0.09);
+  --dash-modal-scrim: rgba(12, 8, 4, 0.38);
+  --dash-grid-a: rgba(0, 0, 0, 0.04);
+  --dash-grid-b: rgba(0, 0, 0, 0.025);
+  --dash-shimmer: rgba(0, 0, 0, 0.04);
+}
+
+.otto-dashboard * {
+  box-sizing: border-box;
+}
+
+.otto-dashboard.sidebar-collapsed {
+  grid-template-columns: 64px 1fr;
+}
+
+/* spacer reserves the sidebar column in the grid while sidebar is fixed */
+.otto-sidebar-spacer {
+  display: block;
+  pointer-events: none;
+}
+
+.otto-dashboard-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 256px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--dash-border);
+  background: var(--dash-bg-elevated);
+  padding: 18px 0;
+  z-index: 10;
+}
+
+.otto-dashboard.sidebar-collapsed .otto-dashboard-sidebar {
+  width: 64px;
+}
+
+/* ── Labels: instant hide on collapse, clean look ── */
+.otto-dashboard-sidebar .otto-brand-copy,
+.otto-dashboard-sidebar .otto-dashboard-nav-item span,
+.otto-dashboard-sidebar .otto-account-email,
+.otto-dashboard-sidebar .otto-account-dots {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.otto-dashboard-sidebar.is-collapsed .otto-brand-copy,
+.otto-dashboard-sidebar.is-collapsed .otto-dashboard-nav-item span,
+.otto-dashboard-sidebar.is-collapsed .otto-account-email,
+.otto-dashboard-sidebar.is-collapsed .otto-account-dots {
+  display: none;
+}
+
+/* ── Collapse toggle capsule — inside sidebar at right edge ── */
+.otto-sidebar-collapse {
+  position: absolute;
+  top: 50%;
+  right: -1px;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--dash-border);
+  border-right: none;
+  border-radius: 7px 0 0 7px;
+  background: var(--dash-panel);
+  color: var(--dash-faint);
+  cursor: pointer;
+  z-index: 5;
+  transition:
+    color 140ms var(--ease-out),
+    border-color 140ms var(--ease-out),
+    background 140ms var(--ease-out);
+}
+
+.otto-sidebar-collapse:hover {
+  color: var(--dash-text);
+  border-color: var(--dash-border-strong);
+  background: var(--dash-raise-med);
+}
+
+.otto-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 8px 18px 15px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+
+.otto-dashboard-sidebar.is-collapsed .otto-brand {
+  justify-content: center;
+  padding: 14px 0 18px;
+}
+
+.otto-brand-logo {
+  width: 44px;
+  height: 44px;
+  display: block;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.otto-dashboard-sidebar.is-collapsed .otto-brand-logo {
+  width: 36px;
+  height: 36px;
+}
+
+.otto-brand-copy,
+.otto-workspace-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.otto-brand-name {
+  font-size: 16px;
+  font-weight: 720;
+  letter-spacing: 0;
+  line-height: 1.1;
+}
+
+.otto-brand-subtitle,
+.otto-workspace-plan {
+  margin-top: 3px;
+  color: var(--dash-faint);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.otto-account-footer {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: auto;
+  padding: 10px 8px 10px 17px;
+  border-top: 1px solid var(--dash-border);
+  min-width: 0;
+}
+
+.otto-account-avatar {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--dash-accent-soft);
+  color: var(--dash-accent);
+  font-size: 12px;
+  font-weight: 720;
+  user-select: none;
+}
+
+.otto-account-email {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dash-muted);
+  font-size: 12px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.otto-sidebar-action,
+.otto-button,
+.otto-run-button,
+.otto-row-run {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  font-weight: 650;
+  transition:
+    transform 160ms var(--ease-out),
+    border-color 160ms var(--ease-out),
+    background 160ms var(--ease-out),
+    color 160ms var(--ease-out),
+    opacity 160ms var(--ease-out);
+}
+
+.otto-sidebar-action {
+  width: 100%;
+  min-height: 38px;
+  margin: 0 0 18px;
+  background: var(--dash-accent-strong);
+  color: #fff9fa;
+  font-size: 13px;
+}
+
+.otto-button {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.otto-sidebar-action:hover,
+.otto-button:hover,
+.otto-run-button:hover,
+.otto-row-run:hover {
+  transform: translateY(-1px);
+}
+
+.otto-sidebar-action:active,
+.otto-button:active,
+.otto-run-button:active,
+.otto-row-run:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.otto-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+  transform: none;
+}
+
+.otto-button.is-primary {
+  background: var(--dash-accent-strong);
+  color: #fff9fa;
+}
+
+.otto-button.is-secondary,
+.otto-button.is-ghost {
+  border: 1px solid var(--dash-border);
+  background: var(--dash-raise);
+  color: var(--dash-muted);
+}
+
+.otto-button.is-secondary:hover,
+.otto-button.is-ghost:hover {
+  border-color: var(--dash-border-strong);
+  color: var(--dash-text);
+}
+
+.otto-button.is-danger {
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+}
+
+.otto-button.is-danger:hover:not(:disabled) {
+  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+.otto-button.is-danger:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.otto-dashboard-nav {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.otto-dashboard-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 10px 0 15px;
+  margin: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--dash-muted);
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 560;
+  text-decoration: none;
+  transition:
+    background 160ms var(--ease-out),
+    border-color 160ms var(--ease-out),
+    color 160ms var(--ease-out);
+}
+
+.otto-dashboard-nav-item:hover {
+  background: var(--dash-raise);
+  color: var(--dash-text);
+}
+
+.otto-dashboard-nav-item.is-active {
+  border-color: color-mix(in srgb, var(--dash-accent) 22%, transparent);
+  background: var(--dash-accent-soft);
+  color: var(--dash-accent);
+}
+
+.otto-sidebar-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px 10px;
+  border-top: 1px solid var(--dash-border);
+  color: var(--dash-muted);
+  font-size: 12px;
+}
+
+.otto-sidebar-status small {
+  display: block;
+  margin-top: 3px;
+  color: var(--dash-faint);
+  font-size: 11px;
+}
+
+.otto-live-dot,
+.status-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 999px;
+  background: var(--dash-faint);
+}
+
+.otto-live-dot,
+.status-dot.is-on {
+  background: var(--dash-green);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--dash-green) 8%, transparent);
+}
+
+.otto-dashboard-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* .otto-theme-floating removed — theme toggle now lives inside .otto-topright-controls */
+
+.otto-dashboard-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--dash-border);
+  background: var(--dash-topbar-bg);
+  padding: 0 28px;
+  backdrop-filter: blur(16px);
+}
+
+.otto-topbar-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--dash-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.otto-topbar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.otto-icon-button {
+  width: 34px;
+  height: 34px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--dash-border);
+  border-radius: 7px;
+  background: var(--dash-subtle);
+  color: var(--dash-muted);
+  cursor: pointer;
+  transition:
+    background 160ms var(--ease-out),
+    border-color 160ms var(--ease-out),
+    color 160ms var(--ease-out),
+    transform 160ms var(--ease-out);
+}
+
+.otto-icon-button:hover {
+  border-color: var(--dash-border-strong);
+  background: var(--dash-raise-med);
+  color: var(--dash-text);
+  transform: translateY(-1px);
+}
+
+.otto-dashboard-content {
+  width: min(1320px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 54px 0 72px;
+}
+
+.otto-page-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 28px;
+  align-items: end;
+  margin-bottom: 26px;
+}
+
+.otto-eyebrow {
+  margin: 0 0 10px;
+  color: var(--dash-accent);
+  font-size: 11px;
+  font-weight: 740;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.otto-page-hero h1 {
+  margin: 0;
+  color: var(--dash-text);
+  font-size: clamp(34px, 4vw, 56px);
+  font-weight: 720;
+  line-height: 0.98;
+}
+
+.otto-hero-copy {
+  max-width: 620px;
+  margin: 14px 0 0;
+  color: var(--dash-muted);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.otto-hero-actions,
+.otto-toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── Button icon micro-animations ── */
+@keyframes otto-bell-ring {
+  0%   { transform: rotate(0deg);   transform-origin: top center; }
+  15%  { transform: rotate(12deg);  transform-origin: top center; }
+  30%  { transform: rotate(-10deg); transform-origin: top center; }
+  45%  { transform: rotate(7deg);   transform-origin: top center; }
+  60%  { transform: rotate(-4deg);  transform-origin: top center; }
+  75%  { transform: rotate(2deg);   transform-origin: top center; }
+  100% { transform: rotate(0deg);   transform-origin: top center; }
+}
+
+
+.otto-btn-bell:hover svg {
+  animation: otto-bell-ring 0.55s ease;
+}
+
+
+.otto-btn-new svg {
+  transition: transform 220ms var(--ease-out);
+}
+
+.otto-btn-new:hover svg {
+  transform: rotate(90deg);
+}
+
+.otto-metric-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.otto-metric-card {
+  min-height: 96px;
+  display: grid;
+  align-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--dash-border);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, var(--dash-raise), transparent),
+    var(--dash-grid-b);
+  padding: 16px;
+}
+
+.otto-metric-card svg {
+  color: var(--dash-accent);
+}
+
+.otto-metric-card span {
+  color: var(--dash-muted);
+  font-size: 12px;
+  font-weight: 580;
+}
+
+.otto-metric-card strong {
+  color: var(--dash-text);
+  font-family: 'Geist Mono', monospace;
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.otto-resource-panel {
+  position: relative;
+  border: 1px solid var(--dash-border);
+  border-radius: 10px;
+  background: var(--dash-glass-bg);
+  box-shadow: var(--dash-shadow);
+}
+
+.otto-resource-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, var(--dash-grid-a) 1px, transparent 1px),
+    linear-gradient(180deg, var(--dash-grid-b) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: linear-gradient(180deg, black, transparent 70%);
+}
+
+.otto-resource-toolbar {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  border-bottom: 1px solid var(--dash-border);
+  padding: 18px;
+}
+
+.otto-resource-toolbar h2 {
+  margin: 0;
+  color: var(--dash-text);
+  font-size: 16px;
+  font-weight: 680;
+}
+
+.otto-resource-toolbar p {
+  margin: 5px 0 0;
+  color: var(--dash-faint);
+  font-size: 12px;
+}
+
+.otto-search {
+  min-height: 38px;
+  width: min(340px, 34vw);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--dash-border);
+  border-radius: 7px;
+  background: var(--dash-input-bg);
+  color: var(--dash-muted);
+  padding: 0 11px;
+  transition: border-color 160ms var(--ease-out);
+}
+
+.otto-search:focus-within {
+  border-color: var(--dash-border-strong);
+}
+
+.otto-search input:focus {
+  border-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.otto-search input,
+.otto-field input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--dash-text);
+  font: inherit;
+}
+
+.otto-search input {
+  width: 100%;
+  font-size: 13px;
+}
+
+.otto-search input::placeholder,
+.otto-field input::placeholder {
+  color: var(--dash-faint);
+}
+
+.otto-sort-wrap {
+  position: relative;
+}
+
+.otto-sort-trigger {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid var(--dash-border);
+  border-radius: 7px;
+  background: var(--dash-input-bg);
+  color: var(--dash-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 620;
+  cursor: pointer;
+  transition:
+    border-color 140ms var(--ease-out),
+    background 140ms var(--ease-out),
+    color 140ms var(--ease-out);
+}
+
+.otto-sort-trigger:hover {
+  border-color: var(--dash-border-strong);
+  background: var(--dash-raise-med);
+  color: var(--dash-text);
+}
+
+.otto-sort-menu {
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  z-index: 200;
+  min-width: 148px;
+  border: 1px solid var(--dash-border);
+  border-radius: 7px;
+  background: var(--dash-menu-bg);
+  box-shadow: var(--dash-menu-shadow);
+  padding: 4px;
+}
+
+.otto-sort-option {
+  width: 100%;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dash-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 620;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms var(--ease-out), color 140ms var(--ease-out);
+}
+
+.otto-sort-option:hover {
+  background: var(--dash-raise-strong);
+  color: var(--dash-text);
+}
+
+.otto-sort-option.is-active {
+  color: var(--dash-accent);
+}
+
+.otto-view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--dash-border);
+  border-radius: 7px;
+  background: var(--dash-input-bg);
+  padding: 3px;
+}
+
+.otto-view-toggle button {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dash-muted);
+  cursor: pointer;
+}
+
+.otto-view-toggle button.is-active {
+  background: var(--dash-panel-strong);
+  color: var(--dash-text);
+}
+
+.otto-run-toast {
+  position: relative;
+  z-index: 1;
+  margin: 14px 18px 0;
+  border: 1px solid rgba(234, 162, 166, 0.18);
+  border-radius: 7px;
+  background: rgba(234, 162, 166, 0.08);
+  color: var(--dash-accent);
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 640;
+}
+
+.otto-run-toast.is-error {
+  border-color: rgba(239, 68, 68, 0.22);
+  background: rgba(239, 68, 68, 0.08);
+  color: #f87171;
+}
+
+.otto-workflow-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding: 18px;
+}
+
+.otto-workflow-card {
+  min-height: 312px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--dash-border);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, var(--dash-raise), transparent 44%),
+    var(--dash-panel);
+  color: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    transform 180ms var(--ease-out),
+    border-color 180ms var(--ease-out),
+    background 180ms var(--ease-out);
+}
+
+.otto-workflow-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(234, 162, 166, 0.28);
+  background:
+    linear-gradient(180deg, rgba(234, 162, 166, 0.07), transparent 48%),
+    var(--dash-panel-soft);
+}
+
+.otto-workflow-card-header,
+.otto-workflow-card-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+}
+
+.otto-workflow-card-header h3 {
+  margin: 0;
+  color: var(--dash-text);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.otto-workflow-card-header p {
+  margin: 5px 0 0;
+  color: var(--dash-faint);
+  font-size: 12px;
+}
+
+.otto-workflow-menu-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.otto-workflow-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: 176px;
+  border: 1px solid var(--dash-border-strong);
+  border-radius: 8px;
+  background: var(--dash-menu-bg);
+  box-shadow: var(--dash-menu-shadow);
+  padding: 5px;
+}
+
+.otto-workflow-menu button {
+  width: 100%;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dash-muted);
+  cursor: pointer;
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 620;
+  text-align: left;
+  transition: background 140ms var(--ease-out), color 140ms var(--ease-out);
+}
+
+.otto-workflow-menu button:hover {
+  background: var(--dash-raise-strong);
+  color: var(--dash-text);
+}
+
+.otto-workflow-menu button.is-danger {
+  color: #f1a2a0;
+}
+
+.otto-workflow-menu button.is-danger:hover {
+  background: rgba(255, 180, 171, 0.09);
+  color: #ffbab7;
+}
+
+.workflow-minimap {
+  position: relative;
+  min-height: 178px;
+  margin: 0 10px;
+  border: 1px solid var(--dash-border);
+  border-radius: 7px;
+  background: var(--dash-minimap-bg);
+  overflow: hidden;
+}
+
+.workflow-minimap-grid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, var(--dash-minimap-dot) 1px, transparent 1px);
+  background-size: 13px 13px;
+}
+
+.workflow-node {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(244, 238, 240, 0.12);
+  border-radius: 8px;
+  background: var(--dash-panel-strong);
+  color: var(--dash-muted);
+  font-size: 12px;
+  font-weight: 760;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+}
+
+.workflow-node.is-active,
+.workflow-node.is-terminal {
+  border-color: color-mix(in srgb, var(--dash-green) 34%, transparent);
+  background: var(--dash-green-soft);
+  color: var(--dash-green);
+}
+
+.workflow-node.node-a {
+  left: 50%;
+  top: 40px;
+  transform: translateX(-50%);
+}
+
+.workflow-node.node-1 {
+  left: 20%;
+  top: 108px;
+}
+
+.workflow-node.node-2 {
+  left: 39%;
+  top: 112px;
+}
+
+.workflow-node.node-3 {
+  left: 58%;
+  top: 108px;
+}
+
+.workflow-node.node-4 {
+  left: 77%;
+  top: 112px;
+}
+
+.workflow-node.node-5 {
+  left: 50%;
+  top: 132px;
+}
+
+.workflow-connection {
+  position: absolute;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(234, 162, 166, 0.36), transparent);
+}
+
+.workflow-connection.connection-a {
+  left: 22%;
+  right: 22%;
+  top: 93px;
+}
+
+.workflow-connection.connection-b {
+  left: 19%;
+  right: 19%;
+  top: 127px;
+}
+
+.workflow-minimap-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.workflow-minimap-footer {
+  position: absolute;
+  left: 12px;
+  bottom: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--dash-faint);
+  font-size: 11px;
+}
+
+.otto-tag-list {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.otto-tag-list span {
+  max-width: 120px;
+  overflow: hidden;
+  border: 1px solid var(--dash-border);
+  border-radius: 999px;
+  color: var(--dash-muted);
+  padding: 4px 8px;
+  font-size: 11px;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.otto-run-button {
+  min-height: 28px;
+  flex: 0 0 auto;
+  background: rgba(234, 162, 166, 0.1);
+  color: var(--dash-accent);
+  padding: 0 9px;
+  font-size: 12px;
+}
+
+.otto-workflow-list {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+}
+
+.otto-workflow-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 92px 126px 36px;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 66px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.otto-workflow-row:hover {
+  border-color: var(--dash-border);
+  background: var(--dash-subtle);
+}
+
+.otto-row-mark {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--dash-accent-soft);
+  color: var(--dash-accent);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.otto-row-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.otto-row-main strong {
+  overflow: hidden;
+  color: var(--dash-text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.otto-row-main small,
+.otto-row-meta {
+  overflow: hidden;
+  color: var(--dash-faint);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.otto-row-status {
+  justify-self: start;
+  border: 1px solid var(--dash-border);
+  border-radius: 999px;
+  color: var(--dash-muted);
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 660;
+}
+
+.otto-row-status.is-active {
+  border-color: color-mix(in srgb, var(--dash-green) 28%, transparent);
+  background: var(--dash-green-soft);
+  color: var(--dash-green);
+}
+
+.otto-row-run {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--dash-border);
+  background: var(--dash-subtle);
+  color: var(--dash-muted);
+}
+
+.otto-workflow-skeleton {
+  min-height: 312px;
+  border: 1px solid var(--dash-border);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, transparent, var(--dash-shimmer), transparent),
+    var(--dash-panel);
+  background-size: 220% 100%, auto;
+  animation: otto-dashboard-shimmer 1.35s linear infinite;
+}
+
+@keyframes otto-dashboard-shimmer {
+  from { background-position: 120% 0, 0 0; }
+  to { background-position: -120% 0, 0 0; }
+}
+
+.otto-empty-state {
+  position: relative;
+  z-index: 1;
+  min-height: 360px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  padding: 40px;
+  text-align: center;
+}
+
+.otto-empty-state svg {
+  color: var(--dash-accent);
+}
+
+.otto-empty-state h3 {
+  margin: 0;
+  color: var(--dash-text);
+  font-size: 18px;
+}
+
+.otto-empty-state p {
+  max-width: 360px;
+  margin: 0;
+  color: var(--dash-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.otto-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: var(--dash-modal-scrim);
+  padding: 18px;
+}
+
+.otto-modal {
+  width: min(460px, 100%);
+  border: 1px solid var(--dash-border-strong);
+  border-radius: 10px;
+  background: var(--dash-bg-elevated);
+  box-shadow: var(--dash-shadow);
+  padding: 18px;
+}
+
+.otto-modal-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.otto-modal-header h2 {
+  margin: 0;
+  color: var(--dash-text);
+  font-size: 20px;
+  font-weight: 720;
+}
+
+.otto-modal-header p {
+  margin: 6px 0 0;
+  color: var(--dash-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.otto-field {
+  display: grid;
+  gap: 8px;
+  color: var(--dash-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.otto-field input {
+  min-height: 40px;
+  border: 1px solid var(--dash-border);
+  border-radius: 7px;
+  background: var(--dash-field-bg);
+  padding: 0 11px;
+}
+
+.otto-field input:focus {
+  border-color: color-mix(in srgb, var(--dash-accent) 42%, transparent);
+  box-shadow: 0 0 0 3px var(--dash-accent-soft);
+}
+
+.otto-modal--danger .otto-modal-header h2 {
+  color: #f87171;
+}
+
+.otto-delete-name-chip {
+  margin-bottom: 16px;
+  padding: 9px 12px;
+  border: 1px solid var(--dash-border);
+  border-radius: 7px;
+  background: var(--dash-subtle);
+  color: var(--dash-text);
+  font-family: 'Geist Mono', monospace;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.otto-inline-error {
+  margin-top: 12px;
+  border: 1px solid rgba(255, 180, 171, 0.22);
+  border-radius: 7px;
+  background: rgba(255, 180, 171, 0.08);
+  color: #ffb4ab;
+  padding: 9px 10px;
+  font-size: 12px;
+}
+
+.otto-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+@media (max-width: 1180px) {
+  .otto-workflow-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .otto-dashboard-sidebar {
+    width: 64px;
+    padding: 14px 8px;
+    transition: none;
+  }
+
+  .otto-sidebar-collapse {
+    display: none;
+  }
+
+  .otto-dashboard-sidebar .otto-brand-copy,
+  .otto-dashboard-sidebar .otto-dashboard-nav-item span,
+  .otto-dashboard-sidebar .otto-account-email,
+  .otto-dashboard-sidebar .otto-account-dots {
+    display: none;
+  }
+
+  .otto-brand,
+  .otto-dashboard-nav-item,
+  .otto-account-footer {
+    justify-content: center;
+  }
+
+  .otto-dashboard-nav-item {
+    padding: 0;
+    min-height: 40px;
+  }
+
+  .otto-resource-toolbar,
+  .otto-page-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .otto-toolbar-controls,
+  .otto-hero-actions {
+    flex-wrap: wrap;
+  }
+
+  .otto-search {
+    width: 100%;
+  }
+
+  .otto-metric-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .otto-dashboard {
+    display: block;
+    transition: none;
+  }
+
+  .otto-dashboard-sidebar {
+    position: relative;
+    width: 100%;
+    height: auto;
+    flex-basis: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+  }
+
+  .otto-brand-copy,
+  .otto-dashboard-nav-item span {
+    display: none;
+  }
+
+  .otto-dashboard-nav {
+    flex: 0 0 auto;
+    flex-direction: row;
+  }
+
+  .otto-sidebar-status {
+    display: none;
+  }
+
+  .otto-sidebar-action {
+    width: auto;
+    min-width: 38px;
+    margin: 0;
+    padding: 0 10px;
+  }
+
+  .otto-dashboard-content {
+    width: calc(100% - 28px);
+    padding-top: 30px;
+  }
+
+  .otto-dashboard-topbar {
+    padding: 0 14px;
+  }
+
+  .otto-workflow-grid,
+  .otto-metric-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .otto-resource-toolbar,
+  .otto-workflow-grid {
+    padding: 14px;
+  }
+
+  .otto-workflow-row {
+    grid-template-columns: 38px minmax(0, 1fr) 34px;
+  }
+
+  .otto-row-status,
+  .otto-row-meta {
+    display: none;
+  }
+}
+
+/* ─────────────────────────────────────────
+   Global top-right controls (bell + theme)
+───────────────────────────────────────── */
+
+.otto-topright-controls {
+  position: fixed;
+  top: 18px;
+  right: 22px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.otto-topright-btn {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--dash-border);
+  border-radius: 10px;
+  background: var(--dash-glass-bg);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--dash-shadow);
+  position: relative;
+}
+
+.otto-notif-wrap {
+  position: relative;
+}
+
+.otto-notif-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 780;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.otto-notif-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 200;
+  width: 340px;
+  border: 1px solid var(--dash-border-strong);
+  border-radius: 10px;
+  background: var(--dash-bg-elevated);
+  box-shadow: var(--dash-shadow);
+  overflow: hidden;
+}
+
+.otto-notif-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--dash-border);
+  color: var(--dash-text);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.otto-notif-list {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.otto-notif-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 36px 18px;
+  color: var(--dash-faint);
+  font-size: 13px;
+}
+
+.otto-notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--dash-border);
+  transition: background 120ms;
+}
+
+.otto-notif-item:last-child {
+  border-bottom: 0;
+}
+
+.otto-notif-item:hover {
+  background: var(--dash-raise);
+}
+
+.otto-notif-item-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.otto-notif-group-label {
+  padding: 8px 14px 4px;
+  color: var(--dash-faint);
+  font-size: 10px;
+  font-weight: 740;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.otto-notif-item-title {
+  color: var(--dash-text);
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.otto-notif-item-ts {
+  color: var(--dash-faint);
+  font-size: 11px;
+}
+
+.otto-notif-item.is-urgent {
+  background: rgba(239, 68, 68, 0.04);
+}
+
+.otto-notif-item.is-urgent:hover {
+  background: rgba(239, 68, 68, 0.07);
+}
+
+/* "Dismiss" text button — shown on urgent items */
+.otto-notif-action {
+  flex-shrink: 0;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  border-radius: 5px;
+  background: rgba(239, 68, 68, 0.10);
+  color: #f87171;
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 120ms, background 120ms, border-color 120ms;
+}
+
+.otto-notif-item:hover .otto-notif-action {
+  opacity: 1;
+}
+
+.otto-notif-action:hover {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+/* Trash icon — shown on dismissed items */
+.otto-notif-dismiss {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dash-faint);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms, background 120ms, border-color 120ms, color 120ms;
+}
+
+.otto-notif-item:hover .otto-notif-dismiss {
+  opacity: 1;
+}
+
+.otto-notif-dismiss:hover {
+  border-color: var(--dash-border);
+  background: var(--dash-raise-med);
+  color: var(--dash-text);
+}
+
+/* ─────────────────────────────────────────
+   Table skeleton rows
+───────────────────────────────────────── */
+
+.otto-table-skeleton-row td {
+  padding: 14px 18px;
+}
+
+.otto-table-skeleton-cell {
+  height: 13px;
+  border-radius: 4px;
+  background:
+    linear-gradient(90deg, transparent, var(--dash-shimmer), transparent),
+    var(--dash-raise);
+  background-size: 220% 100%, auto;
+  animation: otto-dashboard-shimmer 1.35s linear infinite;
+}
+
+/* ─────────────────────────────────────────
+   Executions page — table
+───────────────────────────────────────── */
+
+.otto-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.otto-table thead th {
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--dash-border);
+  color: var(--dash-faint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.otto-table tbody tr {
+  border-bottom: 1px solid var(--dash-border);
+  transition: background 100ms;
+}
+
+.otto-table tbody tr:last-child {
+  border-bottom: 0;
+}
+
+.otto-table tbody tr:hover {
+  background: var(--dash-raise);
+}
+
+.otto-table tbody td {
+  padding: 12px 18px;
+  font-size: 12px;
+  color: var(--dash-muted);
+  vertical-align: middle;
+}
+
+.otto-table .td-mono {
+  font-family: 'Geist Mono', monospace;
+  font-size: 12px;
+  color: var(--dash-text);
+}
+
+.otto-table .td-text {
+  color: var(--dash-text);
+}
+
+/* Status pills */
+.otto-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border: 1px solid var(--dash-border);
+  border-radius: 5px;
+  background: var(--dash-subtle);
+  color: var(--dash-faint);
+  font-size: 10px;
+  font-weight: 740;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.otto-status-pill.is-success {
+  border-color: rgba(120, 216, 170, 0.24);
+  background: var(--dash-green-soft);
+  color: var(--dash-green);
+}
+
+.otto-status-pill.is-error {
+  border-color: rgba(239, 68, 68, 0.26);
+  background: rgba(239, 68, 68, 0.10);
+  color: #f87171;
+}
+
+.otto-status-pill.is-running {
+  border-color: rgba(216, 179, 111, 0.26);
+  background: rgba(216, 179, 111, 0.10);
+  color: var(--dash-amber);
+}
+
+.otto-status-pill.is-cancelled {
+  border-color: var(--dash-border);
+  background: var(--dash-subtle);
+  color: var(--dash-muted);
+}
+
+/* ─────────────────────────────────────────
+   Credentials page
+───────────────────────────────────────── */
+
+.otto-cred-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.otto-cred-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  border: 1px solid var(--dash-border);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, var(--dash-raise), transparent),
+    var(--dash-panel);
+  padding: 16px;
+  transition:
+    border-color 180ms var(--ease-out),
+    background 180ms var(--ease-out);
+}
+
+.otto-cred-card:hover {
+  border-color: var(--dash-border-strong);
+}
+
+.otto-cred-icon {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--dash-accent-soft);
+  color: var(--dash-accent);
+}
+
+.otto-cred-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.otto-cred-meta strong {
+  color: var(--dash-text);
+  font-size: 13px;
+  font-weight: 680;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.otto-cred-meta small {
+  color: var(--dash-faint);
+  font-size: 11px;
+}
+
+.otto-cred-mask {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  color: var(--dash-faint);
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+
+.otto-cred-add-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 2px dashed var(--dash-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--dash-faint);
+  cursor: pointer;
+  min-height: 100px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 620;
+  transition:
+    border-color 160ms var(--ease-out),
+    color 160ms var(--ease-out),
+    background 160ms var(--ease-out);
+}
+
+.otto-cred-add-tile:hover {
+  border-color: var(--dash-accent);
+  color: var(--dash-accent);
+  background: var(--dash-accent-soft);
+}
+
+/* ─────────────────────────────────────────
+   Service picker (Add Credential modal)
+───────────────────────────────────────── */
+
+/* Wide modal variant for service picker */
+.otto-modal.otto-modal--wide {
+  max-width: 720px;
+  width: 95vw;
+}
+
+/* Picker container */
+.otto-svc-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+/* Search bar inside picker */
+.otto-svc-search {
+  flex-shrink: 0;
+  width: 100%;
+}
+
+/* Scrollable services list */
+.otto-svc-scroll {
+  max-height: 420px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dash-border) transparent;
+}
+.otto-svc-scroll::-webkit-scrollbar { width: 4px; }
+.otto-svc-scroll::-webkit-scrollbar-thumb { background: var(--dash-border); border-radius: 4px; }
+
+/* Category label */
+.otto-svc-cat-label {
+  font-size: 10px;
+  font-weight: 680;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--dash-faint);
+  margin-bottom: 8px;
+}
+
+/* Service grid — 4 columns so cards have room to breathe in the modal */
+.otto-svc-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+/* Service card */
+.otto-svc-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 12px 6px 10px;
+  min-width: 0;
+  border: 1px solid var(--dash-border);
+  border-radius: 10px;
+  background: var(--dash-panel);
+  cursor: pointer;
+  font: inherit;
+  transition:
+    border-color 130ms var(--ease-out),
+    background 130ms var(--ease-out),
+    transform 100ms var(--ease-out);
+}
+.otto-svc-card:hover {
+  border-color: var(--dash-accent);
+  background: var(--dash-raise);
+  transform: translateY(-1px);
+}
+.otto-svc-card:active { transform: translateY(0); }
+
+/* Logo box: neutral bg so multi-color SVGs show correctly */
+.otto-svc-logo-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  background: var(--dash-raise);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* SVG logos rendered via dangerouslySetInnerHTML */
+.otto-svc-logo-svg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.otto-svc-logo-svg svg {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+}
+.otto-svc-logo-svg svg svg {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Initials fallback */
+.otto-svc-logo-initial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* Card name */
+.otto-svc-card-name {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--dash-text);
+  text-align: center;
+  line-height: 1.25;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Loading skeleton grid */
+.otto-svc-skeleton-wrap {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.otto-svc-skeleton-card {
+  height: 80px;
+  border-radius: 10px;
+  background: var(--dash-panel);
+  animation: otto-dashboard-shimmer 1.4s ease-in-out infinite;
+  border: 1px solid var(--dash-border);
+}
+
+/* Empty search state */
+.otto-svc-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 48px 0;
+  color: var(--dash-faint);
+  font-size: 13px;
+}
+
+/* Credential form (step 2) */
+.otto-cred-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.otto-cred-form-svc {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--dash-border);
+  border-radius: 10px;
+  background: var(--dash-raise);
+}
+
+.otto-cred-form-svc-logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--dash-panel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.otto-cred-form-svc strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 680;
+  color: var(--dash-text);
+}
+
+.otto-cred-form-svc small {
+  display: block;
+  font-size: 11px;
+  color: var(--dash-faint);
+}
+
+/* .otto-field select — same look as .otto-field input */
+.otto-field select {
+  min-height: 40px;
+  border: 1px solid var(--dash-border);
+  border-radius: 7px;
+  background: var(--dash-field-bg);
+  color: var(--dash-text);
+  font: inherit;
+  font-size: 13px;
+  padding: 0 11px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 160ms var(--ease-out);
+}
+
+.otto-field select:focus {
+  border-color: color-mix(in srgb, var(--dash-accent) 42%, transparent);
+  box-shadow: 0 0 0 3px var(--dash-accent-soft);
+}
+
+/* Security/info banner */
+.otto-info-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid rgba(120, 216, 170, 0.18);
+  border-radius: 10px;
+  background: var(--dash-green-soft);
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  color: var(--dash-green);
+}
+
+.otto-info-banner-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.otto-info-banner-body strong {
+  display: block;
+  color: var(--dash-text);
+  font-size: 13px;
+  font-weight: 680;
+  margin-bottom: 2px;
+}
+
+.otto-info-banner-body p {
+  margin: 0;
+  color: var(--dash-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ─────────────────────────────────────────
+   Observability page
+───────────────────────────────────────── */
+
+.otto-period-toggle {
+  display: inline-flex;
+  border: 1px solid var(--dash-border);
+  border-radius: 7px;
+  background: var(--dash-input-bg);
+  padding: 3px;
+  gap: 2px;
+}
+
+.otto-period-toggle button {
+  min-width: 40px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dash-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 640;
+  padding: 0 10px;
+  transition: background 140ms var(--ease-out), color 140ms var(--ease-out);
+}
+
+.otto-period-toggle button.is-active {
+  background: var(--dash-panel-strong);
+  color: var(--dash-text);
+}
+
+.otto-period-toggle button:not(.is-active):hover {
+  color: var(--dash-text);
+}
+
+.otto-chart-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 120px;
+  padding: 0 18px 0;
+}
+
+.otto-chart-bar {
+  flex: 1;
+  border-radius: 3px 3px 0 0;
+  background: var(--dash-accent-soft);
+  border: 1px solid rgba(234, 162, 166, 0.16);
+  transition: opacity 160ms;
+  min-height: 4px;
+}
+
+.otto-chart-bar.is-low {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(239, 68, 68, 0.18);
+}
+
+.otto-chart-bar:hover {
+  opacity: 0.75;
+}
+
+.otto-chart-labels {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 18px 16px;
+  color: var(--dash-faint);
+  font-size: 10px;
+}
+
+.otto-progress-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--dash-raise-med);
+  overflow: hidden;
+}
+
+.otto-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--dash-accent);
+  transition: width 500ms var(--ease-out);
+}
+
+.otto-progress-fill.is-green {
+  background: var(--dash-green);
+}
+
+.otto-progress-fill.is-red {
+  background: #f87171;
+}
+
+.otto-progress-fill.is-faint {
+  background: var(--dash-faint);
+}
+
+.otto-log-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 4px 6px;
+  border-radius: 5px;
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  transition: background 100ms;
+}
+
+.otto-log-line:hover {
+  background: var(--dash-raise);
+}
+
+.otto-log-ts {
+  flex: 0 0 auto;
+  color: var(--dash-faint);
+}
+
+.otto-log-level {
+  flex: 0 0 40px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+
+.otto-log-level.is-info  { color: var(--dash-faint); }
+.otto-log-level.is-warn  { color: var(--dash-amber); }
+.otto-log-level.is-error { color: #f87171; }
+
+.otto-log-msg {
+  color: var(--dash-muted);
+  word-break: break-all;
+}
+
+@media (max-width: 900px) {
+  .otto-cred-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Usage / Spend page ───────────────────────────────── */
+.otto-month-stepper {
+  display: inline-flex; align-items: center; gap: 4px;
+  border: 1px solid var(--dash-border); border-radius: 9px;
+  background: var(--dash-input-bg); padding: 3px;
+}
+.otto-month-stepper > span {
+  min-width: 104px; text-align: center;
+  font-size: 13px; font-weight: 600; color: var(--dash-text);
+  font-variant-numeric: tabular-nums;
+}
+.otto-month-stepper button {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border: none; border-radius: 6px;
+  background: transparent; color: var(--dash-muted); cursor: pointer;
+}
+.otto-month-stepper button:hover:not(:disabled) { background: var(--dash-raise-med); color: var(--dash-text); }
+.otto-month-stepper button:disabled { opacity: 0.35; cursor: default; }
+
+.otto-spend-summary { padding: 22px 24px; margin-bottom: 14px; }
+.otto-spend-summary-grid {
+  display: grid; grid-template-columns: 1fr auto; gap: 28px; align-items: center;
+}
+.otto-spend-facts { display: flex; flex-direction: column; gap: 14px; margin: 0; }
+.otto-spend-facts > div { display: flex; justify-content: space-between; gap: 24px; max-width: 360px; }
+.otto-spend-facts dt { font-size: 13px; color: var(--dash-muted); }
+.otto-spend-facts dd {
+  margin: 0; font-size: 14px; color: var(--dash-text); font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.otto-spend-tiles { display: flex; gap: 12px; }
+.otto-spend-tile {
+  min-width: 150px; padding: 16px 18px; border-radius: 12px;
+  border: 1px solid var(--dash-border); background: var(--dash-panel-soft);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.otto-spend-tile.is-muted { background: var(--dash-subtle); }
+.otto-spend-tile span { font-size: 12px; color: var(--dash-muted); }
+.otto-spend-tile strong {
+  font-family: 'Geist Mono', monospace; font-size: 26px; font-weight: 720;
+  color: var(--dash-text); line-height: 1; letter-spacing: -0.02em;
+}
+
+.otto-plan-banner {
+  display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  padding: 16px 20px; margin-bottom: 14px; border-radius: 12px;
+  border: 1px solid var(--dash-border); background: var(--dash-accent-soft);
+}
+.otto-plan-banner strong { display: block; font-size: 13px; color: var(--dash-text); margin-bottom: 3px; }
+.otto-plan-banner p { margin: 0; font-size: 12px; color: var(--dash-muted); max-width: 540px; }
+
+.otto-spend-warn {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 11px 16px; margin-bottom: 14px; border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--dash-amber) 30%, transparent);
+  background: color-mix(in srgb, var(--dash-amber) 9%, transparent);
+  font-size: 12.5px; color: var(--dash-text);
+}
+.otto-spend-warn svg { color: var(--dash-amber); flex-shrink: 0; }
+
+.otto-spend-empty {
+  padding: 22px; text-align: center; font-size: 13px; color: var(--dash-muted);
+}
+
+.otto-spend-list { display: flex; flex-direction: column; }
+.otto-spend-row-wrap { border-bottom: 1px solid var(--dash-border); }
+.otto-spend-row-wrap:last-child { border-bottom: none; }
+.otto-spend-row {
+  width: 100%; display: grid; grid-template-columns: 1fr auto auto 18px;
+  gap: 18px; align-items: center; padding: 14px 20px;
+  background: transparent; border: none; cursor: pointer; text-align: left;
+}
+.otto-spend-row:hover { background: var(--dash-subtle); }
+.otto-spend-row-name { font-size: 13.5px; font-weight: 600; color: var(--dash-text); }
+.otto-spend-row-runs, .otto-spend-row-tok {
+  font-size: 12px; color: var(--dash-faint); font-variant-numeric: tabular-nums;
+}
+.otto-spend-row-usd {
+  font-family: 'Geist Mono', monospace; font-size: 13.5px; font-weight: 640;
+  color: var(--dash-text); min-width: 64px; text-align: right;
+}
+.otto-spend-caret { color: var(--dash-faint); transition: transform 0.16s ease; }
+.otto-spend-caret.is-open { transform: rotate(180deg); }
+.otto-spend-models { padding: 4px 20px 14px 20px; display: flex; flex-direction: column; gap: 6px; }
+.otto-spend-model {
+  display: grid; grid-template-columns: 1fr auto; gap: 18px;
+  font-size: 12px; color: var(--dash-muted); font-variant-numeric: tabular-nums;
+  padding: 4px 0 4px 14px; border-left: 2px solid var(--dash-border);
+}
+.otto-spend-model > span:last-child { font-family: 'Geist Mono', monospace; min-width: 64px; text-align: right; }
+.otto-spend-unpriced { color: var(--dash-amber); font-style: normal; }
+
+/* shared small buttons */
+.otto-link {
+  background: none; border: none; padding: 0; cursor: pointer;
+  font-size: 12px; color: var(--dash-accent); font-weight: 600;
+}
+.otto-link:hover { text-decoration: underline; }
+.otto-btn-quiet {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 13px; border: 1px solid var(--dash-border); border-radius: 8px;
+  background: var(--dash-raise); color: var(--dash-text);
+  font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.otto-btn-quiet:hover { border-color: var(--dash-border-strong); background: var(--dash-raise-med); }
+.otto-btn-primary {
+  padding: 8px 15px; border: none; border-radius: 8px;
+  background: var(--dash-accent-strong); color: #fff;
+  font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.otto-btn-primary:disabled { opacity: 0.6; cursor: default; }
+.otto-btn-ghost {
+  padding: 8px 15px; border: 1px solid var(--dash-border); border-radius: 8px;
+  background: transparent; color: var(--dash-muted); font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.otto-btn-ghost:hover { color: var(--dash-text); border-color: var(--dash-border-strong); }
+
+/* ── Settings: collapsible sidebar group ───────────────── */
+.otto-dashboard-nav-group { display: flex; flex-direction: column; }
+.otto-nav-group-toggle {
+  appearance: none; font: inherit; cursor: pointer; text-align: left; background: transparent;
+}
+.otto-nav-caret { margin-left: auto; color: var(--dash-faint); transition: transform 0.16s var(--ease-out); }
+.otto-nav-caret.is-open { transform: rotate(180deg); }
+.otto-dashboard-subnav { display: flex; flex-direction: column; gap: 1px; margin: 3px 8px 6px 0; padding-left: 26px; }
+.otto-dashboard-subnav-item {
+  display: block; padding: 7px 10px; border-left: 1px solid var(--dash-border);
+  color: var(--dash-muted); font-size: 12.5px; font-weight: 540; text-decoration: none;
+  border-radius: 0 6px 6px 0;
+  transition: background 140ms var(--ease-out), color 140ms var(--ease-out), border-color 140ms var(--ease-out);
+}
+.otto-dashboard-subnav-item:hover { background: var(--dash-raise); color: var(--dash-text); }
+.otto-dashboard-subnav-item.is-active { color: var(--dash-accent); border-left-color: var(--dash-accent); background: var(--dash-accent-soft); }
+
+/* ── Settings: responsive tab grid ─────────────────────────
+   Hidden while the sidebar shows its inline Settings sub-nav. Appears only when
+   the sidebar collapses to a rail — i.e. manually collapsed OR a narrow /
+   half-width viewport (`.sidebar-collapsed` is on the root in exactly that case),
+   keeping every Settings sub-page reachable. */
+.otto-settings-tabnav { display: none; }
+.sidebar-collapsed .otto-settings-tabnav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0 0 30px;
+  padding: 6px;
+  border: 1px solid var(--dash-border);
+  border-radius: 12px;
+  background: var(--dash-panel);
+}
+.otto-settings-tab {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--dash-muted);
+  font-size: 13px;
+  font-weight: 560;
+  text-decoration: none;
+  transition: background 140ms var(--ease-out), color 140ms var(--ease-out), border-color 140ms var(--ease-out);
+}
+.otto-settings-tab svg { flex-shrink: 0; }
+.otto-settings-tab span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.otto-settings-tab:hover { background: var(--dash-raise); color: var(--dash-text); }
+.otto-settings-tab.is-active {
+  border-color: color-mix(in srgb, var(--dash-accent) 22%, transparent);
+  background: var(--dash-accent-soft);
+  color: var(--dash-accent);
+}
+@media (max-width: 520px) {
+  .sidebar-collapsed .otto-settings-tabnav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ── Settings: page panels ─────────────────────────────── */
+.otto-settings-panel { padding: 20px 22px; margin-bottom: 14px; }
+.otto-settings-h2 { margin: 0 0 14px; font-size: 14px; font-weight: 680; color: var(--dash-text); }
+.otto-settings-hint { margin: -8px 0 12px; font-size: 12px; color: var(--dash-muted); }
+.otto-settings-actions { margin-top: 16px; display: flex; gap: 10px; }
+.otto-settings-theme { display: flex; gap: 10px; }
+.otto-settings-danger { color: #f87171 !important; border-color: color-mix(in srgb, #f87171 30%, transparent) !important; }
+.otto-settings-danger:hover { background: color-mix(in srgb, #f87171 10%, transparent) !important; }
+.otto-settings-danger-solid { background: #b4434a !important; }
+.otto-settings-facts { display: flex; flex-direction: column; margin: 0; }
+.otto-settings-facts > div { display: flex; justify-content: space-between; gap: 24px; padding: 10px 0; border-bottom: 1px solid var(--dash-border); }
+.otto-settings-facts > div:last-child { border-bottom: none; }
+.otto-settings-facts dt { font-size: 13px; color: var(--dash-muted); }
+.otto-settings-facts dd { margin: 0; font-size: 13px; color: var(--dash-text); }
+.otto-mono { font-family: 'Geist Mono', monospace; }
+.otto-code { font-family: 'Geist Mono', monospace; font-size: 12px; background: var(--dash-raise-med); padding: 1px 5px; border-radius: 4px; color: var(--dash-text); }
+.otto-field select {
+  appearance: none; -webkit-appearance: none;
+  padding: 8px 32px 8px 10px; border: 1px solid var(--dash-border-strong); border-radius: 7px;
+  background-color: var(--dash-field-bg); color: var(--dash-text); font-size: 13px; width: 100%; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center;
+}
+.otto-field select option { background: var(--dash-menu-bg); color: var(--dash-text); }
+.otto-field-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--dash-faint); }
+
+/* ── Settings: Variables ───────────────────────────────── */
+.otto-var-list { display: flex; flex-direction: column; }
+.otto-var-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--dash-border); }
+.otto-var-row:last-child { border-bottom: none; }
+.otto-var-meta { display: flex; align-items: center; gap: 8px; min-width: 190px; flex-wrap: wrap; }
+.otto-var-name { font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--dash-text); }
+.otto-var-type { font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--dash-accent); background: var(--dash-accent-soft); padding: 2px 6px; border-radius: 5px; }
+.otto-var-desc { font-size: 12px; color: var(--dash-faint); }
+.otto-var-value {
+  flex: 1; min-width: 120px; padding: 7px 10px; border: 1px solid var(--dash-border-strong); border-radius: 7px;
+  background: var(--dash-field-bg); color: var(--dash-text); font-family: 'Geist Mono', monospace; font-size: 12.5px;
+}
+
+/* ── Settings: API keys ────────────────────────────────── */
+.otto-apikey-list { display: flex; flex-direction: column; }
+.otto-apikey-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--dash-border); }
+.otto-apikey-row:last-child { border-bottom: none; }
+.otto-apikey-main { min-width: 0; flex: 1; }
+.otto-apikey-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.otto-apikey-name { font-size: 13.5px; font-weight: 620; color: var(--dash-text); }
+.otto-apikey-prefix { font-family: 'Geist Mono', monospace; font-size: 11.5px; color: var(--dash-muted); background: var(--dash-raise-med); padding: 1px 6px; border-radius: 5px; }
+.otto-apikey-meta { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; }
+.otto-apikey-meta span { font-size: 11px; color: var(--dash-faint); }
+.otto-scope-chip { font-size: 10px; padding: 2px 7px; border-radius: 999px; background: var(--dash-accent-soft); color: var(--dash-accent); }
+.otto-scope-chip.is-error { background: color-mix(in srgb, #f87171 18%, transparent); color: #f87171; }
+.otto-scope-chip.is-toggle { cursor: pointer; border: 1px solid var(--dash-border); background: transparent; color: var(--dash-muted); }
+.otto-scope-chip.is-toggle.is-on { background: var(--dash-accent-soft); color: var(--dash-accent); border-color: transparent; }
+.otto-preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.otto-preset-btn { text-align: left; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--dash-border); background: transparent; cursor: pointer; color: var(--dash-muted); }
+.otto-preset-btn:hover { background: var(--dash-raise); }
+.otto-preset-btn.is-active { border-color: color-mix(in srgb, var(--dash-accent) 30%, transparent); background: var(--dash-accent-soft); }
+.otto-preset-btn strong { display: block; font-size: 12.5px; color: var(--dash-text); font-weight: 600; }
+.otto-preset-btn.is-active strong { color: var(--dash-accent); }
+.otto-preset-btn span { display: block; font-size: 11px; margin-top: 2px; opacity: 0.8; }
+.otto-scope-picker { border: 1px solid var(--dash-border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 12px; max-height: 200px; overflow-y: auto; }
+.otto-scope-group-label { margin: 0 0 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--dash-faint); }
+.otto-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.otto-expiry-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.otto-chip-btn { padding: 6px 12px; border-radius: 7px; border: 1px solid var(--dash-border); background: transparent; color: var(--dash-muted); font-size: 12px; cursor: pointer; }
+.otto-chip-btn:hover { background: var(--dash-raise); color: var(--dash-text); }
+.otto-chip-btn.is-on { background: var(--dash-accent-soft); color: var(--dash-accent); border-color: color-mix(in srgb, var(--dash-accent) 30%, transparent); }
+.otto-key-reveal { display: flex; gap: 8px; align-items: stretch; }
+.otto-key-reveal input { flex: 1; font-family: 'Geist Mono', monospace; font-size: 12px; padding: 9px 11px; border: 1px solid var(--dash-border-strong); border-radius: 7px; background: var(--dash-field-bg); color: var(--dash-text); }
+.otto-modal--narrow { max-width: 420px; }
+
+/* Collapsed sidebar: never show the Settings sub-items or caret in the icon rail */
+.otto-dashboard-sidebar.is-collapsed .otto-dashboard-subnav,
+.otto-dashboard-sidebar.is-collapsed .otto-nav-caret { display: none; }
+.otto-dashboard-subnav-item { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Settings: Audit Log ───────────────────────────────── */
+.otto-audit-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.otto-audit-select {
+  appearance: none; -webkit-appearance: none;
+  padding: 7px 30px 7px 11px; border: 1px solid var(--dash-border); border-radius: 8px;
+  background-color: var(--dash-input-bg); color: var(--dash-muted); font-size: 12.5px; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center;
+}
+.otto-audit-select option { background: var(--dash-menu-bg); color: var(--dash-text); }
+.otto-audit-list { display: flex; flex-direction: column; }
+.otto-audit-row-wrap { border-bottom: 1px solid var(--dash-border); }
+.otto-audit-row-wrap:last-child { border-bottom: none; }
+.otto-audit-row {
+  width: 100%; display: grid; grid-template-columns: minmax(150px, auto) 1fr auto 16px; gap: 14px;
+  align-items: center; padding: 11px 4px; background: transparent; border: none; cursor: pointer; text-align: left;
+}
+.otto-audit-row:hover { background: var(--dash-subtle); }
+.otto-audit-action { font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--dash-accent); }
+.otto-audit-action.is-danger { color: #f87171; }
+.otto-audit-resource { font-size: 12px; color: var(--dash-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.otto-audit-when { font-size: 11.5px; color: var(--dash-faint); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.otto-audit-details { padding: 2px 4px 14px; display: grid; grid-template-columns: auto 1fr; gap: 5px 16px; font-size: 12px; margin: 0; }
+.otto-audit-details dt { color: var(--dash-faint); }
+.otto-audit-details dd { margin: 0; color: var(--dash-muted); font-family: 'Geist Mono', monospace; word-break: break-all; }
+.otto-audit-meta { grid-column: 1 / -1; margin: 6px 0 0; padding: 10px; background: var(--dash-subtle); border-radius: 8px; font-family: 'Geist Mono', monospace; font-size: 11.5px; color: var(--dash-muted); white-space: pre-wrap; word-break: break-all; }
+
+/* ── Three-dot loading indicator ───────────────────────── */
+.otto-dots { display: inline-flex; gap: 5px; align-items: center; }
+.otto-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--dash-faint); animation: otto-dot 1.2s infinite ease-in-out both; }
+.otto-dots span:nth-child(1) { animation-delay: -0.24s; }
+.otto-dots span:nth-child(2) { animation-delay: -0.12s; }
+@keyframes otto-dot {
+  0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-4px); }
+}

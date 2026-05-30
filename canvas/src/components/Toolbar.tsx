@@ -5,7 +5,7 @@ import type { WorkflowSettings } from '../types';
 
 type BtnState = 'idle' | 'running' | 'success' | 'error';
 
-const AMBER = '#FF6F1A';
+const AMBER = '#A13C3F';
 
 function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   return (

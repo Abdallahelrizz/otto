@@ -80,8 +80,8 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
 
   const boxShadow =
     selected  ? `0 0 0 3px ${hexA(cardColor, 0.18)}, var(--shadow)` :
-    isSuccess ? '0 0 0 2px rgba(34,197,94,0.14)' :
-    isError   ? '0 0 0 2px rgba(239,68,68,0.14)' :
+    isSuccess ? '0 0 0 2px color-mix(in srgb, var(--node-success) 18%, transparent)' :
+    isError   ? '0 0 0 2px color-mix(in srgb, var(--node-error) 18%, transparent)' :
     'var(--shadow)';
 
   const executionClass = isRunning ? ' otto-node-running' : isSuccess ? ' otto-node-success' : isError ? ' otto-node-error' : '';

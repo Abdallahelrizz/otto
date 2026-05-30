@@ -153,7 +153,36 @@ async function testCredential(credential, body = {}) {
   return { ok: true, checked: 'shape' };
 }
 
+import { readFile } from 'fs/promises';
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+let _catalog = null;
+async function getCatalog() {
+  if (!_catalog) {
+    const catalogPath = path.resolve(__dirname, '../../public/credential-catalog.json');
+    const raw = await readFile(catalogPath, 'utf-8');
+    const entries = JSON.parse(raw);
+    _catalog = new Map(entries.map(e => [e.id, e]));
+  }
+  return _catalog;
+}
+
 export async function credentialRoutes(fastify) {
+  fastify.get('/api/v1/credentials/schema/:type', async (req, reply) => {
+    const catalog = await getCatalog().catch(() => null);
+    if (!catalog) return reply.code(503).send({ error: 'Credential catalog unavailable' });
+
+    const type = req.params.type;
+    const entry = catalog.get(type);
+    if (!entry) return reply.code(404).send({ error: `Unknown credential type: ${type}` });
+
+    // Return schema without svgContent (it's large and only needed for the UI)
+    const { svgContent: _svg, ...schema } = entry;
+    return reply.send({ schema });
+  });
+
   fastify.post('/api/v1/credentials', async (req, reply) => {
     const { name, type, data } = req.body ?? {};
     const normalizedType = normalizeType(type);
