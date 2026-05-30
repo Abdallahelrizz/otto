@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { db } from '../db/client.js';
+import { assertSafeConnectionTarget } from '../utils/safe-fetch.js';
 
 const { Pool } = pg;
 const credentialPools = new Map();
@@ -22,6 +23,11 @@ export async function postgresQuery({ config, credential }) {
     params = typeof paramsRaw === 'string' ? JSON.parse(paramsRaw) : (Array.isArray(paramsRaw) ? paramsRaw : []);
   } catch {
     throw new Error('Postgres Query: params must be a valid JSON array');
+  }
+
+  // SSRF: block a user-supplied credential pointed at internal infra
+  if (credential?.data?.connectionString) {
+    await assertSafeConnectionTarget(credential.data.connectionString);
   }
 
   const pool = getPool(credential);

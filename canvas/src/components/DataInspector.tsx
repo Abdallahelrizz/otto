@@ -9,6 +9,8 @@ type DataInspectorProps = {
   defaultOpen?: boolean;
   defaultTab?: InspectorTab;
   maxHeight?: number;
+  /** When provided, schema rows become draggable and set this expression on drag */
+  makeExpr?: (path: string) => string;
 };
 
 const shellStyle: CSSProperties = {
@@ -253,44 +255,82 @@ function TableView({ rows, maxHeight }: { rows: Array<Record<string, unknown>>; 
   );
 }
 
-function SchemaView({ rows, maxHeight }: { rows: Array<{ path: string; type: string; sample: string }>; maxHeight: number }) {
+function SchemaView({
+  rows,
+  maxHeight,
+  makeExpr,
+}: {
+  rows: Array<{ path: string; type: string; sample: string }>;
+  maxHeight: number;
+  makeExpr?: (path: string) => string;
+}) {
   return (
     <div style={{ maxHeight, overflow: 'auto' }}>
-      {rows.map((row) => (
-        <div key={`${row.path}-${row.type}`} style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(88px, 1fr) 70px minmax(70px, 1fr)',
-          gap: '8px',
-          borderBottom: '1px solid var(--border)',
-          padding: '7px 8px',
-          alignItems: 'center',
-        }}>
-          <button
-            type="button"
-            onClick={() => copyText(row.path)}
-            title="Copy path"
+      {rows.map((row) => {
+        const expr = makeExpr ? makeExpr(row.path) : null;
+        return (
+          <div
+            key={`${row.path}-${row.type}`}
+            className={makeExpr ? 'otto-schema-draggable' : undefined}
+            draggable={makeExpr ? true : undefined}
+            onDragStart={makeExpr ? (e) => {
+              e.dataTransfer.effectAllowed = 'copy';
+              e.dataTransfer.setData('text/plain', expr!);
+              e.dataTransfer.setData('application/otto-expression', expr!);
+            } : undefined}
             style={{
-              border: 'none',
-              background: 'transparent',
-              color: 'var(--text-primary)',
-              cursor: 'copy',
-              fontFamily: 'Geist Mono',
-              fontSize: '10.5px',
-              overflow: 'hidden',
-              padding: 0,
-              textAlign: 'left',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
+              display: 'grid',
+              gridTemplateColumns: 'minmax(88px, 1fr) 70px minmax(70px, 1fr)',
+              gap: '8px',
+              borderBottom: '1px solid var(--border)',
+              padding: '6px 8px',
+              alignItems: 'center',
+              borderRadius: '3px',
+              transition: 'background 0.08s',
+              userSelect: 'none',
             }}
           >
-            {row.path}
-          </button>
-          <span style={{ color: 'var(--text-muted)', fontFamily: 'Geist Mono', fontSize: '10px' }}>{row.type}</span>
-          <span style={{ color: 'var(--text-secondary)', fontFamily: 'Geist Mono', fontSize: '10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {row.sample}
-          </span>
-        </div>
-      ))}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', minWidth: 0 }}>
+              {makeExpr && (
+                <span className="otto-drag-hint" style={{
+                  opacity: 0,
+                  transition: 'opacity 0.1s',
+                  color: 'var(--accent)',
+                  fontSize: '8px',
+                  flexShrink: 0,
+                }}>
+                  ⠿
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => copyText(row.path)}
+                title={makeExpr ? `Drag to field or click to copy: ${expr}` : 'Copy path'}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--text-primary)',
+                  cursor: makeExpr ? 'grab' : 'copy',
+                  fontFamily: 'Geist Mono',
+                  fontSize: '10.5px',
+                  overflow: 'hidden',
+                  padding: 0,
+                  textAlign: 'left',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  flex: 1,
+                }}
+              >
+                {row.path}
+              </button>
+            </div>
+            <span style={{ color: 'var(--text-muted)', fontFamily: 'Geist Mono', fontSize: '10px' }}>{row.type}</span>
+            <span style={{ color: 'var(--text-secondary)', fontFamily: 'Geist Mono', fontSize: '10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {row.sample}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -454,6 +494,7 @@ export function DataInspector({
   defaultOpen = true,
   defaultTab = 'json',
   maxHeight = 240,
+  makeExpr,
 }: DataInspectorProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [tab, setTab] = useState<InspectorTab>(defaultTab);
@@ -537,7 +578,7 @@ export function DataInspector({
           )}
           {tab === 'binary' && <BinaryView refs={binaryRefs} maxHeight={maxHeight} />}
           {tab === 'table' && <TableView rows={rows} maxHeight={maxHeight} />}
-          {tab === 'schema' && <SchemaView rows={schema} maxHeight={maxHeight} />}
+          {tab === 'schema' && <SchemaView rows={schema} maxHeight={maxHeight} makeExpr={makeExpr} />}
         </div>
       )}
     </div>

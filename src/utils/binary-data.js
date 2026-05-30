@@ -1,7 +1,29 @@
 import { randomUUID } from 'crypto';
-import { mkdir, readFile, readdir, lstat, writeFile } from 'fs/promises';
+import { mkdir, readFile, readdir, lstat, writeFile, realpath } from 'fs/promises';
 import path from 'path';
 import { db } from '../db/client.js';
+
+// Defense-in-depth against symlink escapes: resolve real path and re-check it
+// is still inside the workspace root. Tolerates non-existent files (write path).
+async function assertRealInsideRoot(workspaceRoot, filePath) {
+  const rootWithSep = workspaceRoot.endsWith(path.sep) ? workspaceRoot : `${workspaceRoot}${path.sep}`;
+  let target = filePath;
+  // Walk up to the nearest existing ancestor (file may not exist yet on write)
+  for (let i = 0; i < 64; i++) {
+    try {
+      const real = await realpath(target);
+      if (real !== workspaceRoot && !real.startsWith(rootWithSep)) {
+        throw new Error('Path escapes the workspace directory');
+      }
+      return;
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+      const parent = path.dirname(target);
+      if (parent === target) return; // reached fs root without finding anything
+      target = parent;
+    }
+  }
+}
 
 const MIME_BY_EXT = {
   '.txt': 'text/plain',
@@ -68,7 +90,8 @@ function fileEntry(workspaceRoot, filePath, stat, type) {
 }
 
 export async function readWorkspaceFile(workspaceId, requestedPath) {
-  const { filePath } = resolveWorkspaceFilePath(workspaceId, requestedPath);
+  const { filePath, workspaceRoot } = resolveWorkspaceFilePath(workspaceId, requestedPath);
+  await assertRealInsideRoot(workspaceRoot, filePath);
   const data = await readFile(filePath);
   return {
     buffer: data,
@@ -82,6 +105,7 @@ export async function writeWorkspaceFile(workspaceId, requestedPath, buffer) {
   const { filePath, workspaceRoot } = resolveWorkspaceFilePath(workspaceId, requestedPath);
   if (filePath === workspaceRoot) throw new Error('Write file: path must include a file name');
   await mkdir(path.dirname(filePath), { recursive: true });
+  await assertRealInsideRoot(workspaceRoot, filePath);
   await writeFile(filePath, buffer);
   return { filePath, workspaceRoot };
 }
@@ -96,6 +120,7 @@ export async function listWorkspaceFiles(workspaceId, options = {}) {
     limit = 250,
   } = options;
   const { filePath, workspaceRoot } = resolveWorkspaceFilePath(workspaceId, requestedPath || '.');
+  await assertRealInsideRoot(workspaceRoot, filePath);
   const matcher = globToRegExp(pattern);
   const entries = [];
   const boundedLimit = Math.min(Math.max(Number(limit) || 250, 1), 1000);

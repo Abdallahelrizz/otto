@@ -6,12 +6,9 @@ services:
     environment:
       POSTGRES_DB:       otto
       POSTGRES_USER:     otto
-      POSTGRES_PASSWORD: otto_dev
-    ports:
-      - '5432:5432'
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-otto_dev}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Run schema.sql on first boot (only if DB is empty)
       - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U otto -d otto']
@@ -22,8 +19,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - '6379:6379'
     volumes:
       - redis_data:/data
     healthcheck:
@@ -36,8 +31,6 @@ services:
   piston:
     image: ghcr.io/engineer-man/piston:latest
     privileged: true
-    ports:
-      - '2000:2000'
     volumes:
       - piston_data:/piston
     restart: unless-stopped
@@ -46,30 +39,37 @@ services:
     image: curlimages/curl:8.10.1
     depends_on:
       - piston
+    restart: 'no'
     command: >
       sh -c "
-      until curl -fsS http://piston:2000/api/v2/packages >/dev/null; do sleep 2; done;
+      until curl -fsS http://piston:2000/api/v2/packages >/dev/null 2>&1; do sleep 2; done;
       curl -fsS -X POST http://piston:2000/api/v2/packages -H 'Content-Type: application/json' -d '{\"language\":\"node\",\"version\":\"18.x\"}' || true;
       curl -fsS -X POST http://piston:2000/api/v2/packages -H 'Content-Type: application/json' -d '{\"language\":\"python\",\"version\":\"3.11.x\"}' || true;
       curl -fsS -X POST http://piston:2000/api/v2/packages -H 'Content-Type: application/json' -d '{\"language\":\"bash\",\"version\":\"5.x\"}' || true;
-      echo piston runtimes initialized
+      echo done
       "
 
-  # ─── Otto server ───────────────────────────────────────────────────────────
+  # ─── Otto ──────────────────────────────────────────────────────────────────
 
   otto:
-    build: .
+    image: ghcr.io/abdallahelrizz/otto:latest
+    # To build locally instead: comment the line above and uncomment below
+    # build: .
     ports:
-      - '3000:3000'
+      - '${PORT:-3000}:3000'
     environment:
-      DATABASE_URL:              postgresql://otto:otto_dev@postgres:5432/otto
+      DATABASE_URL:              postgresql://otto:${POSTGRES_PASSWORD:-otto_dev}@postgres:5432/otto
       REDIS_URL:                 redis://redis:6379
       PISTON_URL:                http://piston:2000
       CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:?set CREDENTIAL_ENCRYPTION_KEY in .env}
+      API_KEY_PEPPER:            ${API_KEY_PEPPER:?set API_KEY_PEPPER in .env}
+      ALLOWED_ORIGINS:           ${ALLOWED_ORIGINS:-http://localhost:3000}
       SESSION_DAYS:              ${SESSION_DAYS:-7}
       PORT:                      3000
       HOST:                      0.0.0.0
-      # Optional — nodes fall back to these if no credential is attached
+      NODE_ENV:                  production
+      WORKER_CONCURRENCY:        ${WORKER_CONCURRENCY:-10}
+      EXECUTION_RETENTION_DAYS:  ${EXECUTION_RETENTION_DAYS:-30}
       OPENAI_API_KEY:            ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY:         ${ANTHROPIC_API_KEY:-}
       OPENROUTER_API_KEY:        ${OPENROUTER_API_KEY:-}
@@ -78,11 +78,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      piston:
-        condition: service_started
     restart: unless-stopped
+    volumes:
+      - otto_files:/app/files
 
 volumes:
   postgres_data:
   redis_data:
   piston_data:
+  otto_files:

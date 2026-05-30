@@ -149,7 +149,8 @@ export async function externalSecretRoutes(fastify) {
       await resolveExternalSecret(workspaceId, { provider: existing.rows[0].name, secretName });
       return reply.send({ ok: true });
     } catch (err) {
-      return reply.send({ ok: false, error: err.message });
+      req.log.error({ err }, 'external secret test failed');
+      return reply.send({ ok: false, error: 'Secret provider test failed' });
     }
   });
 }

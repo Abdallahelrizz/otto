@@ -1,4 +1,4 @@
-import { memo, useState, useCallback, Fragment } from 'react';
+import { memo, useCallback, Fragment } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
 import { useStore } from '../../store';
 import { getNodeDef, nodeColor, nodeRadius, OTTO_AMBER } from './nodeConfig';
@@ -15,25 +15,27 @@ function hexA(hex: string, a: number): string {
   return `rgba(${r},${g},${b},${a})`;
 }
 
-const NODE_W = 196;
-const NODE_H_MIN = 58;
+const NODE_W = 220;
+const NODE_H_MIN = 64;
+const ICON_SIZE = 32;
+const UI_FONT = 'Geist, system-ui, sans-serif';
 
 function cardHeight(inCount: number, outCount: number): number {
   const max = Math.max(inCount, outCount);
   if (max <= 1) return NODE_H_MIN;
-  return NODE_H_MIN + (max - 1) * 24;
+  return NODE_H_MIN + (max - 1) * 26;
 }
 
 function RunningSpinner({ color }: { color: string }) {
   return (
     <span style={{
       position: 'absolute',
-      top: 6,
-      right: 6,
-      width: 7,
-      height: 7,
+      top: 7,
+      right: 9,
+      width: 8,
+      height: 8,
       borderRadius: '50%',
-      border: `1.5px solid ${hexA(color, 0.25)}`,
+      border: `1.5px solid ${hexA(color, 0.22)}`,
       borderTopColor: color,
       animation: 'otto-spin 0.7s linear infinite',
       flexShrink: 0,
@@ -49,7 +51,6 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
   const setContextMenu = useStore((s) => s.setContextMenu);
   const theme = useStore((s) => s.theme);
   const def = getNodeDef(data.nodeType);
-  const [hovered, setHovered] = useState(false);
 
   const status = execution?.status ?? 'idle';
   const cardColor = nodeColor(def, theme);
@@ -65,26 +66,30 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
   const inCount  = def.handles.in.length;
   const outCount = def.handles.out.length;
   const h = cardHeight(inCount, outCount);
-  const noteHeight = showNote ? 46 : 0;
+  const noteHeight = showNote ? 48 : 0;
 
-  const borderColor =
+  // Status strip color (left 3px bar)
+  const hasStatus = isRunning || isSuccess || isError || isValidationError || isValidationWarning;
+  const stripColor =
     isRunning ? 'var(--node-running)' :
     isSuccess ? 'var(--node-success)' :
-    isError   ? 'var(--node-error)' :
-    isValidationError ? 'var(--node-error)' :
+    isError || isValidationError ? 'var(--node-error)' :
     isValidationWarning ? 'var(--node-running)' :
-    isDisabled ? 'var(--border)' :
-    selected  ? cardColor :
-    hovered   ? 'var(--border-input)' :
-                'var(--border-node)';
+    'transparent';
+
+  // Border: subtle at rest, accent on selected/hover (handled by CSS class), status on error
+  const borderColor =
+    isError || isValidationError ? hexA('#ef4444', 0.35) :
+    isValidationWarning ? hexA('#f59e0b', 0.35) :
+    selected ? hexA(cardColor, 0.55) :
+    'var(--border-node)';
 
   const boxShadow =
-    selected  ? `0 0 0 3px ${hexA(cardColor, 0.18)}, var(--shadow)` :
-    isSuccess ? '0 0 0 2px color-mix(in srgb, var(--node-success) 18%, transparent)' :
-    isError   ? '0 0 0 2px color-mix(in srgb, var(--node-error) 18%, transparent)' :
+    selected ? `0 0 0 2px ${hexA(cardColor, 0.20)}, var(--shadow)` :
+    isRunning ? 'var(--shadow)' :
     'var(--shadow)';
 
-  const executionClass = isRunning ? ' otto-node-running' : isSuccess ? ' otto-node-success' : isError ? ' otto-node-error' : '';
+  const executionClass = isRunning ? ' otto-node-running' : '';
 
   const onContextMenu = useCallback(
     (e: React.MouseEvent) => {
@@ -96,28 +101,29 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
   );
 
   const dotStyle = (color: string): React.CSSProperties => ({
-    width: 8,
-    height: 8,
+    width: 9,
+    height: 9,
     borderRadius: '50%',
     background: color,
     boxShadow: '0 0 0 2px var(--bg-canvas)',
     border: 'none',
     zIndex: 2,
     cursor: 'crosshair',
+    transition: 'transform 0.15s ease',
   });
 
   const tagText = def.tag || def.slug || '';
   const tagColor = tagText === 'TRIGGER' ? OTTO_AMBER : 'var(--text-muted)';
-  const tagBg = tagText === 'TRIGGER' ? hexA(OTTO_AMBER, 0.12) : 'rgba(120,115,110,0.08)';
-  const tagBorder = tagText === 'TRIGGER' ? hexA(OTTO_AMBER, 0.22) : 'rgba(120,115,110,0.16)';
+  const tagBg = tagText === 'TRIGGER' ? hexA(OTTO_AMBER, 0.10) : 'rgba(120,115,110,0.07)';
+  const tagBorder = tagText === 'TRIGGER' ? hexA(OTTO_AMBER, 0.20) : 'rgba(120,115,110,0.14)';
 
   const subtitleText = def.subtitle ? def.subtitle(data.config ?? {}) : '';
+  // Icon container radius: scale up proportionally from nodeRadius
+  const iconRadius = nodeRadius(def).replace(/\d+px/, (v) => `${Math.round(parseInt(v) * 1.4)}px`);
 
   return (
     <div
-      style={{ position: 'relative', width: NODE_W, height: h + noteHeight, overflow: 'visible', cursor: 'pointer', userSelect: 'none' }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      style={{ position: 'relative', width: NODE_W, height: h + noteHeight, overflow: 'visible', cursor: 'default', userSelect: 'none' }}
       onContextMenu={onContextMenu}
     >
       {/* Card body */}
@@ -131,104 +137,100 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
           height: h,
           background: 'var(--bg-node-card)',
           border: `1px solid ${borderColor}`,
-          borderRadius: '6px',
+          borderRadius: '12px',
           boxShadow,
-          opacity: isDisabled ? 0.58 : 1,
-          filter: isDisabled ? 'grayscale(0.25)' : 'none',
+          opacity: isDisabled ? 0.55 : 1,
+          filter: isDisabled ? 'grayscale(0.3)' : 'none',
           display: 'flex',
           alignItems: 'center',
-          gap: '10px',
-          padding: '9px 12px',
+          gap: '11px',
+          padding: '10px 14px 10px 18px',
           boxSizing: 'border-box',
-          transition: 'border-color 130ms ease-out, box-shadow 130ms ease-out',
           overflow: 'hidden',
         }}
       >
+        {/* Status strip — left edge */}
+        {hasStatus && (
+          <div
+            className={isRunning ? 'otto-status-strip-running' : undefined}
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 8,
+              bottom: 8,
+              width: 3,
+              borderRadius: '0 2px 2px 0',
+              background: stripColor,
+              transition: 'background 200ms ease, opacity 200ms ease',
+            }}
+          />
+        )}
+
         {isRunning && <RunningSpinner color="var(--node-running)" />}
+
+        {/* Disabled badge */}
         {isDisabled && (
-          <span title="Node disabled" style={{
+          <span style={{
             position: 'absolute',
-            top: tagText ? 27 : 7,
+            bottom: 7,
             right: 10,
-            fontFamily: "'JetBrains Mono'",
-            fontSize: '8.5px',
-            fontWeight: 800,
+            fontFamily: UI_FONT,
+            fontSize: '10px',
+            fontWeight: 600,
             color: 'var(--text-muted)',
             background: 'rgba(120,115,110,0.10)',
-            border: '1px solid rgba(120,115,110,0.22)',
-            borderRadius: '3px',
-            padding: '1px 4px',
-            lineHeight: 1.1,
+            border: '1px solid rgba(120,115,110,0.20)',
+            borderRadius: '4px',
+            padding: '1px 5px',
           }}>
-            OFF
-          </span>
-        )}
-        {isPinned && (
-          <span title="Pinned data" style={{
-            position: 'absolute',
-            right: 8,
-            bottom: 6,
-            fontFamily: "'JetBrains Mono'",
-            fontSize: '8.5px',
-            fontWeight: 800,
-            color: OTTO_AMBER,
-            background: hexA(OTTO_AMBER, 0.12),
-            border: `1px solid ${hexA(OTTO_AMBER, 0.22)}`,
-            borderRadius: '3px',
-            padding: '1px 4px',
-            lineHeight: 1.1,
-          }}>
-            PIN
+            Off
           </span>
         )}
 
+        {/* Pinned badge */}
+        {isPinned && (
+          <span style={{
+            position: 'absolute',
+            right: 9,
+            bottom: 7,
+            fontFamily: UI_FONT,
+            fontSize: '10px',
+            fontWeight: 600,
+            color: OTTO_AMBER,
+            background: hexA(OTTO_AMBER, 0.10),
+            border: `1px solid ${hexA(OTTO_AMBER, 0.20)}`,
+            borderRadius: '4px',
+            padding: '1px 5px',
+          }}>
+            Pinned
+          </span>
+        )}
+
+        {/* Validation badge */}
         {validationIssue && (
           <span title={validationIssue.message} style={{
             position: 'absolute',
-            left: 8,
-            bottom: 6,
-            fontFamily: "'JetBrains Mono'",
-            fontSize: '8.5px',
-            fontWeight: 800,
+            left: 10,
+            bottom: 7,
+            fontFamily: UI_FONT,
+            fontSize: '10px',
+            fontWeight: 600,
             color: isValidationError ? 'var(--node-error)' : 'var(--node-running)',
-            background: isValidationError ? 'rgba(239,68,68,0.10)' : 'rgba(245,158,11,0.10)',
-            border: `1px solid ${isValidationError ? 'rgba(239,68,68,0.22)' : 'rgba(245,158,11,0.22)'}`,
-            borderRadius: '3px',
-            padding: '1px 4px',
-            lineHeight: 1.1,
+            background: isValidationError ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)',
+            border: `1px solid ${isValidationError ? 'rgba(239,68,68,0.20)' : 'rgba(245,158,11,0.20)'}`,
+            borderRadius: '4px',
+            padding: '1px 5px',
           }}>
-            {isValidationError ? 'ERR' : 'WARN'}
-          </span>
-        )}
-
-        {/* Tag — top right */}
-        {tagText && (
-          <span style={{
-            position: 'absolute',
-            top: 7,
-            right: 10,
-            fontFamily: "'JetBrains Mono'",
-            fontSize: '9.5px',
-            fontWeight: 700,
-            letterSpacing: '0.10em',
-            color: tagColor,
-            background: tagBg,
-            border: `1px solid ${tagBorder}`,
-            padding: '2px 5px',
-            borderRadius: '3px',
-            lineHeight: 1.1,
-            whiteSpace: 'nowrap',
-            textTransform: 'uppercase',
-          }}>
-            {tagText}
+            {isValidationError ? 'Error' : 'Warning'}
           </span>
         )}
 
         {/* Icon container */}
         <span style={{
-          width: 26,
-          height: 26,
-          borderRadius: nodeRadius(def),
+          width: ICON_SIZE,
+          height: ICON_SIZE,
+          minWidth: ICON_SIZE,
+          borderRadius: iconRadius,
           background: hexA(cardColor, theme === 'dark' ? 0.14 : 0.11),
           border: `1px solid ${hexA(cardColor, theme === 'dark' ? 0.22 : 0.18)}`,
           display: 'flex',
@@ -236,33 +238,57 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
           justifyContent: 'center',
           flexShrink: 0,
         }}>
-          <NodeIcon type={data.nodeType} size={14} color={cardColor} />
+          <NodeIcon type={data.nodeType} size={16} color={cardColor} />
         </span>
 
-        {/* Label + subtitle */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '1px' }}>
-          <span style={{
-            fontSize: '12.5px',
-            fontWeight: 600,
-            color: 'var(--text-primary)',
-            letterSpacing: '-0.012em',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            maxWidth: tagText ? 'calc(100% - 52px)' : '100%',
-          }}>
-            {data.label}
-          </span>
-          {subtitleText && (
+        {/* Label + tag + subtitle */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Label row with inline tag */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: subtitleText ? '2px' : 0 }}>
             <span style={{
-              fontFamily: "'JetBrains Mono'",
-              fontSize: '10.5px',
-              fontWeight: 400,
-              color: 'var(--text-muted)',
-              letterSpacing: '0.01em',
+              fontFamily: UI_FONT,
+              fontSize: '13px',
+              fontWeight: 550,
+              color: 'var(--text-primary)',
+              letterSpacing: '-0.012em',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
+              flex: 1,
+              minWidth: 0,
+            }}>
+              {data.label}
+            </span>
+            {tagText && (
+              <span style={{
+                fontFamily: UI_FONT,
+                fontSize: '10px',
+                fontWeight: 600,
+                color: tagColor,
+                background: tagBg,
+                border: `1px solid ${tagBorder}`,
+                padding: '1px 5px',
+                borderRadius: '4px',
+                lineHeight: 1.3,
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+                letterSpacing: '0.01em',
+              }}>
+                {tagText.charAt(0) + tagText.slice(1).toLowerCase()}
+              </span>
+            )}
+          </div>
+          {/* Subtitle — Geist, not mono */}
+          {subtitleText && (
+            <span style={{
+              fontFamily: UI_FONT,
+              fontSize: '11px',
+              fontWeight: 400,
+              color: 'var(--text-muted)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              display: 'block',
             }}>
               {subtitleText}
             </span>
@@ -270,24 +296,25 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
         </div>
       </div>
 
+      {/* Note annotation */}
       {showNote && (
         <div style={{
           position: 'absolute',
-          top: h + 6,
+          top: h + 7,
           left: 0,
           width: NODE_W,
-          minHeight: 34,
-          maxHeight: 40,
+          minHeight: 36,
+          maxHeight: 42,
           boxSizing: 'border-box',
           overflow: 'hidden',
           border: '1px solid var(--border)',
-          borderRadius: '5px',
+          borderRadius: '8px',
           background: 'var(--bg-node-lift)',
           color: 'var(--text-secondary)',
-          fontFamily: "'Inter'",
-          fontSize: '10.5px',
-          lineHeight: 1.35,
-          padding: '5px 7px',
+          fontFamily: UI_FONT,
+          fontSize: '11px',
+          lineHeight: 1.4,
+          padding: '5px 8px',
           boxShadow: 'var(--shadow)',
           whiteSpace: 'normal',
           wordBreak: 'break-word',
@@ -311,10 +338,10 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
             {h_.label && (
               <span style={{
                 position: 'absolute',
-                right: `calc(100% + 10px)`,
+                right: `calc(100% + 11px)`,
                 top: y,
                 transform: 'translateY(-50%)',
-                fontFamily: "'JetBrains Mono'",
+                fontFamily: UI_FONT,
                 fontSize: '10px',
                 fontWeight: 500,
                 color: hexA(color, 0.85),
@@ -343,10 +370,10 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
             {h_.label && (
               <span style={{
                 position: 'absolute',
-                left: `calc(100% + 10px)`,
+                left: `calc(100% + 11px)`,
                 top: y,
                 transform: 'translateY(-50%)',
-                fontFamily: "'JetBrains Mono'",
+                fontFamily: UI_FONT,
                 fontSize: '10px',
                 fontWeight: 500,
                 color: hexA(color, 0.85),

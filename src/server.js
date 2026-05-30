@@ -32,6 +32,8 @@ import { nodeRoutes } from './routes/nodes.js';
 import { tagRoutes } from './routes/tags.js';
 import { exportRoutes } from './routes/export.js';
 import { usageRoutes } from './routes/usage.js';
+import { expressionRoutes } from './routes/expressions.js';
+import { ottobotRoutes } from './routes/ottobot.js';
 import { resolveScope } from './auth/scopes.js';
 import { auditLog } from './utils/audit.js';
 import { startWorker } from './queue/worker.js';
@@ -62,6 +64,43 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   : true; // true = reflect request origin (dev default)
 
 const fastify = Fastify({ logger: true, bodyLimit: 10 * 1024 * 1024 });
+
+// ── Global error handler ──────────────────────────────────────────────────
+// Logs the true cause server-side; returns clean JSON to the client.
+// Never leaks a stack trace. Infra/connection errors map to 503.
+const INFRA_ERROR_CODES = new Set([
+  'ECONNREFUSED', 'ENOTFOUND', 'ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN', 'EPIPE',
+]);
+fastify.setErrorHandler((err, req, reply) => {
+  req.log.error({ err, path: req.url, method: req.method }, 'request failed');
+
+  // Client-intended errors (validation, 4xx) pass their message through.
+  const status = err.statusCode && err.statusCode >= 400 && err.statusCode < 500
+    ? err.statusCode
+    : null;
+  if (status) {
+    return reply.code(status).send({ error: err.message, code: err.code });
+  }
+
+  // Infra connectivity → 503 with an actionable (but non-leaky) message.
+  if (INFRA_ERROR_CODES.has(err.code) || /ECONNREFUSED|ENOTFOUND|getaddrinfo|pool|redis/i.test(err.message ?? '')) {
+    return reply.code(503).send({
+      error: 'A backend service (database or queue) is unavailable. Check server connectivity.',
+      code: 'SERVICE_UNAVAILABLE',
+    });
+  }
+
+  return reply.code(500).send({ error: 'Internal server error', code: 'INTERNAL' });
+});
+
+// ── Process-level guards ──────────────────────────────────────────────────
+// A stray rejection/exception logs instead of silently killing the process.
+process.on('unhandledRejection', (reason) => {
+  fastify.log.error({ err: reason }, 'unhandledRejection');
+});
+process.on('uncaughtException', (err) => {
+  fastify.log.error({ err }, 'uncaughtException');
+});
 
 await fastify.register(cors, { origin: allowedOrigins, credentials: true });
 await fastify.register(cookie);
@@ -206,6 +245,8 @@ await fastify.register(nodeRoutes);
 await fastify.register(tagRoutes);
 await fastify.register(exportRoutes);
 await fastify.register(usageRoutes);
+await fastify.register(expressionRoutes);
+await fastify.register(ottobotRoutes);
 
 // Health check
 fastify.get('/health', async () => ({ status: 'ok', version: '0.1.0' }));
@@ -349,6 +390,15 @@ const port = Number(process.env.PORT ?? 3000);
 try {
   await fastify.listen({ host, port });
   console.log(`Otto engine running on http://${host}:${port}`);
+
+  // Connectivity self-check — surfaces which dependency is down (the #1 cause of 500s).
+  const checkDb = db.query('SELECT 1')
+    .then(() => console.log('  ✓ Postgres reachable'))
+    .catch((err) => console.error(`  ✗ Postgres UNREACHABLE — executions will 503: ${err.message}`));
+  const checkRedis = redis.ping()
+    .then(() => console.log('  ✓ Redis reachable'))
+    .catch((err) => console.error(`  ✗ Redis UNREACHABLE — running workflows will 503: ${err.message}`));
+  await Promise.allSettled([checkDb, checkRedis]);
 } catch (err) {
   fastify.log.error(err);
   process.exit(1);

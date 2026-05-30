@@ -78,7 +78,7 @@ export async function evaluationRoutes(fastify) {
     );
     if (!rows.length) return reply.code(404).send({ error: 'Dataset not found' });
 
-    await db.query('DELETE FROM eval_datasets WHERE id = $1', [datasetId]);
+    await db.query('DELETE FROM eval_datasets WHERE id = $1 AND workspace_id = $2', [datasetId, workspaceId]);
     return reply.send({ ok: true });
   });
 
@@ -147,7 +147,7 @@ export async function evaluationRoutes(fastify) {
     );
     if (!cs.length) return reply.code(404).send({ error: 'Case not found' });
 
-    await db.query('DELETE FROM eval_cases WHERE id = $1', [caseId]);
+    await db.query('DELETE FROM eval_cases WHERE id = $1 AND dataset_id = $2', [caseId, datasetId]);
     return reply.send({ ok: true });
   });
 

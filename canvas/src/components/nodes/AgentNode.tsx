@@ -1,4 +1,4 @@
-import { memo, useState, useCallback, Fragment } from 'react';
+import { memo, useCallback, Fragment } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
 import { useStore } from '../../store';
 import { getNodeDef, nodeColor, nodeRadius, OTTO_AMBER } from './nodeConfig';
@@ -14,6 +14,22 @@ function hexA(hex: string, a: number): string {
   return `rgba(${r},${g},${b},${a})`;
 }
 
+const NODE_W = 340;
+const UI_FONT = 'Geist, system-ui, sans-serif';
+
+// Named geometry constants used in handle positioning below
+const HEADER_PAD_TOP    = 14;   // padding-top of header div
+const HEADER_ICON_H     = 36;   // icon container height (updated from 34)
+const HEADER_PAD_BOTTOM = 12;   // padding-bottom of header div
+const DIVIDER_H         = 1;    // 1px divider
+const TOOLS_PAD_TOP     = 11;   // padding-top of tools section
+const TOOLS_LABEL_H     = 9.5;  // approximate rendered height of TOOLS label row
+const TOOLS_LABEL_MB    = 3;    // marginBottom of TOOLS label
+// Sum = position of first tool row's top edge
+const HEADER_H = HEADER_PAD_TOP + HEADER_ICON_H + HEADER_PAD_BOTTOM + DIVIDER_H + TOOLS_PAD_TOP + TOOLS_LABEL_H + TOOLS_LABEL_MB;
+
+const TOOL_ROW_H  = 36; // tool row height: icon 22 + padding 7+7
+const TOOL_ROW_GAP = 5; // gap between tool rows
 
 interface AgentTool {
   id: string;
@@ -35,42 +51,49 @@ function toolColor(type: string, isDark: boolean): string {
 }
 
 export const AgentNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) => {
-  const execution = useStore((s) => s.nodeExecutions[id]);
-  const isPinned = useStore((s) => Object.prototype.hasOwnProperty.call(s.pinnedData, id));
+  const execution  = useStore((s) => s.nodeExecutions[id]);
+  const isPinned   = useStore((s) => Object.prototype.hasOwnProperty.call(s.pinnedData, id));
   const validationIssue = useStore((s) => s.validationIssues.find((issue) => issue.nodeId === id));
-  const setContextMenu = useStore((s) => s.setContextMenu);
+  const setContextMenu  = useStore((s) => s.setContextMenu);
   const theme = useStore((s) => s.theme);
-  const def = getNodeDef(data.nodeType);
-  const [hovered, setHovered] = useState(false);
+  const def   = getNodeDef(data.nodeType);
   const isDark = theme === 'dark';
 
   const status = execution?.status ?? 'idle';
   const isRunning = status === 'running';
   const isSuccess = status === 'success';
   const isError   = status === 'error';
-  const isValidationError = validationIssue?.severity === 'error';
+  const isValidationError   = validationIssue?.severity === 'error';
   const isValidationWarning = validationIssue?.severity === 'warning';
   const isDisabled = Boolean(data.disabled);
-  const noteText = String(data.notes ?? '').trim();
-  const showNote = Boolean(data.displayNote && noteText);
+  const noteText  = String(data.notes ?? '').trim();
+  const showNote  = Boolean(data.displayNote && noteText);
 
   const tools: AgentTool[] = Array.isArray(data.config?.tools)
     ? (data.config.tools as AgentTool[])
     : [];
 
+  // Status strip — same approach as OttoNode
+  const hasStatus = isRunning || isSuccess || isError || isValidationError || isValidationWarning;
+  const stripColor =
+    isRunning ? 'var(--node-running)' :
+    isSuccess ? 'var(--node-success)' :
+    isError || isValidationError ? 'var(--node-error)' :
+    isValidationWarning ? 'var(--node-running)' :
+    'transparent';
+
+  // Border: only shows on selected / status — CSS handles hover via .otto-node-card:hover
   const borderColor =
     isRunning ? 'var(--node-running)' :
     isSuccess ? 'var(--node-success)' :
-    isError   ? 'var(--node-error)' :
-    isValidationError ? 'var(--node-error)' :
-    isValidationWarning ? 'var(--node-running)' :
+    isError || isValidationError ? hexA('#ef4444', 0.35) :
+    isValidationWarning ? hexA('#f59e0b', 0.35) :
     isDisabled ? 'var(--border)' :
-    selected  ? OTTO_AMBER :
-    hovered   ? 'var(--border-input)' :
-                'var(--border-input)';
+    selected  ? hexA(OTTO_AMBER, 0.55) :
+    'var(--border-node)';
 
   const boxShadow = selected
-    ? `0 0 0 3px ${hexA(OTTO_AMBER, 0.18)}, var(--shadow-main)`
+    ? `0 0 0 2px ${hexA(OTTO_AMBER, 0.20)}, var(--shadow-main)`
     : 'var(--shadow-main)';
 
   const executionClass = isRunning ? ' otto-node-running' : isSuccess ? ' otto-node-success' : isError ? ' otto-node-error' : '';
@@ -85,23 +108,22 @@ export const AgentNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) 
   );
 
   const dotStyle: React.CSSProperties = {
-    width: 8,
-    height: 8,
+    width: 9,
+    height: 9,
     borderRadius: '50%',
     background: 'var(--text-muted)',
     boxShadow: '0 0 0 2px var(--bg-canvas)',
     border: 'none',
     zIndex: 2,
     cursor: 'crosshair',
+    transition: 'transform 0.15s ease',
   };
 
   const subtitleText = def.subtitle ? def.subtitle(data.config ?? {}) : '';
 
   return (
     <div
-      style={{ position: 'relative', width: 336, overflow: 'visible', cursor: 'pointer', userSelect: 'none' }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      style={{ position: 'relative', width: NODE_W, overflow: 'visible', cursor: 'default', userSelect: 'none' }}
       onContextMenu={onContextMenu}
     >
       <div
@@ -109,82 +131,101 @@ export const AgentNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) 
         style={{
           background: 'var(--bg-node-card)',
           border: `1.5px solid ${borderColor}`,
-          borderRadius: '8px',
+          borderRadius: '12px',
           boxShadow,
-          opacity: isDisabled ? 0.58 : 1,
-          filter: isDisabled ? 'grayscale(0.25)' : 'none',
+          opacity: isDisabled ? 0.55 : 1,
+          filter: isDisabled ? 'grayscale(0.3)' : 'none',
           overflow: 'hidden',
-          transition: 'border-color 130ms ease-out, box-shadow 130ms ease-out',
+          position: 'relative',
         }}
       >
+        {/* Status strip — left edge (pulses when running) */}
+        {hasStatus && (
+          <div
+            className={isRunning ? 'otto-status-strip-running' : undefined}
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 8,
+              bottom: 8,
+              width: 3,
+              borderRadius: '0 2px 2px 0',
+              background: stripColor,
+              zIndex: 1,
+            }}
+          />
+        )}
+
+        {/* Disabled badge */}
         {isDisabled && (
           <span title="Node disabled" style={{
             position: 'absolute',
             top: 8,
             right: 8,
             zIndex: 2,
-            fontFamily: "'JetBrains Mono'",
-            fontSize: '8.5px',
-            fontWeight: 800,
+            fontFamily: UI_FONT,
+            fontSize: '10px',
+            fontWeight: 600,
             color: 'var(--text-muted)',
             background: 'rgba(120,115,110,0.10)',
-            border: '1px solid rgba(120,115,110,0.22)',
-            borderRadius: '3px',
-            padding: '1px 4px',
-            lineHeight: 1.1,
+            border: '1px solid rgba(120,115,110,0.20)',
+            borderRadius: '4px',
+            padding: '1px 5px',
           }}>
-            OFF
+            Off
           </span>
         )}
+
+        {/* Pinned badge */}
         {isPinned && (
           <span title="Pinned data" style={{
             position: 'absolute',
             right: 8,
             bottom: 8,
             zIndex: 2,
-            fontFamily: "'JetBrains Mono'",
-            fontSize: '8.5px',
-            fontWeight: 800,
+            fontFamily: UI_FONT,
+            fontSize: '10px',
+            fontWeight: 600,
             color: OTTO_AMBER,
-            background: hexA(OTTO_AMBER, 0.12),
-            border: `1px solid ${hexA(OTTO_AMBER, 0.22)}`,
-            borderRadius: '3px',
-            padding: '1px 4px',
-            lineHeight: 1.1,
+            background: hexA(OTTO_AMBER, 0.10),
+            border: `1px solid ${hexA(OTTO_AMBER, 0.20)}`,
+            borderRadius: '4px',
+            padding: '1px 5px',
           }}>
-            PIN
+            Pinned
           </span>
         )}
+
+        {/* Validation badge */}
         {validationIssue && (
           <span title={validationIssue.message} style={{
             position: 'absolute',
             left: 8,
             bottom: 8,
             zIndex: 2,
-            fontFamily: "'JetBrains Mono'",
-            fontSize: '8.5px',
-            fontWeight: 800,
+            fontFamily: UI_FONT,
+            fontSize: '10px',
+            fontWeight: 600,
             color: isValidationError ? 'var(--node-error)' : 'var(--node-running)',
-            background: isValidationError ? 'rgba(239,68,68,0.10)' : 'rgba(245,158,11,0.10)',
-            border: `1px solid ${isValidationError ? 'rgba(239,68,68,0.22)' : 'rgba(245,158,11,0.22)'}`,
-            borderRadius: '3px',
-            padding: '1px 4px',
-            lineHeight: 1.1,
+            background: isValidationError ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)',
+            border: `1px solid ${isValidationError ? 'rgba(239,68,68,0.20)' : 'rgba(245,158,11,0.20)'}`,
+            borderRadius: '4px',
+            padding: '1px 5px',
           }}>
-            {isValidationError ? 'ERR' : 'WARN'}
+            {isValidationError ? 'Error' : 'Warning'}
           </span>
         )}
 
         {/* Header */}
         <div style={{
-          padding: '14px 14px 12px',
+          padding: `${HEADER_PAD_TOP}px 14px ${HEADER_PAD_BOTTOM}px`,
           display: 'flex',
           alignItems: 'flex-start',
           gap: '11px',
         }}>
           <span style={{
-            width: 34,
-            height: 34,
+            width: HEADER_ICON_H,
+            height: HEADER_ICON_H,
             borderRadius: nodeRadius(def),
             background: hexA(OTTO_AMBER, isDark ? 0.14 : 0.10),
             border: `1px solid ${hexA(OTTO_AMBER, isDark ? 0.30 : 0.22)}`,
@@ -193,48 +234,49 @@ export const AgentNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) 
             justifyContent: 'center',
             flexShrink: 0,
           }}>
-            <NodeIcon type={data.nodeType} size={17} color={OTTO_AMBER} />
+            <NodeIcon type={data.nodeType} size={18} color={OTTO_AMBER} />
           </span>
 
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '3px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{
-                fontSize: '14.5px',
-                fontWeight: 700,
+                fontFamily: UI_FONT,
+                fontSize: '14px',
+                fontWeight: 600,
                 color: 'var(--text-primary)',
                 letterSpacing: '-0.018em',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
+                flex: 1,
+                minWidth: 0,
               }}>
                 {data.label}
               </span>
-              {/* MAIN tag — always amber */}
+              {/* MAIN tag — amber, sentence-case */}
               <span style={{
-                fontFamily: "'JetBrains Mono'",
-                fontSize: '9.5px',
-                fontWeight: 700,
-                letterSpacing: '0.10em',
+                fontFamily: UI_FONT,
+                fontSize: '10px',
+                fontWeight: 600,
+                letterSpacing: '0.01em',
                 color: OTTO_AMBER,
                 background: hexA(OTTO_AMBER, isDark ? 0.12 : 0.10),
                 border: `1px solid ${hexA(OTTO_AMBER, isDark ? 0.22 : 0.18)}`,
-                padding: '2px 6px',
-                borderRadius: '3px',
-                lineHeight: 1.1,
+                padding: '1px 6px',
+                borderRadius: '4px',
+                lineHeight: 1.3,
                 whiteSpace: 'nowrap',
-                textTransform: 'uppercase',
                 flexShrink: 0,
               }}>
-                MAIN
+                Main
               </span>
             </div>
             {subtitleText && (
               <span style={{
-                fontFamily: "'JetBrains Mono'",
-                fontSize: '10.5px',
+                fontFamily: UI_FONT,
+                fontSize: '11px',
                 fontWeight: 400,
-                color: 'var(--text-secondary)',
-                letterSpacing: '0.01em',
+                color: 'var(--text-muted)',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
@@ -246,32 +288,36 @@ export const AgentNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) 
         </div>
 
         {/* Divider */}
-        <div style={{ height: '1px', background: 'var(--border)' }} />
+        <div style={{ height: `${DIVIDER_H}px`, background: 'var(--border)' }} />
 
         {/* Tools section */}
-        <div style={{ padding: '11px 12px 12px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+        <div style={{ padding: `${TOOLS_PAD_TOP}px 12px 12px`, display: 'flex', flexDirection: 'column', gap: `${TOOL_ROW_GAP}px` }}>
           <div style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '2px 2px',
-            marginBottom: '3px',
+            marginBottom: `${TOOLS_LABEL_MB}px`,
           }}>
             <span style={{
-              fontFamily: "'JetBrains Mono'",
-              fontSize: '9.5px',
-              fontWeight: 600,
-              color: 'var(--text-secondary)',
-              letterSpacing: '0.16em',
+              fontFamily: UI_FONT,
+              fontSize: '10px',
+              fontWeight: 700,
+              color: 'var(--text-muted)',
+              letterSpacing: '0.08em',
               textTransform: 'uppercase',
-            }}>TOOLS</span>
+            }}>
+              Tools
+            </span>
             <span style={{
-              fontFamily: "'JetBrains Mono'",
-              fontSize: '9.5px',
+              fontFamily: 'Geist Mono, monospace',
+              fontSize: '10px',
               fontWeight: 500,
               color: 'var(--text-muted)',
-              letterSpacing: '0.04em',
-            }}>{String(tools.length).padStart(2, '0')}</span>
+              fontVariantNumeric: 'tabular-nums',
+            }}>
+              {String(tools.length).padStart(2, '0')}
+            </span>
           </div>
 
           {tools.map((tool) => {
@@ -285,7 +331,9 @@ export const AgentNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) 
                 padding: '7px 9px',
                 background: 'var(--bg-node-lift)',
                 border: '1px solid var(--border)',
-                borderRadius: '5px',
+                borderRadius: '6px',
+                height: `${TOOL_ROW_H}px`,
+                boxSizing: 'border-box',
               }}>
                 <span style={{
                   width: 22,
@@ -302,6 +350,7 @@ export const AgentNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) 
                 </span>
                 <span style={{
                   flex: 1,
+                  fontFamily: UI_FONT,
                   fontSize: '12px',
                   fontWeight: 600,
                   color: 'var(--text-primary)',
@@ -313,11 +362,10 @@ export const AgentNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) 
                   {tool.name}
                 </span>
                 <span style={{
-                  fontFamily: "'JetBrains Mono'",
+                  fontFamily: 'Geist Mono, monospace',
                   fontSize: '10px',
-                  fontWeight: 500,
+                  fontWeight: 400,
                   color: 'var(--text-muted)',
-                  letterSpacing: '0.02em',
                   flexShrink: 0,
                 }}>
                   {tool.type}
@@ -328,11 +376,11 @@ export const AgentNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) 
 
           {tools.length === 0 && (
             <div style={{
-              padding: '10px',
+              padding: '12px 10px',
               textAlign: 'center',
-              fontSize: '11px',
+              fontFamily: UI_FONT,
+              fontSize: '12px',
               color: 'var(--text-muted)',
-              fontFamily: "'Inter'",
             }}>
               No tools configured
             </div>
@@ -340,25 +388,25 @@ export const AgentNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) 
         </div>
       </div>
 
-      {/* Input handle — left center */}
+      {/* Note annotation */}
       {showNote && (
         <div style={{
           position: 'absolute',
-          top: 'calc(100% + 6px)',
+          top: 'calc(100% + 7px)',
           left: 0,
-          width: 336,
-          minHeight: 34,
+          width: NODE_W,
+          minHeight: 36,
           maxHeight: 48,
           boxSizing: 'border-box',
           overflow: 'hidden',
           border: '1px solid var(--border)',
-          borderRadius: '5px',
+          borderRadius: '8px',
           background: 'var(--bg-node-lift)',
           color: 'var(--text-secondary)',
-          fontFamily: "'Inter'",
-          fontSize: '10.5px',
-          lineHeight: 1.35,
-          padding: '5px 7px',
+          fontFamily: UI_FONT,
+          fontSize: '11px',
+          lineHeight: 1.4,
+          padding: '5px 8px',
           boxShadow: 'var(--shadow-main)',
           wordBreak: 'break-word',
         }}>
@@ -366,6 +414,7 @@ export const AgentNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) 
         </div>
       )}
 
+      {/* Input handle — left center */}
       <Handle
         type="target"
         position={Position.Left}
@@ -373,11 +422,10 @@ export const AgentNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) 
         style={{ ...dotStyle, position: 'absolute', left: -4, top: '50%', transform: 'translateY(-50%)' }}
       />
 
-      {/* Output handles — right side at tool row offsets */}
+      {/* Output handles — right side aligned with each tool row */}
       {tools.map((_, i) => {
-        const headerH = 14 + 34 + 12 + 1 + 11 + 9.5 + 3;
-        const toolRowH = 36;
-        const y = headerH + i * (toolRowH + 5) + toolRowH / 2;
+        // y = top of tools section + tool rows above + center of current row
+        const y = HEADER_H + i * (TOOL_ROW_H + TOOL_ROW_GAP) + TOOL_ROW_H / 2;
         return (
           <Fragment key={`out-${i}`}>
             <Handle

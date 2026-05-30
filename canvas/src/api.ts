@@ -157,6 +157,44 @@ export const api = {
     return new EventSource(`${BASE}/executions/${executionId}/stream`, { withCredentials: true });
   },
 
+  // OttoBot
+  async ottobotCredentials(): Promise<{ credentials: Array<{ id: string; name: string; type: string }> }> {
+    return req('/ottobot/credentials');
+  },
+
+  ottobotChat(
+    messages: Array<{ role: string; content: string }>,
+    credentialId?: string | null,
+  ): Promise<Response> {
+    const csrfToken = document.cookie
+      .split('; ')
+      .find(r => r.startsWith('otto-csrf='))
+      ?.split('=')[1];
+
+    return fetch(`${BASE}/ottobot/chat`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(csrfToken ? { 'x-csrf-token': csrfToken } : {}),
+      },
+      body: JSON.stringify({ messages, credentialId: credentialId ?? null }),
+    });
+  },
+
+  async expressionPreview(
+    expression: string,
+    opts: { executionId?: string | null; nodeId?: string | null } = {}
+  ): Promise<{ ok: boolean; result?: string; resolvedType?: string; error?: string }> {
+    return req<{ ok: boolean; result?: string; resolvedType?: string; error?: string }>(
+      '/expressions/preview',
+      {
+        method: 'POST',
+        body: JSON.stringify({ expression, executionId: opts.executionId ?? null, nodeId: opts.nodeId ?? null }),
+      }
+    );
+  },
+
   // Workflows
   async listWorkflows(limit = 50, offset = 0) {
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });

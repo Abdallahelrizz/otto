@@ -89,6 +89,30 @@ export const SERVICE = {
 export const EDGE_COLOR_DARK  = 'rgba(255,255,255,0.16)';
 export const EDGE_COLOR_LIGHT = 'rgba(15,15,10,0.18)';
 
+// Maps node type → credential catalog ID for brand logo rendering in the node library.
+// If an entry is present, ServiceLogo renders the brand SVG; otherwise NodeIcon is used.
+export const NODE_SERVICE_LOGO: Record<string, string> = {
+  slack_send_message:    'slackApi',
+  discord_send_message:  'discordBotApi',
+  telegram_send_message: 'telegramApi',
+  github_api:            'githubApi',
+  notion_api:            'notionApi',
+  airtable_records:      'airtableApi',
+  graphql_request:       'graphqlApi',
+  stripe_api:            'stripeApi',
+  sendgrid_email:        'sendGridApi',
+  twilio_sms:            'twilioApi',
+  salesforce_api:        'salesforceOAuth2Api',
+  hubspot_api:           'hubspotApi',
+  linear_api:            'linearApi',
+  postgres_query:        'postgres',
+  redis_get:             'redis',
+  redis_set:             'redis',
+  s3_object:             'aws',
+  llm_call:              'openAiApi',
+  ai_agent:              'openAiApi',
+};
+
 // Resolve the display color for a node, theme-aware
 export function nodeColor(def: NodeTypeDef, theme: 'dark' | 'light'): string {
   if (def.tint === 'amber')   return OTTO_AMBER;

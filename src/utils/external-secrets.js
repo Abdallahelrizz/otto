@@ -1,4 +1,5 @@
 import { db } from '../db/client.js';
+import { safeFetch } from './safe-fetch.js';
 
 const cache = new Map(); // key → { value, expiresAt }
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -62,9 +63,16 @@ async function fetchAzureSecret(config, secretName) {
 }
 
 async function fetchVaultSecret(config, secretName) {
-  // HashiCorp Vault: GET {vault_url}/v1/{secretName} with X-Vault-Token header
+  // HashiCorp Vault: GET {vault_url}/v1/{secretName} with X-Vault-Token header.
+  // SSRF-guarded via safeFetch (internal Vault → set SSRF_ALLOW_PRIVATE=true).
   const url = `${config.vault_url}/v1/${secretName}`;
-  const res = await fetch(url, { headers: { 'X-Vault-Token': config.token } });
+  let res;
+  try {
+    res = await safeFetch(url, { headers: { 'X-Vault-Token': config.token } });
+  } catch {
+    // Never echo the URL/token in the error
+    throw new Error('Vault request failed (connection or SSRF block)');
+  }
   if (!res.ok) throw new Error(`Vault fetch failed: ${res.status}`);
   const json = await res.json();
   return json.data?.value ?? JSON.stringify(json.data);

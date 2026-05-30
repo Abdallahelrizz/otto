@@ -71,62 +71,76 @@ code, pre, textarea.mono, .mono {
 
 /* ─────────────────────────────────────────
    Color tokens — Dark (default)
+   Matches dashboard palette (--dash-* tokens)
 ───────────────────────────────────────── */
 :root,
 .theme-dark {
-  --surface: #200e0f;
-  --surface-container-lowest: #1a090a;
-  --surface-container-low: #2a1617;
-  --surface-container: #2e1a1b;
-  --surface-container-high: #3a2425;
-  --surface-container-highest: #452f30;
-  --surface-glass: rgba(69,47,48,0.42);
-  --terminal-black: #1a090a;
-  --status-stable: #aeeef2;
+  --surface: #0e0e14;
+  --surface-container-lowest: #0a0a10;
+  --surface-container-low: #13131b;
+  --surface-container: #181821;
+  --surface-container-high: #1d1d28;
+  --surface-container-highest: #242432;
+  --surface-glass: rgba(24,24,33,0.42);
+  --terminal-black: #0a0a10;
+  --status-stable: #78d8aa;
   --status-running: #ee9800;
 
   --bg-canvas:    var(--surface);
   --bg-sidebar:   var(--surface-container-low);
-  --bg-toolbar:   rgba(42,22,23,0.92);
+  --bg-toolbar:   rgba(19,19,27,0.94);
   --bg-node:      var(--surface-container);
   --bg-node-card: var(--surface-container);
   --bg-node-lift: var(--surface-container-high);
   --bg-panel:     var(--surface-container-low);
   --bg-input:     var(--surface-container-lowest);
-  --bg-hover:     rgba(255,217,219,0.07);
+  --bg-hover:     rgba(234,162,166,0.07);
 
-  --border:       rgba(158,141,141,0.24);
-  --border-node:  rgba(248,181,186,0.20);
-  --border-input: rgba(158,141,141,0.34);
+  --border:       rgba(238,221,224,0.10);
+  --border-node:  rgba(234,162,166,0.18);
+  --border-input: rgba(238,221,224,0.18);
 
-  --text-primary:   #fedada;
-  --text-secondary: #d6c2c2;
-  --text-muted:     rgba(214,194,194,0.58);
+  --text-primary:   #f4eef0;
+  --text-secondary: #a89ca4;
+  --text-muted:     rgba(168,156,164,0.58);
 
-  --accent:       #f8b5ba;
-  --accent-hover: #ffd9db;
-  --accent-dim:   rgba(248,181,186,0.14);
-  --accent-contrast: #4e2328;
-  --accent-strong: #a13c3f;
-  --accent-strong-hover: #b74d51;
+  --accent:       #eaa2a6;
+  --accent-hover: #f5b8bc;
+  --accent-dim:   rgba(234,162,166,0.14);
+  --accent-contrast: #1e0d10;
+  --accent-strong: #a94d56;
+  --accent-strong-hover: #bc5a63;
   --accent-strong-contrast: #ffffff;
 
-  --brand-soft:   rgba(248,181,186,0.13);
-  --brand-ring:   rgba(248,181,186,0.36);
+  --brand-soft:   rgba(234,162,166,0.12);
+  --brand-ring:   rgba(234,162,166,0.32);
 
   --live:         var(--status-stable);
-  --live-soft:    rgba(174,238,242,0.13);
+  --live-soft:    rgba(120,216,170,0.13);
 
   --node-success: var(--status-stable);
   --node-error:   #ffb4ab;
   --node-running: var(--status-running);
-  --node-pending: rgba(214,194,194,0.46);
+  --node-pending: rgba(168,156,164,0.46);
 
-  --dot-color:    rgba(255,217,219,0.12);
-  --edge-idle:    rgba(214,194,194,0.22);
+  --dot-color:    rgba(234,162,166,0.10);
+  --edge-idle:    rgba(168,156,164,0.20);
 
-  --shadow:       0 1px 0 rgba(255,217,219,0.05), 0 16px 44px rgba(26,9,10,0.38);
-  --shadow-main:  0 18px 64px rgba(26,9,10,0.62);
+  --shadow:       0 1px 0 rgba(234,162,166,0.04), 0 16px 44px rgba(10,10,16,0.42);
+  --shadow-main:  0 20px 64px rgba(0,0,0,0.52);
+
+  /* Syntax highlight tokens (JsonViewer, ExpressionEditor) */
+  --syntax-key:    rgba(234,162,166,0.95);
+  --syntax-string: #a8f0b4;
+  --syntax-number: #93c5fd;
+  --syntax-bool:   #fca5a5;
+  --syntax-null:   rgba(168,156,164,0.46);
+
+  /* NDV surface tokens */
+  --ndv-bg:         var(--surface-container-lowest);
+  --ndv-pane:       var(--surface-container-low);
+  --ndv-header-bg:  var(--surface-container);
+  --ndv-overlay:    rgba(10,10,16,0.76);
 }
 
 /* ─────────────────────────────────────────
@@ -186,6 +200,19 @@ code, pre, textarea.mono, .mono {
 
   --shadow:       0 1px 2px rgba(65,0,7,0.04), 0 8px 24px rgba(65,0,7,0.06);
   --shadow-main:  0 4px 16px rgba(65,0,7,0.07), 0 24px 54px rgba(65,0,7,0.10);
+
+  /* Syntax highlight tokens */
+  --syntax-key:    #630d16;
+  --syntax-string: #166534;
+  --syntax-number: #1e40af;
+  --syntax-bool:   #92400e;
+  --syntax-null:   rgba(86,66,65,0.55);
+
+  /* NDV surface tokens */
+  --ndv-bg:         var(--surface);
+  --ndv-pane:       var(--surface-container-lowest);
+  --ndv-header-bg:  var(--surface-container-low);
+  --ndv-overlay:    rgba(200,185,183,0.55);
 }
 
 /* ── React Flow: handles — always visible ── */
@@ -237,14 +264,12 @@ code, pre, textarea.mono, .mono {
   box-shadow: var(--shadow) !important;
 }
 
-/* ── Node execution state — border pulse animations ── */
-@keyframes node-running-pulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(238, 152, 0, 0);
-  }
-  50% {
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--node-running) 24%, transparent);
-  }
+/* ── Node execution state animations ── */
+
+/* Strip pulse — applied to the status strip <div> inside the node card */
+@keyframes otto-strip-pulse {
+  0%, 100% { opacity: 0.45; }
+  50%       { opacity: 1; }
 }
 
 @keyframes otto-pulse {
@@ -254,7 +279,12 @@ code, pre, textarea.mono, .mono {
 
 .otto-node-running {
   border-color: var(--node-running) !important;
-  animation: node-running-pulse 1.8s ease-in-out infinite;
+  /* No outer box-shadow halo — the left strip carries the running signal */
+}
+
+/* Applied to the status strip <div> inside both OttoNode and AgentNode */
+.otto-status-strip-running {
+  animation: otto-strip-pulse 1.4s ease-in-out infinite;
 }
 
 .otto-node-success {
@@ -408,115 +438,183 @@ input[type="range"]::-moz-range-thumb {
 
 * { box-sizing: border-box; }
 
-/* ── Stitch design system classes ── */
-.material-symbols-outlined {
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-  font-family: 'Material Symbols Outlined';
-  font-style: normal;
-  font-size: 24px;
-  line-height: 1;
-  letter-spacing: normal;
-  text-transform: none;
-  display: inline-block;
-  white-space: nowrap;
-  word-wrap: normal;
-  direction: ltr;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-  -moz-osx-font-smoothing: grayscale;
-  font-feature-settings: 'liga';
-  user-select: none;
+/* ── NDV (Node Detail View) modal animations ── */
+@keyframes otto-ndv-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes otto-ndv-panel-in {
+  from { opacity: 0; transform: scale(0.975) translateY(10px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes otto-ndv-pane-in {
+  from { opacity: 0; transform: translateY(7px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-.dot-grid {
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-  background-size: 16px 16px;
+.otto-ndv-backdrop {
+  animation: otto-ndv-backdrop-in 180ms ease both;
+}
+.otto-ndv-modal {
+  animation: otto-ndv-panel-in 220ms var(--ease-out) both;
+}
+.otto-ndv-pane {
+  animation: otto-ndv-pane-in 240ms var(--ease-out) both;
+}
+.otto-ndv-pane:nth-child(1) { animation-delay: 40ms; }
+.otto-ndv-pane:nth-child(2) { animation-delay: 70ms; }
+.otto-ndv-pane:nth-child(3) { animation-delay: 100ms; }
+
+/* NDV schema rows: drag handle highlight on hover */
+.otto-schema-draggable:hover {
+  background: var(--bg-hover);
+  cursor: grab;
+}
+.otto-schema-draggable:active {
+  cursor: grabbing;
+}
+.otto-schema-draggable[draggable="true"]:hover .otto-drag-hint {
+  opacity: 1;
 }
 
-.workflow-card {
-  background-color: #121414;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  transition: border-color 0.2s ease, transform 0.2s ease;
+/* NDV skeleton loader */
+@keyframes otto-skeleton {
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 1; }
 }
-.workflow-card:hover {
-  border-color: #a13c3f;
-  transform: translateY(-2px);
-}
-
-.status-pill-active {
-  background-color: rgba(129, 215, 177, 0.15);
-  border: 1px solid #81d7b1;
-  color: #81d7b1;
-}
-.status-pill-inactive {
-  background-color: rgba(220, 192, 191, 0.15);
-  border: 1px solid #dcc0bf;
-  color: #dcc0bf;
+.otto-skeleton {
+  background: var(--bg-hover);
+  border-radius: 4px;
+  animation: otto-skeleton 1.4s ease-in-out infinite;
 }
 
-.node-line {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-}
+/* ── JSON syntax highlight classes ── */
+.otto-json-viewer .syntax-key    { color: var(--syntax-key); }
+.otto-json-viewer .syntax-string { color: var(--syntax-string); }
+.otto-json-viewer .syntax-number { color: var(--syntax-number); font-variant-numeric: tabular-nums; }
+.otto-json-viewer .syntax-bool   { color: var(--syntax-bool); }
+.otto-json-viewer .syntax-null   { color: var(--syntax-null); }
 
-.technical-card {
-  background-color: #1e2020;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  transition: border-color 0.2s ease;
+/* ── Node card CSS hover/focus (replaces JS onMouseEnter/Leave) ── */
+.otto-node-card {
+  transition: border-color 130ms ease-out, box-shadow 130ms ease-out;
 }
-.technical-card:hover {
-  border-color: rgba(161, 60, 63, 0.5);
+.otto-node-card:hover {
+  border-color: var(--border-input) !important;
 }
-
-.execution-row {
-  transition: background-color 0.1s ease;
-}
-.execution-row:hover {
-  background-color: rgba(255, 255, 255, 0.03);
-}
-
-.log-line:hover {
-  background-color: rgba(255, 255, 255, 0.03);
-}
-
-.focus-ring:focus {
+.otto-node-card:focus-visible {
   outline: none;
-  border-color: #a13c3f;
-  box-shadow: 0 0 0 2px rgba(161, 60, 63, 0.2);
+  box-shadow: 0 0 0 3px var(--brand-ring);
 }
 
-/* Stitch app layout */
-.stitch-sidebar {
-  background-color: #121414;
-  border-right: 1px solid #564241;
+/* ── Context menu (token-based, no hardcoded colors) ── */
+.otto-context-menu {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-input);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.16);
+  overflow: hidden;
+  font-family: 'Geist', system-ui, sans-serif;
+  font-size: 13px;
 }
-.stitch-topbar {
-  background-color: #121414;
-  border-bottom: 1px solid #564241;
+.otto-menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 3px 8px;
 }
-.stitch-nav-item {
+.otto-menu-item {
+  width: 100%;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 2px;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.05em;
-  color: #dcc0bf;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  justify-content: space-between;
+  padding: 7px 12px;
+  background: transparent;
+  border: none;
   cursor: pointer;
-  text-decoration: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 450;
+  text-align: left;
+  transition: background 0.08s ease;
+  border-radius: 6px;
+  margin: 0 4px;
+  width: calc(100% - 8px);
 }
-.stitch-nav-item:hover {
-  background-color: #282a2b;
-  color: #e2e2e2;
+.otto-menu-item:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
-.stitch-nav-item.active {
-  color: #ffb3b1;
-  font-weight: 700;
-  border-left: 2px solid #ffb3b1;
-  padding-left: 10px;
-  background-color: #282a2b;
+.otto-menu-item:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+.otto-menu-item.danger {
+  color: var(--node-error);
+}
+.otto-menu-item.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--node-error) 10%, transparent);
+}
+.otto-menu-shortcut {
+  font-size: '11px';
+  color: var(--text-muted);
+  margin-left: 16px;
+  font-family: 'Geist Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+}
+
+/* ── Shortcut reference overlay ── */
+.otto-shortcut-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ndv-overlay);
+  backdrop-filter: blur(4px);
+}
+.otto-shortcut-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-input);
+  border-radius: 14px;
+  box-shadow: var(--shadow-main);
+  width: 520px;
+  max-width: 94vw;
+  max-height: 80vh;
+  overflow: auto;
+  padding: 24px;
+}
+.otto-shortcut-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 24px;
+  margin-top: 16px;
+}
+.otto-shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.otto-shortcut-label {
+  color: var(--text-secondary);
+}
+.otto-shortcut-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-input);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-weight: 600;
 }
 
 /* Dashboard shell - first page slice */

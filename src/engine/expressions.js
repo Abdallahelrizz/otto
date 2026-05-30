@@ -3,7 +3,11 @@ import { normalizeItems, toJson } from '../utils/items.js';
 
 const FULL_EXPRESSION_RE = /^=?\s*\{\{\s*([\s\S]*?)\s*\}\}\s*$/;
 const INLINE_EXPRESSION_RE = /\{\{\s*([\s\S]*?)\s*\}\}/g;
-const BLOCKED_TOKENS = /\b(?:constructor|__proto__|prototype|process|global|globalThis|require|module|import|Function|eval)\b/;
+
+// Dangerous identifiers (match anywhere — bracket/dot access alike).
+const BLOCKED_IDENTIFIERS = /constructor|__proto__|prototype|globalThis|process|require|\bmodule\b|\bimport\b|\bexports\b|\beval\b|\bFunction\b|child_process|Reflect|Proxy|WebAssembly|queueMicrotask|setImmediate|Atomics|SharedArrayBuffer/i;
+// Obfuscation primitives used to build the names above at runtime.
+const BLOCKED_OBFUSCATION = /fromCharCode|fromCodePoint|\batob\b|\bunescape\b|\bglobal\b|\\x[0-9a-f]{2}|\\u[0-9a-f{]/i;
 const EXPRESSION_TIMEOUT_MS = 50;
 
 export function resolveValue(value, context = {}) {
@@ -63,7 +67,7 @@ export function evaluateExpression(rawExpression, context = {}) {
 }
 
 function assertSafeExpression(expression) {
-  if (BLOCKED_TOKENS.test(expression)) {
+  if (BLOCKED_IDENTIFIERS.test(expression) || BLOCKED_OBFUSCATION.test(expression)) {
     throw new Error('Expression contains a blocked identifier');
   }
 }
@@ -111,18 +115,13 @@ function createExpressionSandbox(context) {
     $number: (value) => Number(value),
     $string: (value) => String(value ?? ''),
     $boolean: (value) => Boolean(value),
-    Math,
-    Date,
-    JSON,
-    Array,
-    Object,
-    Number,
-    String,
-    Boolean,
-    parseInt,
-    parseFloat,
-    encodeURIComponent,
-    decodeURIComponent,
+    // NOTE: We deliberately do NOT inject outer-realm intrinsics (Math, JSON,
+    // Object, Array, Function, Date, …). A bare vm context already provides its
+    // own copies of all ECMAScript built-ins, and those context-local copies are
+    // NOT an escape vector (their constructor chain stays inside the sandbox,
+    // which has no `process`/`require`). Injecting the outer-realm versions WOULD
+    // expose `<intrinsic>.constructor.constructor` → outer Function → host escape.
+    // For hard multi-tenant isolation (Otto Cloud), migrate to isolated-vm.
   });
 
   return sandbox;

@@ -41,11 +41,21 @@ async function enqueueManualExecution({
     pinnedData,
   });
 
-  await executionQueue.add(
+  // Fail fast if Redis is unreachable: ioredis with offline-queue enabled would
+  // otherwise hang the request. Race the enqueue against a short timeout → 503.
+  const enqueue = executionQueue.add(
     'run',
     { executionId, workflowId, workspaceId, triggerType: 'manual', input, definition, mode, nodeId, pinnedData },
     { jobId: executionId }
   );
+  const timeout = new Promise((_, rej) =>
+    setTimeout(() => {
+      const err = new Error('Queue enqueue timed out — Redis may be unreachable');
+      err.code = 'ETIMEDOUT';
+      rej(err);
+    }, 8000)
+  );
+  await Promise.race([enqueue, timeout]);
 
   return executionId;
 }

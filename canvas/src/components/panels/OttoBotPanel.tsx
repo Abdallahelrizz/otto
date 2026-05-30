@@ -1,724 +1,472 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useStore } from '../../store';
+import { api } from '../../api';
 import { getNodeDef } from '../nodes/nodeConfig';
 import type { Node, Edge } from 'reactflow';
 
-const AMBER = '#A13C3F';
-const OTTOBOT_KEY_STORAGE = 'otto_ottobot_openai_key';
+const UI_FONT = 'Geist, system-ui, sans-serif';
+const MONO    = 'Geist Mono, monospace';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── DAG analysis (kept intact) ──────────────────────────────────────────────
 
-type Message = {
-  role: 'user' | 'assistant';
-  content: string;
-  id: string;
-};
-
-type Insight = {
-  type: 'parallel' | 'composition' | 'pattern';
-  text: string;
-  highlight?: string;
-};
-
-// ─── DAG analysis helpers ─────────────────────────────────────────────────────
+type Insight = { type: 'parallel' | 'composition' | 'pattern'; text: string; highlight?: string };
+type Message  = { role: 'user' | 'assistant'; content: string; id: string };
 
 function buildAdjacency(nodes: Node[], edges: Edge[]) {
-  const parents: Record<string, Set<string>> = {};
+  const parents:  Record<string, Set<string>> = {};
   const children: Record<string, Set<string>> = {};
-  for (const n of nodes) {
-    parents[n.id] = new Set();
-    children[n.id] = new Set();
-  }
+  for (const n of nodes) { parents[n.id] = new Set(); children[n.id] = new Set(); }
   for (const e of edges) {
-    if (parents[e.target]) parents[e.target].add(e.source);
+    if (parents[e.target])  parents[e.target].add(e.source);
     if (children[e.source]) children[e.source].add(e.target);
   }
   return { parents, children };
 }
 
-/** Get all ancestors (transitive) of a node */
 function getAncestors(nodeId: string, parents: Record<string, Set<string>>): Set<string> {
   const visited = new Set<string>();
   const stack = [nodeId];
   while (stack.length) {
     const cur = stack.pop()!;
     for (const p of (parents[cur] ?? new Set())) {
-      if (!visited.has(p)) {
-        visited.add(p);
-        stack.push(p);
-      }
+      if (!visited.has(p)) { visited.add(p); stack.push(p); }
     }
   }
   return visited;
 }
 
 function analyzeWorkflow(nodes: Node[], edges: Edge[]): Insight[] {
+  if (nodes.length === 0) return [{ type: 'composition', text: 'Canvas is empty — drag nodes in from the sidebar to get started.' }];
+  const { parents, children } = buildAdjacency(nodes, edges);
   const insights: Insight[] = [];
 
-  if (nodes.length === 0) {
-    return [{ type: 'composition', text: 'Canvas is empty — drag nodes in from the sidebar to get started.' }];
-  }
-
-  const { parents, children } = buildAdjacency(nodes, edges);
-
-  // ── 1. Composition stats ──────────────────────────────────────────────────
-  const categoryCounts: Record<string, number> = {};
+  const cats: Record<string, number> = {};
   for (const n of nodes) {
-    const nodeType = (n.data?.nodeType as string) ?? '';
-    const def = getNodeDef(nodeType);
-    const cat = def?.category ?? 'core';
-    categoryCounts[cat] = (categoryCounts[cat] ?? 0) + 1;
+    const cat = getNodeDef((n.data?.nodeType as string) ?? '').category ?? 'core';
+    cats[cat] = (cats[cat] ?? 0) + 1;
+  }
+  const parts: string[] = [];
+  if (cats.triggers) parts.push(`${cats.triggers} trigger${cats.triggers > 1 ? 's' : ''}`);
+  if (cats.ai)       parts.push(`${cats.ai} AI node${cats.ai > 1 ? 's' : ''}`);
+  if (cats.core)     parts.push(`${cats.core} core node${cats.core > 1 ? 's' : ''}`);
+  if (cats.data)     parts.push(`${cats.data} data node${cats.data > 1 ? 's' : ''}`);
+  insights.push({ type: 'composition', text: `${nodes.length} node${nodes.length > 1 ? 's' : ''}: ${parts.join(', ')}.` });
+
+  const isolated = nodes.filter(n => !(parents[n.id]?.size) && !(children[n.id]?.size));
+  if (isolated.length) {
+    insights.push({ type: 'pattern', text: `${isolated.length} isolated node${isolated.length > 1 ? 's' : ''}: ${isolated.slice(0, 3).map(n => `"${n.data?.label ?? n.id}"`).join(', ')}. Connect or remove them.` });
   }
 
-  const catParts: string[] = [];
-  if (categoryCounts.triggers) catParts.push(`${categoryCounts.triggers} trigger${categoryCounts.triggers > 1 ? 's' : ''}`);
-  if (categoryCounts.ai)       catParts.push(`${categoryCounts.ai} AI node${categoryCounts.ai > 1 ? 's' : ''}`);
-  if (categoryCounts.core)     catParts.push(`${categoryCounts.core} core node${categoryCounts.core > 1 ? 's' : ''}`);
-  if (categoryCounts.data)     catParts.push(`${categoryCounts.data} data node${categoryCounts.data > 1 ? 's' : ''}`);
-
-  insights.push({
-    type: 'composition',
-    text: `This workflow has ${nodes.length} node${nodes.length > 1 ? 's' : ''}: ${catParts.join(', ')}.`,
-  });
-
-  // ── 2. Isolated nodes ─────────────────────────────────────────────────────
-  const isolated = nodes.filter(
-    (n) => (parents[n.id]?.size ?? 0) === 0 && (children[n.id]?.size ?? 0) === 0
-  );
-  if (isolated.length > 0) {
-    const names = isolated.slice(0, 3).map((n) => `"${(n.data?.label as string) ?? n.id}"`).join(', ');
-    insights.push({
-      type: 'pattern',
-      text: `${isolated.length} node${isolated.length > 1 ? 's are' : ' is'} isolated (no connections): ${names}. Connect them or remove them.`,
-    });
-  }
-
-  // ── 3. Parallelization analysis ───────────────────────────────────────────
   if (nodes.length >= 2) {
-    const ancestorMap = new Map<string, Set<string>>();
-    for (const n of nodes) {
-      ancestorMap.set(n.id, getAncestors(n.id, parents));
-    }
-
-    // Find pairs with no path between them (neither is ancestor of the other)
-    const parallelPairs: [Node, Node][] = [];
-    for (let i = 0; i < nodes.length; i++) {
-      for (let j = i + 1; j < nodes.length; j++) {
-        const a = nodes[i];
-        const b = nodes[j];
-        const aAnc = ancestorMap.get(a.id)!;
-        const bAnc = ancestorMap.get(b.id)!;
-        if (!aAnc.has(b.id) && !bAnc.has(a.id)) {
-          parallelPairs.push([a, b]);
-        }
+    const ancestorMap = new Map(nodes.map(n => [n.id, getAncestors(n.id, parents)]));
+    const parallelIds = new Set<string>();
+    for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
+      const [a, b] = [nodes[i], nodes[j]];
+      if (!ancestorMap.get(a.id)!.has(b.id) && !ancestorMap.get(b.id)!.has(a.id)) {
+        parallelIds.add(a.id); parallelIds.add(b.id);
       }
     }
-
-    // Count unique nodes involved in parallel relationships
-    const parallelNodeIds = new Set<string>();
-    for (const [a, b] of parallelPairs) {
-      parallelNodeIds.add(a.id);
-      parallelNodeIds.add(b.id);
-    }
-
-    if (parallelNodeIds.size === 0) {
-      insights.push({
-        type: 'parallel',
-        text: `All ${nodes.length} nodes are fully sequential. If any steps are independent, connecting them in parallel will speed up execution.`,
-      });
-    } else {
-      // How many distinct "parallel groups" are there?
-      const numParallelNodes = parallelNodeIds.size;
-      insights.push({
-        type: 'parallel',
-        highlight: `${numParallelNodes} nodes run in parallel`,
-        text: `${numParallelNodes} of ${nodes.length} nodes can run in parallel — Otto executes them concurrently with Promise.all() for maximum throughput.`,
-      });
-    }
+    parallelIds.size === 0
+      ? insights.push({ type: 'parallel', text: `All ${nodes.length} nodes are sequential. Independent steps can run in parallel.` })
+      : insights.push({ type: 'parallel', highlight: `${parallelIds.size} nodes run in parallel`, text: `${parallelIds.size} of ${nodes.length} nodes run concurrently via Promise.all().` });
   }
 
-  // ── 4. LLM chaining anti-pattern ─────────────────────────────────────────
-  const llmTypes = new Set(['llm_call', 'ai_agent']);
-  const llmNodes = nodes.filter((n) => llmTypes.has((n.data?.nodeType as string) ?? ''));
-
-  if (llmNodes.length >= 2) {
-    const llmIds = new Set(llmNodes.map((n) => n.id));
-    const chainPairs: [string, string][] = [];
-    for (const e of edges) {
-      if (llmIds.has(e.source) && llmIds.has(e.target)) {
-        const srcLabel = nodes.find((n) => n.id === e.source)?.data?.label as string ?? e.source;
-        const tgtLabel = nodes.find((n) => n.id === e.target)?.data?.label as string ?? e.target;
-        chainPairs.push([srcLabel, tgtLabel]);
-      }
-    }
-    if (chainPairs.length > 0) {
-      const example = chainPairs[0];
-      insights.push({
-        type: 'pattern',
-        text: `LLM chaining detected: "${example[0]}" feeds directly into "${example[1]}". Each chained LLM call adds latency — consider whether the second prompt could incorporate the first as context instead.`,
-      });
+  const llmIds = new Set(nodes.filter(n => ['llm_call','ai_agent'].includes((n.data?.nodeType as string) ?? '')).map(n => n.id));
+  if (llmIds.size >= 2) {
+    const chain = edges.filter(e => llmIds.has(e.source) && llmIds.has(e.target));
+    if (chain.length) {
+      const src = nodes.find(n => n.id === chain[0].source)?.data?.label as string ?? chain[0].source;
+      const tgt = nodes.find(n => n.id === chain[0].target)?.data?.label as string ?? chain[0].target;
+      insights.push({ type: 'pattern', text: `LLM chain: "${src}" → "${tgt}". Each chained call adds latency — consider merging prompts.` });
     }
   }
-
   return insights;
 }
 
-// ─── Credential helpers ───────────────────────────────────────────────────────
+// ─── Bot logo with fallback ───────────────────────────────────────────────────
 
-function loadStoredApiKey(): string {
-  try { return localStorage.getItem(OTTOBOT_KEY_STORAGE) ?? ''; }
-  catch { return ''; }
-}
-
-function saveStoredApiKey(key: string) {
-  try { localStorage.setItem(OTTOBOT_KEY_STORAGE, key); }
-  catch { /* ignore */ }
-}
-
-// ─── Streaming LLM call ───────────────────────────────────────────────────────
-
-async function streamOpenAI(
-  apiKey: string,
-  systemPrompt: string,
-  messages: Message[],
-  onToken: (token: string) => void,
-  onDone: () => void,
-  onError: (err: string) => void
-) {
-  const body = {
-    model: 'gpt-4o-mini',
-    stream: true,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      ...messages.map((m) => ({ role: m.role, content: m.content })),
-    ],
-  };
-
-  try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const errText = await res.text().catch(() => res.statusText);
-      onError(`OpenAI error ${res.status}: ${errText}`);
-      return;
-    }
-
-    const reader = res.body?.getReader();
-    if (!reader) { onError('No response body'); return; }
-
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed === 'data: [DONE]') continue;
-        if (trimmed.startsWith('data: ')) {
-          try {
-            const json = JSON.parse(trimmed.slice(6));
-            const delta = json.choices?.[0]?.delta?.content;
-            if (typeof delta === 'string' && delta) onToken(delta);
-          } catch { /* skip malformed chunk */ }
-        }
-      }
-    }
-    onDone();
-  } catch (err) {
-    onError(err instanceof Error ? err.message : String(err));
-  }
-}
-
-// ─── Component ────────────────────────────────────────────────────────────────
-
-function genId() {
-  return Math.random().toString(36).slice(2, 10);
-}
-
-const WELCOME_MESSAGE: Message = {
-  role: 'assistant',
-  id: 'welcome',
-  content:
-    'Your agent runs **CRM lookup** and **Chat history** sequentially. They have no shared deps — running them in parallel cuts agent latency by **~2.3×**.',
-};
-
-export function OttoBotPanel() {
-  const nodes = useStore((s) => s.nodes);
-  const edges = useStore((s) => s.edges);
-  const workflowName = useStore((s) => s.workflowName);
-
-  const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
-  const [input, setInput] = useState('');
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [insights, setInsights] = useState<Insight[]>([]);
-  const [apiKey, setApiKey] = useState<string>(loadStoredApiKey);
-  const [showKeyInput, setShowKeyInput] = useState(false);
-  const [keyDraft, setKeyDraft] = useState('');
-  const [analyzed, setAnalyzed] = useState(false);
-
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const abortRef = useRef<boolean>(false);
-
-  // Auto-scroll to bottom when messages change
+function BotAvatar({ size = 22 }: { size?: number }) {
+  const [hasSvg, setHasSvg] = useState<boolean | null>(null);
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    fetch('/ottobot-logo.svg', { method: 'HEAD' })
+      .then(r => setHasSvg(r.ok))
+      .catch(() => setHasSvg(false));
+  }, []);
 
-  // Auto-analyze when panel mounts or workflow changes
-  useEffect(() => {
-    const newInsights = analyzeWorkflow(nodes, edges);
-    setInsights(newInsights);
-
-    if (!analyzed && nodes.length > 0) {
-      setAnalyzed(true);
-      const analysisMsg: Message = {
-        role: 'assistant',
-        id: genId(),
-        content: newInsights.map((ins) => ins.text).join('\n\n'),
-      };
-      setMessages((prev) => {
-        // Don't duplicate if already have analysis
-        const hasAnalysis = prev.some((m) => m.id !== 'welcome' && m.role === 'assistant');
-        if (hasAnalysis) return prev;
-        return [...prev, analysisMsg];
-      });
-    }
-  }, [nodes, edges, analyzed]);
-
-  const buildSystemPrompt = useCallback(() => {
-    const nodeSummary = nodes.map((n) => ({
-      id: n.id,
-      label: n.data?.label,
-      type: n.data?.nodeType,
-    }));
-    const edgeSummary = edges.map((e) => ({ from: e.source, to: e.target }));
-    const insightTexts = insights.map((i) => i.text).join('\n');
-
-    return `You are OttoBot, the workflow assistant built into Otto — an AI-era workflow orchestrator.
-You are helping a user optimize the workflow named "${workflowName}".
-
-CURRENT WORKFLOW SUMMARY:
-- ${nodes.length} nodes, ${edges.length} edges
-- Nodes: ${JSON.stringify(nodeSummary)}
-- Edges: ${JSON.stringify(edgeSummary)}
-
-ANALYSIS INSIGHTS:
-${insightTexts}
-
-Your job:
-- Answer questions about this workflow concisely
-- Suggest parallelization opportunities (Otto runs nodes with Promise.all() when they have no shared deps)
-- Identify anti-patterns: sequential LLM chains, isolated nodes, over-complicated branches
-- Suggest node type improvements when relevant
-- Be brief, practical, and specific to this workflow — not generic
-
-Formatting: use **bold** for node names. Keep responses under 150 words unless the user asks for detail.`;
-  }, [nodes, edges, workflowName, insights]);
-
-  const handleSend = useCallback(async () => {
-    const text = input.trim();
-    if (!text || isStreaming) return;
-
-    const effectiveKey = apiKey.trim();
-    if (!effectiveKey) {
-      setShowKeyInput(true);
-      return;
-    }
-
-    const userMsg: Message = { role: 'user', content: text, id: genId() };
-    const assistantId = genId();
-    const assistantMsg: Message = { role: 'assistant', content: '', id: assistantId };
-
-    setMessages((prev) => [...prev, userMsg, assistantMsg]);
-    setInput('');
-    setIsStreaming(true);
-    abortRef.current = false;
-
-    const history = [...messages, userMsg];
-
-    await streamOpenAI(
-      effectiveKey,
-      buildSystemPrompt(),
-      history,
-      (token) => {
-        if (abortRef.current) return;
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId ? { ...m, content: m.content + token } : m
-          )
-        );
-      },
-      () => {
-        setIsStreaming(false);
-      },
-      (err) => {
-        setIsStreaming(false);
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId ? { ...m, content: `Error: ${err}` } : m
-          )
-        );
-      }
-    );
-  }, [input, isStreaming, apiKey, messages, buildSystemPrompt]);
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
-  const handleSaveKey = () => {
-    const trimmed = keyDraft.trim();
-    if (!trimmed) return;
-    setApiKey(trimmed);
-    saveStoredApiKey(trimmed);
-    setShowKeyInput(false);
-    setKeyDraft('');
-    setTimeout(() => inputRef.current?.focus(), 50);
-  };
-
-  const hasKey = apiKey.trim().length > 0;
-
-  // ── Render helper: format message content (basic **bold** support) ───────
-  function renderContent(content: string) {
-    const parts = content.split(/(\*\*[^*]+\*\*)/g);
-    return parts.map((part, i) => {
-      if (part.startsWith('**') && part.endsWith('**')) {
-        return <strong key={i} style={{ fontWeight: 600 }}>{part.slice(2, -2)}</strong>;
-      }
-      // Handle newlines
-      return part.split('\n').map((line, j, arr) => (
-        <span key={`${i}-${j}`}>{line}{j < arr.length - 1 ? <br /> : null}</span>
-      ));
-    });
+  if (hasSvg === true) {
+    return <img src="/ottobot-logo.svg" alt="OttoBot" width={size} height={size} style={{ display: 'block', objectFit: 'contain' }} />;
   }
+  // Fallback — amber lightning square
+  return (
+    <span style={{ width: size, height: size, borderRadius: '4px', background: '#A13C3F', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <svg width={Math.round(size * 0.55)} height={Math.round(size * 0.55)} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+      </svg>
+    </span>
+  );
+}
+
+// ─── Memory tab ──────────────────────────────────────────────────────────────
+
+function MemoryTab() {
+  const [stats, setStats]   = useState<{ patternsCount?: number; sessionsCount?: number } | null>(null);
+  const [interactions, setInteractions] = useState<unknown[]>([]);
+  const [query, setQuery]   = useState('');
+  const [results, setResults] = useState<unknown[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [clearing, setClearing]   = useState(false);
+
+  useEffect(() => {
+    api.getMemoryStats().then(setStats).catch(() => {});
+    api.getMemoryInteractions(10).then(setInteractions).catch(() => {});
+  }, []);
+
+  const search = async () => {
+    if (!query.trim()) return;
+    setSearching(true);
+    try { setResults(await api.searchMemory(query.trim(), 5)); }
+    catch { /**/ }
+    finally { setSearching(false); }
+  };
+
+  const clear = async () => {
+    if (!confirm('Clear all OttoBot memory? This cannot be undone.')) return;
+    setClearing(true);
+    try { await api.clearMemory(); setStats(null); setInteractions([]); setResults([]); }
+    catch { /**/ }
+    finally { setClearing(false); }
+  };
+
+  const row: React.CSSProperties = { fontFamily: UI_FONT, fontSize: '12px', color: 'var(--text-secondary)', padding: '7px 0', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '2px' };
+  const label: React.CSSProperties = { fontFamily: UI_FONT, fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px' };
 
   return (
-    <div style={{
-      flex: 1,
-      background: 'var(--bg-panel)',
-      display: 'flex',
-      flexDirection: 'column',
-      borderRight: '1px solid var(--border)',
-      minWidth: 0,
-    }}>
-      {/* Header */}
-      <div style={{
-        height: 36,
-        padding: '0 14px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        borderBottom: '1px solid var(--border)',
-        flexShrink: 0,
-      }}>
-        <span style={{
-          width: 18,
-          height: 18,
-          borderRadius: '4px',
-          background: 'var(--brand-soft)',
-          border: '1px solid var(--brand-ring)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-        }}>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={AMBER} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-          </svg>
-        </span>
-        <span style={{
-          fontSize: '12.5px',
-          fontWeight: 600,
-          color: 'var(--text-primary)',
-          letterSpacing: '-0.008em',
-          fontFamily: "'Inter'",
-        }}>
-          otto bot
-        </span>
-        <span style={{
-          fontFamily: "'JetBrains Mono', monospace",
-          fontSize: '9.5px',
-          color: 'var(--text-muted)',
-          letterSpacing: '0.04em',
-          fontWeight: 500,
-        }}>
-          workflow assistant
-        </span>
-        <div style={{ flex: 1 }} />
-        {/* API key indicator */}
-        <button
-          onClick={() => { setShowKeyInput((v) => !v); setKeyDraft(''); }}
-          title={hasKey ? 'OpenAI key set — click to change' : 'Add OpenAI key'}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            padding: '2px 6px',
-            fontSize: '10px',
-            fontWeight: 500,
-            color: hasKey ? 'var(--node-success)' : 'var(--text-muted)',
-            background: 'transparent',
-            border: `1px solid ${hasKey ? 'var(--brand-ring)' : 'var(--border)'}`,
-            borderRadius: '3px',
-            cursor: 'pointer',
-            fontFamily: "'Inter'",
-          }}
-        >
-          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-          </svg>
-          {hasKey ? 'key set' : 'add key'}
-        </button>
-      </div>
-
-      {/* Key input drawer */}
-      {showKeyInput && (
-        <div style={{
-          padding: '10px 14px',
-          borderBottom: '1px solid var(--border)',
-          background: 'var(--bg-input)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '6px',
-          flexShrink: 0,
-        }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontFamily: "'Inter'" }}>
-            Paste your OpenAI API key. It's stored only in this browser.
-          </span>
-          <div style={{ display: 'flex', gap: '6px' }}>
-            <input
-              type="password"
-              value={keyDraft}
-              onChange={(e) => setKeyDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleSaveKey(); }}
-              placeholder="sk-..."
-              autoFocus
-              style={{
-                flex: 1,
-                padding: '5px 8px',
-                fontSize: '12px',
-                color: 'var(--text-primary)',
-                background: 'var(--bg-panel)',
-                border: '1px solid var(--border-input)',
-                borderRadius: '4px',
-                outline: 'none',
-                fontFamily: "'JetBrains Mono', monospace",
-              }}
-            />
-            <button
-              onClick={handleSaveKey}
-              style={{
-                padding: '5px 10px',
-                background: AMBER,
-                color: '#fff',
-                border: 'none',
-                borderRadius: '4px',
-                fontSize: '11.5px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                fontFamily: "'Inter'",
-              }}
-            >
-              Save
-            </button>
-            {hasKey && (
-              <button
-                onClick={() => { setApiKey(''); saveStoredApiKey(''); setShowKeyInput(false); }}
-                style={{
-                  padding: '5px 10px',
-                  background: 'transparent',
-                  color: 'var(--text-secondary)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '4px',
-                  fontSize: '11.5px',
-                  cursor: 'pointer',
-                  fontFamily: "'Inter'",
-                }}
-              >
-                Remove
-              </button>
-            )}
-          </div>
+    <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto', flex: 1 }}>
+      {/* Stats */}
+      {stats && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          {[['Patterns', stats.patternsCount ?? 0], ['Sessions', stats.sessionsCount ?? 0]].map(([k, v]) => (
+            <div key={String(k)} style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: '8px', padding: '10px 12px' }}>
+              <div style={{ fontFamily: MONO, fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{v}</div>
+              <div style={{ fontFamily: UI_FONT, fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>{k}</div>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Messages */}
-      <div style={{
-        flex: 1,
-        padding: '12px 14px',
-        overflow: 'auto',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
-      }}>
-        {messages.map((msg) => (
-          msg.role === 'assistant' ? (
-            <div key={msg.id} style={{ display: 'flex', gap: '9px', alignItems: 'flex-start' }}>
-              <span style={{
-                width: 22,
-                height: 22,
-                borderRadius: '5px',
-                background: 'var(--brand-soft)',
-                border: '1px solid var(--brand-ring)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                marginTop: '1px',
-              }}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={AMBER} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-                </svg>
-              </span>
-              <p style={{
-                fontSize: '12.5px',
-                color: msg.content ? 'var(--text-primary)' : 'var(--text-muted)',
-                lineHeight: 1.55,
-                letterSpacing: '-0.003em',
-                margin: 0,
-                fontFamily: "'Inter'",
-                flex: 1,
-                wordBreak: 'break-word',
-              }}>
-                {msg.content
-                  ? renderContent(msg.content)
-                  : <span style={{ display: 'inline-flex', gap: '3px', alignItems: 'center' }}>
-                      <span style={{ animation: 'otto-dot 1.2s 0s infinite both', display: 'inline-block', width: 4, height: 4, borderRadius: '50%', background: AMBER }} />
-                      <span style={{ animation: 'otto-dot 1.2s 0.2s infinite both', display: 'inline-block', width: 4, height: 4, borderRadius: '50%', background: AMBER }} />
-                      <span style={{ animation: 'otto-dot 1.2s 0.4s infinite both', display: 'inline-block', width: 4, height: 4, borderRadius: '50%', background: AMBER }} />
-                    </span>
-                }
-              </p>
-            </div>
-          ) : (
-            <div key={msg.id} style={{
-              alignSelf: 'flex-end',
-              maxWidth: '85%',
-              padding: '7px 10px',
-              background: 'rgba(255,111,26,0.12)',
-              border: '1px solid rgba(255,111,26,0.2)',
-              borderRadius: '8px 8px 2px 8px',
-              fontSize: '12.5px',
-              color: 'var(--text-primary)',
-              lineHeight: 1.5,
-              letterSpacing: '-0.003em',
-              fontFamily: "'Inter'",
-              wordBreak: 'break-word',
-            }}>
-              {msg.content}
-            </div>
-          )
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Input */}
-      <div style={{
-        padding: '10px',
-        borderTop: '1px solid var(--border)',
-        flexShrink: 0,
-      }}>
-        {!hasKey && !showKeyInput ? (
-          <div style={{
-            padding: '8px 10px',
-            background: 'var(--bg-input)',
-            border: '1px solid var(--border)',
-            borderRadius: '5px',
-            fontSize: '12px',
-            color: 'var(--text-muted)',
-            fontFamily: "'Inter'",
-            lineHeight: 1.5,
-          }}>
-            <button
-              onClick={() => setShowKeyInput(true)}
-              style={{
-                color: AMBER,
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                fontWeight: 600,
-                fontSize: '12px',
-                padding: 0,
-                fontFamily: "'Inter'",
-              }}
-            >
-              Add an OpenAI API key
-            </button>
-            {' '}to enable AI suggestions.
-          </div>
-        ) : (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '7px 10px',
-            background: 'var(--bg-input)',
-            border: '1px solid var(--border)',
-            borderRadius: '5px',
-            opacity: isStreaming ? 0.7 : 1,
-          }}>
-            <input
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask otto bot to improve this workflow…"
-              disabled={isStreaming}
-              style={{
-                flex: 1,
-                fontSize: '12.5px',
-                color: 'var(--text-primary)',
-                background: 'transparent',
-                border: 'none',
-                outline: 'none',
-                letterSpacing: '-0.005em',
-                fontWeight: 400,
-                fontFamily: "'Inter'",
-              }}
-            />
-            <button
-              onClick={handleSend}
-              disabled={isStreaming || !input.trim()}
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: isStreaming || !input.trim() ? 'default' : 'pointer',
-                padding: 0,
-                display: 'flex',
-                alignItems: 'center',
-                opacity: isStreaming || !input.trim() ? 0.4 : 1,
-              }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={AMBER} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-              </svg>
-            </button>
+      {/* Search */}
+      <div>
+        <div style={label}>Search memory</div>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && search()}
+            placeholder="Query patterns…"
+            style={{ flex: 1, background: 'var(--bg-input)', border: '1px solid var(--border-input)', borderRadius: '7px', padding: '6px 10px', color: 'var(--text-primary)', fontFamily: UI_FONT, fontSize: '13px', outline: 'none' }}
+          />
+          <button onClick={search} disabled={searching} style={{ background: 'var(--bg-hover)', border: '1px solid var(--border)', borderRadius: '7px', padding: '6px 12px', cursor: 'pointer', fontFamily: UI_FONT, fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+            {searching ? '…' : 'Search'}
+          </button>
+        </div>
+        {results.length > 0 && (
+          <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {(results as Array<Record<string, unknown>>).map((r, i) => (
+              <div key={i} style={{ ...row, padding: '6px 8px', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-input)' }}>
+                <span style={{ fontFamily: UI_FONT, fontSize: '12px', color: 'var(--text-primary)' }}>{String(r.content ?? r.text ?? JSON.stringify(r)).slice(0, 120)}</span>
+                {r.similarity != null && <span style={{ fontFamily: MONO, fontSize: '10px', color: 'var(--text-muted)' }}>{Number(r.similarity).toFixed(3)} similarity</span>}
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      {/* Keyframe style for loading dots */}
-      <style>{`
-        @keyframes otto-dot {
-          0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
-          40% { opacity: 1; transform: scale(1); }
+      {/* Recent interactions */}
+      {interactions.length > 0 && (
+        <div>
+          <div style={label}>Recent interactions</div>
+          {(interactions as Array<Record<string, unknown>>).slice(0, 8).map((item, i) => (
+            <div key={i} style={row}>
+              <span style={{ color: 'var(--text-primary)', fontFamily: UI_FONT, fontSize: '12px' }}>{String(item.content ?? item.message ?? '').slice(0, 100)}</span>
+              {item.created_at != null && <span style={{ fontFamily: MONO, fontSize: '10px', color: 'var(--text-muted)' }}>{new Date(String(item.created_at)).toLocaleString()}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Clear */}
+      <button onClick={clear} disabled={clearing} style={{ background: 'color-mix(in srgb, var(--node-error) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--node-error) 22%, transparent)', borderRadius: '7px', padding: '7px 12px', cursor: 'pointer', fontFamily: UI_FONT, fontSize: '12px', color: 'var(--node-error)', marginTop: 'auto' }}>
+        {clearing ? 'Clearing…' : 'Clear all memory'}
+      </button>
+    </div>
+  );
+}
+
+// ─── Main panel ───────────────────────────────────────────────────────────────
+
+export function OttoBotPanel() {
+  const nodes = useStore(s => s.nodes);
+  const edges = useStore(s => s.edges);
+
+  const [tab,        setTab]        = useState<'chat' | 'memory'>('chat');
+  const [messages,   setMessages]   = useState<Message[]>([]);
+  const [input,      setInput]      = useState('');
+  const [streaming,  setStreaming]   = useState(false);
+  const [creds,      setCreds]      = useState<Array<{ id: string; name: string; type: string }> | null>(null);
+  const [credId,     setCredId]     = useState<string | null>(null);
+  const [credError,  setCredError]  = useState<string | null>(null);
+
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const abortRef  = useRef<AbortController | null>(null);
+
+  // Fetch available AI credentials on mount
+  useEffect(() => {
+    api.ottobotCredentials()
+      .then(r => {
+        setCreds(r.credentials);
+        if (r.credentials.length > 0) setCredId(r.credentials[0].id);
+      })
+      .catch(() => setCreds([]));
+  }, []);
+
+  // Auto-scroll on new messages
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, streaming]);
+
+  const insights = analyzeWorkflow(nodes, edges);
+  const ready = creds !== null && creds.length > 0;
+
+  const sendMessage = useCallback(async () => {
+    if (!input.trim() || streaming || !ready) return;
+    const userMsg: Message = { role: 'user', content: input.trim(), id: String(Date.now()) };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setStreaming(true);
+    setCredError(null);
+
+    const history = [...messages, userMsg].map(m => ({ role: m.role, content: m.content }));
+
+    // Include workflow context as a system note in the first user turn if canvas has nodes
+    const contextNote = nodes.length > 0
+      ? `\n\n[Workflow context: ${nodes.length} nodes, ${edges.length} edges. Analysis: ${insights.map(i => i.text).join(' ')}]`
+      : '';
+    const historyWithContext = history.map((m, i) =>
+      i === 0 ? { ...m, content: m.content + contextNote } : m
+    );
+
+    const assistantId = String(Date.now() + 1);
+    setMessages(prev => [...prev, { role: 'assistant', content: '', id: assistantId }]);
+
+    abortRef.current = new AbortController();
+    try {
+      const res = await api.ottobotChat(historyWithContext, credId);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'OttoBot request failed' }));
+        setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: err.error ?? 'Request failed.' } : m));
+        setStreaming(false);
+        return;
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) { setStreaming(false); return; }
+      const decoder = new TextDecoder();
+      let buf = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6).trim();
+          if (payload === '[DONE]' || payload === '[ERROR]') break;
+          try {
+            const { text } = JSON.parse(payload) as { text?: string };
+            if (text) setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: m.content + text } : m));
+          } catch { /**/ }
         }
-      `}</style>
+      }
+    } catch {
+      setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: 'Request failed. Check your connection.' } : m));
+    } finally {
+      setStreaming(false);
+    }
+  }, [input, streaming, ready, messages, nodes, edges, insights, credId]);
+
+  const handleKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void sendMessage(); }
+  };
+
+  const PROVIDER_LABELS: Record<string, string> = { openai: 'OpenAI', anthropic: 'Anthropic', openrouter: 'OpenRouter' };
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-panel)', minWidth: 0 }}>
+
+      {/* Header */}
+      <div style={{ height: 36, padding: '0 14px', display: 'flex', alignItems: 'center', gap: '9px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+        <BotAvatar size={20} />
+        <span style={{ fontFamily: UI_FONT, fontSize: '12.5px', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.008em' }}>OttoBot</span>
+
+        {/* Ready dot */}
+        {ready && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--node-success)', flexShrink: 0 }} />
+            <span style={{ fontFamily: UI_FONT, fontSize: '11px', color: 'var(--text-muted)' }}>
+              {creds!.find(c => c.id === credId)?.name ?? 'Ready'}
+            </span>
+          </span>
+        )}
+
+        <div style={{ flex: 1 }} />
+
+        {/* Credential picker */}
+        {creds && creds.length > 1 && (
+          <select
+            value={credId ?? ''}
+            onChange={e => setCredId(e.target.value)}
+            style={{ fontFamily: UI_FONT, fontSize: '11px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: '5px', color: 'var(--text-secondary)', padding: '2px 6px', cursor: 'pointer', outline: 'none' }}
+          >
+            {creds.map(c => <option key={c.id} value={c.id}>{c.name} ({PROVIDER_LABELS[c.type] ?? c.type})</option>)}
+          </select>
+        )}
+
+        {/* Chat / Memory tabs */}
+        {['chat', 'memory'].map(t => (
+          <button key={t} onClick={() => setTab(t as 'chat' | 'memory')} style={{
+            fontFamily: UI_FONT, fontSize: '11px', fontWeight: tab === t ? 600 : 400,
+            background: tab === t ? 'var(--bg-hover)' : 'transparent',
+            border: '1px solid var(--border)', borderRadius: '5px',
+            color: tab === t ? 'var(--text-primary)' : 'var(--text-muted)',
+            padding: '2px 8px', cursor: 'pointer',
+          }}>
+            {t.charAt(0).toUpperCase() + t.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {/* Memory tab */}
+      {tab === 'memory' && <MemoryTab />}
+
+      {/* Chat tab */}
+      {tab === 'chat' && (
+        <>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '8px', minHeight: 0 }}>
+
+            {/* No credentials CTA */}
+            {creds !== null && creds.length === 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', padding: '24px 16px', textAlign: 'center' }}>
+                <BotAvatar size={40} />
+                <span style={{ fontFamily: UI_FONT, fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>No AI provider connected</span>
+                <span style={{ fontFamily: UI_FONT, fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                  Add an OpenAI, Anthropic, or OpenRouter credential to enable OttoBot chat.
+                </span>
+                <button
+                  onClick={() => window.location.assign('/app/credentials')}
+                  style={{ background: 'var(--accent-dim)', border: '1px solid var(--brand-ring)', borderRadius: '7px', padding: '7px 14px', cursor: 'pointer', fontFamily: UI_FONT, fontSize: '12px', fontWeight: 500, color: 'var(--accent)' }}
+                >
+                  Add a credential →
+                </button>
+              </div>
+            )}
+
+            {/* Insights */}
+            {messages.length === 0 && creds !== null && creds.length > 0 && insights.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '4px' }}>
+                {insights.map((ins, i) => (
+                  <div key={i} style={{
+                    background: ins.type === 'parallel' ? 'color-mix(in srgb, var(--node-success) 8%, transparent)' : ins.type === 'pattern' ? 'color-mix(in srgb, var(--node-running) 8%, transparent)' : 'var(--bg-hover)',
+                    border: `1px solid ${ins.type === 'parallel' ? 'color-mix(in srgb, var(--node-success) 18%, transparent)' : ins.type === 'pattern' ? 'color-mix(in srgb, var(--node-running) 18%, transparent)' : 'var(--border)'}`,
+                    borderRadius: '7px', padding: '7px 10px',
+                  }}>
+                    {ins.highlight && <div style={{ fontFamily: UI_FONT, fontSize: '11px', fontWeight: 700, color: ins.type === 'parallel' ? 'var(--node-success)' : 'var(--node-running)', marginBottom: '2px' }}>{ins.highlight}</div>}
+                    <div style={{ fontFamily: UI_FONT, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>{ins.text}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Messages */}
+            {messages.map(msg => (
+              <div key={msg.id} style={{ display: 'flex', gap: '8px', flexDirection: msg.role === 'user' ? 'row-reverse' : 'row', alignItems: 'flex-start' }}>
+                {msg.role === 'assistant' && (
+                  <span style={{ flexShrink: 0, marginTop: 2 }}><BotAvatar size={18} /></span>
+                )}
+                <div style={{
+                  maxWidth: '82%',
+                  background: msg.role === 'user' ? 'var(--accent-dim)' : 'var(--bg-input)',
+                  border: `1px solid ${msg.role === 'user' ? 'var(--brand-ring)' : 'var(--border)'}`,
+                  borderRadius: '10px',
+                  padding: '8px 11px',
+                  fontFamily: UI_FONT,
+                  fontSize: '13px',
+                  color: 'var(--text-primary)',
+                  lineHeight: 1.5,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                }}>
+                  {msg.content ? msg.content : (streaming && msg.role === 'assistant' ? <span style={{ opacity: 0.4, animation: 'otto-pulse 1s ease-in-out infinite' }}>●●●</span> : null)}
+                </div>
+              </div>
+            ))}
+
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Error */}
+          {credError && (
+            <div style={{ padding: '6px 14px', fontFamily: UI_FONT, fontSize: '11px', color: 'var(--node-error)', background: 'color-mix(in srgb, var(--node-error) 8%, transparent)', borderTop: '1px solid var(--border)' }}>
+              {credError}
+            </div>
+          )}
+
+          {/* Input */}
+          <div style={{ padding: '8px 10px', borderTop: '1px solid var(--border)', display: 'flex', gap: '7px', alignItems: 'flex-end', flexShrink: 0 }}>
+            <textarea
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKey}
+              placeholder={ready ? 'Ask OttoBot about your workflow…' : 'Connect a credential to chat'}
+              disabled={!ready || streaming}
+              rows={1}
+              style={{
+                flex: 1,
+                fontFamily: UI_FONT,
+                fontSize: '13px',
+                background: 'var(--bg-input)',
+                border: '1px solid var(--border-input)',
+                borderRadius: '8px',
+                padding: '7px 10px',
+                color: 'var(--text-primary)',
+                resize: 'none',
+                outline: 'none',
+                lineHeight: 1.4,
+                maxHeight: '80px',
+                overflowY: 'auto',
+                opacity: ready ? 1 : 0.5,
+              }}
+            />
+            <button
+              onClick={() => void sendMessage()}
+              disabled={!input.trim() || !ready || streaming}
+              style={{
+                width: 32, height: 32, borderRadius: '8px',
+                background: input.trim() && ready && !streaming ? 'var(--accent-strong)' : 'var(--bg-hover)',
+                border: '1px solid var(--border)',
+                cursor: input.trim() && ready && !streaming ? 'pointer' : 'not-allowed',
+                color: input.trim() && ready && !streaming ? '#fff' : 'var(--text-muted)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0, transition: 'background 0.1s, color 0.1s',
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -5,13 +5,70 @@ import { db } from '../db/client.js';
 import { getCredential } from '../engine/credentials.js';
 import { encryptCredential } from '../utils/encrypt.js';
 import { auditLog } from '../utils/audit.js';
+import { redactString, credentialSecrets } from '../utils/redact.js';
 
 const { Pool } = pg;
 
+// Maps n8n-style catalog IDs → canonical short types that the engine understands.
+// Applied at save time so stored credentials always use canonical types.
+const CATALOG_TO_CANONICAL = {
+  // AI providers
+  openAiApi:        'openai',
+  anthropicApi:     'anthropic',
+  openRouterApi:    'openrouter',
+  // HTTP auth
+  httpHeaderAuth:   'api_key',
+  httpBearerAuth:   'bearer_token',
+  httpBasicAuth:    'basic',
+  httpBasicAuthApi: 'basic',
+  httpDigestAuth:   'basic',
+  // Email
+  resendApi:        'resend',
+  // Cloud
+  aws:              's3',
+  awsS3:            's3',
+  // Integration services → generic type that matches node hints
+  slackApi:         'api_key',
+  slackOAuth2Api:   'bearer_token',
+  discordWebhookApi: 'bearer_token',
+  discordBotApi:    'api_key',
+  telegramApi:      'api_key',
+  githubApi:        'api_key',
+  githubOAuth2Api:  'bearer_token',
+  notionApi:        'api_key',
+  notionOAuth2Api:  'bearer_token',
+  airtableApi:      'api_key',
+  airtableTokenApi: 'api_key',
+  stripeApi:        'api_key',
+  sendGridApi:      'api_key',
+  twilioApi:        'api_key',
+  salesforceOAuth2Api: 'bearer_token',
+  hubspotApi:       'api_key',
+  hubspotOAuth2Api: 'bearer_token',
+  linearApi:        'api_key',
+  oAuth2Api:        'bearer_token',
+  oauthApi:         'bearer_token',
+};
+
+// Known canonical short types that we actually validate / test
+const KNOWN_CANONICAL_TYPES = new Set([
+  'api_key', 'bearer_token', 'basic', 'openai', 'anthropic', 'openrouter',
+  'postgres', 'redis', 's3', 'resend', 'smtp',
+]);
+
 function normalizeType(type) {
   const value = String(type ?? '').trim();
+  // Catalog ID → canonical
+  if (CATALOG_TO_CANONICAL[value]) return CATALOG_TO_CANONICAL[value];
+  // Legacy aliases
   if (value === 'basic_auth') return 'basic';
   if (value === 'bearer') return 'bearer_token';
+  // Unknown catalog IDs default to api_key (generic) rather than passing through raw
+  if (!KNOWN_CANONICAL_TYPES.has(value) && value.length > 0) {
+    // Preserve postgres/redis/smtp/s3 even if they come in exactly as-is
+    if (['postgres', 'redis', 'smtp', 's3'].includes(value)) return value;
+    return 'api_key';
+  }
   return value;
 }
 
@@ -20,23 +77,52 @@ function normalizeData(type, data) {
   const value = source.value ?? source.key ?? source.apiKey ?? '';
 
   if (type === 'api_key') {
-    return { header: source.header || 'Authorization', value: String(value) };
+    // Catalog forms use various field names — normalise them all
+    const apiValue = String(
+      source.value ?? source.key ?? source.apiKey ?? source.api_key ??
+      source.token ?? source.access_token ?? source.accessToken ?? ''
+    );
+    return { header: String(source.header ?? 'Authorization'), value: apiValue };
   }
   if (type === 'bearer_token') {
-    const token = String(value).replace(/^Bearer\s+/i, '');
-    return { value: token };
+    const raw = String(
+      source.value ?? source.key ?? source.apiKey ?? source.token ??
+      source.access_token ?? source.accessToken ?? ''
+    );
+    return { value: raw.replace(/^Bearer\s+/i, '') };
   }
   if (type === 'basic') {
-    return { username: String(source.username ?? ''), password: String(source.password ?? '') };
+    return {
+      username: String(source.username ?? source.user ?? ''),
+      password: String(source.password ?? source.pass ?? ''),
+    };
   }
   if (['openai', 'anthropic', 'openrouter'].includes(type)) {
-    return { value: String(value) };
+    return {
+      value: String(
+        source.value ?? source.key ?? source.apiKey ?? source.api_key ??
+        source.token ?? ''
+      )
+    };
   }
   if (type === 'postgres') {
-    return { connectionString: String(source.connectionString ?? value) };
+    // Accept a ready-made connection string, or build one from individual fields
+    if (source.connectionString) return { connectionString: String(source.connectionString) };
+    const host = String(source.host ?? 'localhost');
+    const port = String(source.port ?? '5432');
+    const database = String(source.database ?? source.db ?? '');
+    const user = String(source.user ?? source.username ?? '');
+    const password = String(source.password ?? source.pass ?? '');
+    const encoded = encodeURIComponent(password);
+    return { connectionString: `postgresql://${user}:${encoded}@${host}:${port}/${database}` };
   }
   if (type === 'redis') {
-    return { url: String(source.url ?? value) };
+    if (source.url) return { url: String(source.url) };
+    const host = String(source.host ?? 'localhost');
+    const port = String(source.port ?? '6379');
+    const password = source.password ?? source.pass ?? null;
+    const auth = password ? `:${encodeURIComponent(String(password))}@` : '';
+    return { url: `redis://${auth}${host}:${port}` };
   }
   if (type === 's3') {
     return {
@@ -194,14 +280,30 @@ export async function credentialRoutes(fastify) {
     const validationError = validateCredentialData(normalizedType, normalizedData);
     if (validationError) return reply.code(400).send({ error: validationError });
 
-    const encrypted = encryptCredential(normalizedData);
+    let encrypted;
+    try {
+      encrypted = encryptCredential(normalizedData);
+    } catch (err) {
+      req.log.error({ err }, 'credential encryption failed');
+      return reply.code(500).send({ error: 'Credential could not be encrypted. Check that CREDENTIAL_ENCRYPTION_KEY is set.' });
+    }
 
-    const { rows } = await db.query(
-      `INSERT INTO credentials (workspace_id, name, type, data)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, name, type, created_at`,
-      [req.auth.workspaceId, name, normalizedType, JSON.stringify(encrypted)]
-    );
+    let rows;
+    try {
+      ({ rows } = await db.query(
+        `INSERT INTO credentials (workspace_id, name, type, data)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, name, type, created_at`,
+        [req.auth.workspaceId, name, normalizedType, JSON.stringify(encrypted)]
+      ));
+    } catch (err) {
+      req.log.error({ err }, 'credential insert failed');
+      if (err.code === '23505') {
+        return reply.code(409).send({ error: `A credential named "${name}" already exists in this workspace.` });
+      }
+      return reply.code(500).send({ error: 'Failed to save credential. Check the server logs for details.' });
+    }
+
     await auditLog({
       workspaceId: req.auth.workspaceId,
       userId: req.auth.userId,
@@ -289,7 +391,13 @@ export async function credentialRoutes(fastify) {
       const result = await testCredential(credential, req.body ?? {});
       return reply.send(result);
     } catch (err) {
-      return reply.send({ ok: false, checked: credential.type, error: err.message });
+      req.log.error({ err }, 'credential test failed');
+      // Redact any secret (e.g. password embedded in a connection-string error)
+      return reply.send({
+        ok: false,
+        checked: credential.type,
+        error: redactString(err.message, credentialSecrets(credential)),
+      });
     }
   });
 

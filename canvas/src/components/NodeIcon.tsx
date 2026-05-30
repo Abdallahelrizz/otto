@@ -37,6 +37,9 @@ import {
   XCircle,
   HandWaving,
   Kanban,
+  CreditCard,
+  PaperPlaneTilt,
+  Phone,
   type Icon as PhosphorIcon,
   type IconWeight,
 } from '@phosphor-icons/react';
@@ -98,6 +101,9 @@ const ICON_MAP: Record<string, PhosphorIcon> = {
   salesforce_api:  Database,
   hubspot_api:     Funnel,
   linear_api:      Kanban,
+  stripe_api:      CreditCard,
+  sendgrid_email:  PaperPlaneTilt,
+  twilio_sms:      Phone,
 };
 
 export interface NodeIconProps {

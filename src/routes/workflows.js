@@ -9,8 +9,11 @@ import {
 
 export async function workflowRoutes(fastify) {
   fastify.get('/api/v1/workflows', async (req, reply) => {
-    const { limit = 50, offset = 0, tag } = req.query;
+    const { tag } = req.query;
     const { workspaceId } = req.auth;
+    // Clamp pagination to sane bounds (guard NaN / negative / huge)
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
 
     const { rows } = await db.query(
       `SELECT id, name, active, tags, created_at, updated_at,
@@ -30,7 +33,7 @@ export async function workflowRoutes(fastify) {
        WHERE workspace_id = $1 AND ($2::text IS NULL OR $2 = ANY(tags))
        ORDER BY updated_at DESC
        LIMIT $3 OFFSET $4`,
-      [workspaceId, tag ?? null, Number(limit), Number(offset)]
+      [workspaceId, tag ?? null, limit, offset]
     );
     return reply.send({ workflows: rows });
   });

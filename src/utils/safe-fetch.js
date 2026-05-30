@@ -65,6 +65,40 @@ async function resolveAndCheck(hostname) {
 }
 
 /**
+ * Assert a connection target (e.g. a postgres:// or redis:// URL, or a bare
+ * hostname) does not point at a private/reserved address. Throws SsrfBlockedError.
+ * No-op when SSRF_ALLOW_PRIVATE=true. Used to guard credential-supplied DB/cache hosts.
+ */
+export async function assertSafeConnectionTarget(target) {
+  if (process.env.SSRF_ALLOW_PRIVATE === 'true') return;
+  if (!target) return;
+
+  let hostname = String(target);
+  // If it looks like a URL, extract the hostname
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(hostname)) {
+    try {
+      hostname = new URL(hostname).hostname;
+    } catch {
+      throw new SsrfBlockedError('Invalid connection URL');
+    }
+  } else if (hostname.includes('@')) {
+    // user:pass@host:port form without scheme
+    hostname = hostname.split('@').pop().split(':')[0].split('/')[0];
+  } else {
+    hostname = hostname.split(':')[0].split('/')[0];
+  }
+
+  if (!hostname) return;
+  if (net.isIP(hostname)) {
+    if (isBlockedIP(hostname)) {
+      throw new SsrfBlockedError(`Blocked: ${hostname} is a private/reserved address`);
+    }
+  } else {
+    await resolveAndCheck(hostname);
+  }
+}
+
+/**
  * Fetch wrapper that prevents SSRF by resolving the hostname and checking
  * it against private/reserved IP ranges before making the request.
  * Follows redirects safely (each hop is checked).

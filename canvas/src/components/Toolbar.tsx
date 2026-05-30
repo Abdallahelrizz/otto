@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore, buildDefinition } from '../store';
 import { api } from '../api';
 import type { WorkflowSettings } from '../types';
@@ -266,6 +267,7 @@ function WorkflowSettingsModal({
 }
 
 export function Toolbar() {
+  const navigate = useNavigate();
   const nodes = useStore((s) => s.nodes);
   const edges = useStore((s) => s.edges);
   const pinnedData = useStore((s) => s.pinnedData);
@@ -331,14 +333,24 @@ export function Toolbar() {
 
   const handleDuplicateWorkflow = useCallback(async () => {
     try {
-      const definition = buildDefinition(nodes, edges, pinnedData);
-      const { id } = await api.createWorkflow(`${workflowName} Copy`, definition);
-      await loadWorkflow(id);
+      let newId: string;
+      if (savedWorkflowId) {
+        // Prefer the server-side duplicate endpoint — preserves server state + version history
+        const result = await api.duplicateWorkflow(savedWorkflowId);
+        newId = result.id;
+      } else {
+        // Workflow not yet saved — rebuild definition from the current canvas state
+        const definition = buildDefinition(nodes, edges, pinnedData);
+        const result = await api.createWorkflow(`${workflowName} Copy`, definition);
+        newId = result.id;
+      }
+      await loadWorkflow(newId);
       fetchWorkflows();
     } catch (err: unknown) {
-      alert(`Duplicate failed: ${err instanceof Error ? err.message : String(err)}`);
+      // No alert() — log and let the user notice no navigation occurred
+      console.error('[otto] Duplicate workflow failed:', err instanceof Error ? err.message : err);
     }
-  }, [nodes, edges, pinnedData, workflowName, loadWorkflow, fetchWorkflows]);
+  }, [savedWorkflowId, nodes, edges, pinnedData, workflowName, loadWorkflow, fetchWorkflows]);
 
   const iconBtn: React.CSSProperties = {
     width: '28px',
@@ -370,10 +382,35 @@ export function Toolbar() {
     >
       {/* Breadcrumb */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0, flex: 1 }}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><line x1="6" y1="15" x2="6" y2="3"/><line x1="18" y1="21" x2="18" y2="9"/><line x1="6" y1="3" x2="18" y2="3"/>
-        </svg>
-        <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)', letterSpacing: '-0.005em', fontWeight: 500, whiteSpace: 'nowrap' }}>Workflows</span>
+        <button
+          onClick={() => navigate('/app/workflows')}
+          title="Back to dashboard"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '3px 6px',
+            borderRadius: '5px',
+            color: 'var(--text-secondary)',
+            transition: 'background 0.1s, color 0.1s',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
+            (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.background = 'none';
+            (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)';
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><line x1="6" y1="15" x2="6" y2="3"/><line x1="18" y1="21" x2="18" y2="9"/><line x1="6" y1="3" x2="18" y2="3"/>
+          </svg>
+          <span style={{ fontSize: '12.5px', letterSpacing: '-0.005em', fontWeight: 500, whiteSpace: 'nowrap' }}>Workflows</span>
+        </button>
         <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>/</span>
 
         {/* Editable workflow name */}
@@ -450,6 +487,20 @@ export function Toolbar() {
 
       {/* Right side controls */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+        {/* Settings gear */}
+        <button
+          onClick={() => navigate('/app/settings/general')}
+          title="Settings"
+          style={{ ...iconBtn }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+
         {/* Theme toggle */}
         <button
           onClick={toggleTheme}

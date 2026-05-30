@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { NODE_TYPE_DEFS, NODE_CATEGORIES, nodeColor, nodeRadius, OTTO_AMBER, OTTO_AMBER_HOVER, type NodeTypeDef } from './nodes/nodeConfig';
+import { NODE_TYPE_DEFS, NODE_CATEGORIES, nodeColor, nodeRadius, NODE_SERVICE_LOGO, OTTO_AMBER, OTTO_AMBER_HOVER, type NodeTypeDef } from './nodes/nodeConfig';
 import { NodeIcon } from './NodeIcon';
+import { ServiceLogo } from './ServiceLogo';
 import { v4 as uuidv4 } from 'uuid';
 import { useStore } from '../store';
 import { api } from '../api';
@@ -19,14 +20,8 @@ import type {
 const AMBER = OTTO_AMBER;
 
 const NAV_ITEMS = [
-  { id: 'workflows',    label: 'Workflows',    badge: null },
-  { id: 'library',     label: 'Node library', badge: null },
-  { id: 'history',     label: 'History',      badge: null },
-  { id: 'observability', label: 'Observability', badge: null },
-  { id: 'integrations',label: 'Integrations', badge: null },
-  { id: 'models',      label: 'Models',       badge: 4    },
-  { id: 'memory',      label: 'Memory',       badge: null },
-  { id: 'settings',    label: 'Settings',     badge: null },
+  { id: 'library', label: 'Node library', badge: null },
+  { id: 'history', label: 'History',      badge: null },
 ];
 
 function NavIcon({ id }: { id: string }) {
@@ -2727,41 +2722,6 @@ export function Sidebar() {
         flexShrink: 0,
       }}
     >
-      {/* Brand mark */}
-      <div style={{
-        height: '54px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '9px',
-        padding: '0 16px',
-        borderBottom: '1px solid var(--border)',
-        flexShrink: 0,
-      }}>
-        <span style={{
-          width: 22,
-          height: 22,
-          borderRadius: '5px',
-          background: AMBER,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-        }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-          </svg>
-        </span>
-        <span style={{
-          fontSize: '16px',
-          fontWeight: 700,
-          color: 'var(--text-primary)',
-          letterSpacing: '-0.022em',
-          fontFamily: "'Inter'",
-        }}>
-          otto
-        </span>
-      </div>
-
       {/* Nav items */}
       <div style={{ padding: '10px 8px', display: 'flex', flexDirection: 'column', gap: '1px', flexShrink: 0 }}>
         {NAV_ITEMS.map((item) => {
@@ -2967,7 +2927,86 @@ export function Sidebar() {
               </div>
             );
           })}
-          {libraryMatches.length === 0 && (
+          {/* ── Integrations group — service-tinted nodes with brand logos ── */}
+          {(() => {
+            const integrationDefs = NODE_TYPE_DEFS.filter((d) => {
+              if (d.tint !== 'service') return false;
+              if (!libraryQuery.trim()) return true;
+              const q = libraryQuery.toLowerCase();
+              return (
+                d.label.toLowerCase().includes(q) ||
+                d.description?.toLowerCase().includes(q) ||
+                d.type.toLowerCase().includes(q) ||
+                d.slug?.toLowerCase().includes(q)
+              );
+            });
+            if (integrationDefs.length === 0) return null;
+            const isOpen = Boolean(libraryQuery.trim()) || openCat === 'integrations';
+            return (
+              <div key="integrations">
+                <button
+                  onClick={() => toggle('integrations')}
+                  style={{
+                    width: '100%',
+                    height: '34px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '0 10px',
+                    gap: '8px',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'background 120ms ease-out',
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
+                >
+                  <span style={{
+                    fontFamily: 'Geist, system-ui, sans-serif',
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    color: 'var(--text-muted)',
+                    letterSpacing: '0.10em',
+                    flex: 1,
+                    textAlign: 'left',
+                    textTransform: 'uppercase',
+                  }}>
+                    Integrations
+                  </span>
+                  {!isOpen && (
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 500 }}>
+                      {integrationDefs.length}
+                    </span>
+                  )}
+                  <span style={{
+                    color: 'var(--text-muted)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    flexShrink: 0,
+                    transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+                    transition: 'transform 150ms cubic-bezier(0.23, 1, 0.32, 1)',
+                  }}>
+                    <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                      <path d="M2 1.5L5.5 4L2 6.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                </button>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateRows: isOpen ? '1fr' : '0fr',
+                  transition: 'grid-template-rows 150ms cubic-bezier(0.23, 1, 0.32, 1)',
+                }}>
+                  <div style={{ overflow: 'hidden' }}>
+                    {integrationDefs.map((def) => (
+                      <NodeRow key={def.type} def={def} theme={theme} onDragStart={onDragStart} onClick={addToCanvas} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {libraryMatches.filter(d => d.tint !== 'service').length === 0 && (
             <div style={{
               color: 'var(--text-muted)',
               fontSize: '12px',
@@ -2981,27 +3020,7 @@ export function Sidebar() {
         </div>
       )}
 
-      {activeSidebarTab === 'workflows' && <WorkflowsTab />}
       {activeSidebarTab === 'history' && <HistoryTab />}
-      {activeSidebarTab === 'observability' && <ObservabilityTab />}
-      {activeSidebarTab === 'integrations' && <IntegrationsTab />}
-      {activeSidebarTab === 'memory' && <MemoryTab />}
-      {activeSidebarTab === 'settings' && <SettingsTabV2 />}
-
-      {/* Placeholder tabs */}
-      {activeSidebarTab === 'models' && (
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '24px 16px',
-        }}>
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', letterSpacing: '-0.005em' }}>
-            {activeSidebarTab === 'models' && 'Model registry coming soon'}
-          </span>
-        </div>
-      )}
 
       {/* Footer */}
       <div style={{
@@ -3117,19 +3136,36 @@ function NodeRow({
       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
     >
-      <span style={{
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '22px',
-        height: '22px',
-        borderRadius: radius,
-        background: `${color}1a`,
-        border: `1px solid ${color}33`,
-      }}>
-        <NodeIcon type={def.type} size={12} color={color} />
-      </span>
+      {NODE_SERVICE_LOGO[def.type] ? (
+        <span style={{
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '28px',
+          height: '28px',
+          borderRadius: '6px',
+          overflow: 'hidden',
+          background: 'var(--bg-hover)',
+          border: '1px solid var(--border)',
+        }}>
+          <ServiceLogo catalogId={NODE_SERVICE_LOGO[def.type]} name={def.label} fallbackColor={color} size={22} />
+        </span>
+      ) : (
+        <span style={{
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '22px',
+          height: '22px',
+          borderRadius: radius,
+          background: `${color}1a`,
+          border: `1px solid ${color}33`,
+        }}>
+          <NodeIcon type={def.type} size={12} color={color} />
+        </span>
+      )}
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
         <span style={{
           display: 'flex',

@@ -160,9 +160,25 @@ interface OttoStore {
   clearPinnedDataForNode: (nodeId: string) => void;
   clearAllPinnedData: () => void;
 
-  // Bottom panels
-  bottomPanelsOpen: boolean;
+  // Bottom dock — individual panel visibility + layout
+  bottomPanelsOpen: boolean;        // kept for backward-compat callers; maps to logsOpen
   setBottomPanelsOpen: (open: boolean) => void;
+  ottobotOpen: boolean;
+  logsOpen: boolean;
+  dockHeight: number;               // persisted to localStorage
+  dockSplit: number;                // 0–1, persisted to localStorage
+  toggleOttobot: () => void;
+  toggleLogs: () => void;
+  setDockHeight: (h: number) => void;
+  setDockSplit: (s: number) => void;
+
+  // NDV (Node Detail View) modal
+  ndvNodeId: string | null;
+  setNdvNodeId: (id: string | null) => void;
+
+  // Fit view callback (registered by Canvas)
+  fitViewCallback: (() => void) | null;
+  setFitViewCallback: (fn: (() => void) | null) => void;
 
   // Context menu
   contextMenu: ContextMenuState | null;
@@ -721,7 +737,7 @@ export const useStore = create<OttoStore>((set, get) => ({
     set((s) => ({ apiKeys: s.apiKeys.filter((key) => key.id !== id) }));
   },
 
-  sidebarOpen: true,
+  sidebarOpen: false,
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   activeSidebarTab: 'library',
   setActiveSidebarTab: (tab) => set({ activeSidebarTab: tab }),
@@ -748,8 +764,24 @@ export const useStore = create<OttoStore>((set, get) => ({
     })),
   clearAllPinnedData: () => set({ pinnedData: {} }),
 
-  bottomPanelsOpen: true,
-  setBottomPanelsOpen: (open) => set({ bottomPanelsOpen: open }),
+  bottomPanelsOpen: false,
+  // backward compat: opening "bottom panels" = opening the Logs pane
+  setBottomPanelsOpen: (open) => set({ bottomPanelsOpen: open, logsOpen: open }),
+
+  ottobotOpen: false,
+  logsOpen: false,
+  dockHeight: (() => { try { return Math.max(160, Number(localStorage.getItem('otto-dock-h') || '300')); } catch { return 300; } })(),
+  dockSplit:  (() => { try { const v = Number(localStorage.getItem('otto-dock-split') || '0.5'); return v > 0 && v < 1 ? v : 0.5; } catch { return 0.5; } })(),
+  toggleOttobot: () => set((s) => ({ ottobotOpen: !s.ottobotOpen })),
+  toggleLogs:    () => set((s) => ({ logsOpen: !s.logsOpen })),
+  setDockHeight: (h) => { try { localStorage.setItem('otto-dock-h', String(h)); } catch { /**/ } set({ dockHeight: h }); },
+  setDockSplit:  (s) => { try { localStorage.setItem('otto-dock-split', String(s)); } catch { /**/ } set({ dockSplit: s }); },
+
+  ndvNodeId: null,
+  setNdvNodeId: (id) => set({ ndvNodeId: id }),
+
+  fitViewCallback: null,
+  setFitViewCallback: (fn) => set({ fitViewCallback: fn }),
 
   contextMenu: null,
   setContextMenu: (menu) => set({ contextMenu: menu }),
@@ -834,7 +866,7 @@ export const useStore = create<OttoStore>((set, get) => ({
     }
 
     get().resetExecution();
-    set({ bottomPanelsOpen: true });
+    set({ bottomPanelsOpen: true, logsOpen: true });
 
     try {
       const definition = buildDefinition(nodes, edges, pinnedData, workflowImportReport, workflowSettings);
@@ -887,7 +919,7 @@ export const useStore = create<OttoStore>((set, get) => ({
   retryExecution: async (executionId = get().executionId) => {
     if (!executionId) return;
     get().resetExecution();
-    set({ bottomPanelsOpen: true });
+    set({ bottomPanelsOpen: true, logsOpen: true });
     try {
       const res = await api.retryExecution(executionId);
       get().setExecutionStarted(res.executionId);

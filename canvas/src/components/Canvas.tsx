@@ -35,7 +35,7 @@ function CanvasTabs() {
   const tabs = [
     { id: 'editor' as const, label: 'Editor' },
     { id: 'executions' as const, label: 'Executions' },
-    { id: 'test' as const, label: 'Test' },
+    { id: 'test' as const, label: 'Run with input' },
   ];
 
   return (
@@ -236,7 +236,7 @@ function TestPanel() {
         borderBottom: '1px solid var(--border)',
         gap: 8,
       }}>
-        <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--text-primary)' }}>Test input</span>
+        <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--text-primary)' }}>Run with input</span>
         <div style={{ flex: 1 }} />
         <button
           disabled={disabled}
@@ -485,6 +485,8 @@ export function Canvas() {
   const selectAllNodes = useStore((s) => s.selectAllNodes);
   const nodeClipboard = useStore((s) => s.nodeClipboard);
   const setContextMenu = useStore((s) => s.setContextMenu);
+  const setNdvNodeId = useStore((s) => s.setNdvNodeId);
+  const setFitViewCallback = useStore((s) => s.setFitViewCallback);
   const activeCanvasTab = useStore((s) => s.activeCanvasTab);
 
   const dotColor = theme === 'dark' ? 'rgba(255,255,255,0.035)' : 'rgba(15,15,10,0.06)';
@@ -507,6 +509,12 @@ export function Canvas() {
     () => executionPhase === 'running' ? edges.map((e) => ({ ...e, animated: true })) : edges,
     [edges, executionPhase]
   );
+
+  // Register fitView callback for the keyboard shortcut hook
+  useEffect(() => {
+    setFitViewCallback(() => fitView({ padding: 0.15, duration: 400 }));
+    return () => setFitViewCallback(null);
+  }, [fitView, setFitViewCallback]);
 
   const prevPhaseRef = useRef(executionPhase);
   useEffect(() => {
@@ -583,6 +591,14 @@ export function Canvas() {
     [focusCanvas, selectNode]
   );
 
+  const onNodeDoubleClick: NodeMouseHandler = useCallback(
+    (_e, node) => {
+      selectNode(node.id);
+      setNdvNodeId(node.id);
+    },
+    [selectNode, setNdvNodeId]
+  );
+
   const onPaneClick = useCallback(() => {
     focusCanvas();
     selectNode(null);
@@ -620,6 +636,7 @@ export function Canvas() {
         onDrop={onDrop}
         onDragOver={onDragOver}
         onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick}
         onPaneClick={onPaneClick}
         onNodeContextMenu={onNodeContextMenu}
         onPaneContextMenu={onPaneContextMenu}

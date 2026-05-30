@@ -66,6 +66,12 @@ export const VALID_SCOPES = new Set([
   'import:write',
   'export:read',
 
+  // Expression preview (live resolve in NDV)
+  'expressions:preview',
+
+  // OttoBot AI assistant
+  'ottobot:invoke',
+
   // MCP invocation
   'mcp:invoke',
 
@@ -156,6 +162,13 @@ const SCOPE_MAP = [
 
   // External secrets
   [/^\/api\/v1\/external-secrets/, 'GET',             'external_secrets:read'],
+
+  // Expression preview
+  [/^\/api\/v1\/expressions\/preview$/, 'POST',       'expressions:preview'],
+
+  // OttoBot
+  [/^\/api\/v1\/ottobot\/chat$/, 'POST',              'ottobot:invoke'],
+  [/^\/api\/v1\/ottobot\/credentials$/, 'GET',        'ottobot:invoke'],
 
   // Import / Export
   [/^\/api\/v1\/import/, 'POST',                      'import:write'],

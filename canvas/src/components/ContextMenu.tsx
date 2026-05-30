@@ -17,6 +17,7 @@ export function ContextMenu() {
   const clearPinnedDataForNode = useStore((s) => s.clearPinnedDataForNode);
   const pinnedData = useStore((s) => s.pinnedData);
   const setBottomPanelsOpen = useStore((s) => s.setBottomPanelsOpen);
+  const setNdvNodeId = useStore((s) => s.setNdvNodeId);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -25,7 +26,6 @@ export function ContextMenu() {
     const close = () => setContextMenu(null);
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
 
-    // Delay so the right-click that opened the menu doesn't immediately close it
     const t = setTimeout(() => {
       document.addEventListener('click', close);
       document.addEventListener('contextmenu', close);
@@ -42,19 +42,19 @@ export function ContextMenu() {
 
   if (!contextMenu) return null;
 
-  // Clamp to viewport
-  const x = Math.max(8, Math.min(contextMenu.x, window.innerWidth - 180));
-  const y = Math.max(8, Math.min(contextMenu.y, window.innerHeight - 410));
+  const x = Math.max(8, Math.min(contextMenu.x, window.innerWidth - 200));
+  const y = Math.max(8, Math.min(contextMenu.y, window.innerHeight - 420));
   const { nodeId } = contextMenu;
-  const selectedNodeIds = nodes.filter((item) => item.selected).map((item) => item.id);
+  const selectedNodeIds = nodes.filter((n) => n.selected).map((n) => n.id);
   const actionNodeIds = selectedNodeIds.includes(nodeId) ? selectedNodeIds : [nodeId];
   const actionCount = actionNodeIds.length;
-  const actionNodes = nodes.filter((item) => actionNodeIds.includes(item.id));
-  const isDisabled = actionNodes.length > 0 && actionNodes.every((item) => Boolean(item.data.disabled));
+  const actionNodes = nodes.filter((n) => actionNodeIds.includes(n.id));
+  const isDisabled = actionNodes.length > 0 && actionNodes.every((n) => Boolean(n.data.disabled));
   const hasCopiedNodes = Boolean(nodeClipboard?.nodes.length);
   const hasPinnedData = Object.prototype.hasOwnProperty.call(pinnedData, nodeId);
 
   const close = () => setContextMenu(null);
+
   const runNode = (mode: 'single_node' | 'to_node' | 'from_node') => {
     selectNode(nodeId);
     setBottomPanelsOpen(true);
@@ -64,89 +64,77 @@ export function ContextMenu() {
 
   const pinOutput = () => {
     const ok = pinNodeOutput(nodeId);
-    if (!ok) alert('Run this node before pinning its output.');
+    if (!ok) {
+      // Non-blocking notification instead of alert
+      console.warn('[otto] Run this node before pinning its output.');
+    }
+    close();
+  };
+
+  const openNDV = () => {
+    selectNode(nodeId);
+    if (setNdvNodeId) setNdvNodeId(nodeId);
     close();
   };
 
   return (
     <div
       ref={ref}
-      style={{
-        position: 'fixed',
-        left: x,
-        top: y,
-        zIndex: 9999,
-        background: '#1A1A1A',
-        border: '1px solid #2A2A2A',
-        borderRadius: '8px',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4)',
-        minWidth: '170px',
-        overflow: 'hidden',
-        fontFamily: "'Inter'",
-        fontSize: '13px',
-      }}
+      className="otto-context-menu"
+      style={{ position: 'fixed', left: x, top: y, zIndex: 9999, minWidth: '180px' }}
     >
-      <MenuItem
-        label={actionCount > 1 ? `Duplicate ${actionCount} nodes` : 'Duplicate'}
-        shortcut="Ctrl+D"
-        onClick={() => { duplicateNodes(actionNodeIds); setContextMenu(null); }}
-      />
-      <MenuItem
-        label={actionCount > 1 ? `Copy ${actionCount} nodes` : 'Copy'}
-        shortcut="Ctrl+C"
-        onClick={() => { copyNodes(actionNodeIds); setContextMenu(null); }}
-      />
-      <MenuItem
-        label="Paste"
-        shortcut="Ctrl+V"
-        disabled={!hasCopiedNodes}
-        onClick={() => { pasteNodes(); setContextMenu(null); }}
-      />
-      <MenuItem
-        label="Rename"
-        onClick={() => { selectNode(nodeId); setContextMenu(null); }}
-      />
-      <MenuItem
-        label={actionCount > 1
-          ? `${isDisabled ? 'Enable' : 'Disable'} ${actionCount} nodes`
-          : isDisabled ? 'Enable node' : 'Disable node'}
-        onClick={() => { toggleNodesDisabled(actionNodeIds); close(); }}
-      />
-      <div style={{ height: '1px', background: '#2A2A2A', margin: '3px 0' }} />
-      <MenuItem
-        label="Run node"
-        onClick={() => runNode('single_node')}
-      />
-      <MenuItem
-        label="Run to here"
-        onClick={() => runNode('to_node')}
-      />
-      <MenuItem
-        label="Run from here"
-        onClick={() => runNode('from_node')}
-      />
-      <MenuItem
-        label="View data"
-        onClick={() => { selectNode(nodeId); setBottomPanelsOpen(true); close(); }}
-      />
-      <div style={{ height: '1px', background: '#2A2A2A', margin: '3px 0' }} />
-      <MenuItem
-        label={hasPinnedData ? 'Update pinned output' : 'Pin last output'}
-        onClick={pinOutput}
-      />
-      {hasPinnedData && (
+      <div style={{ padding: '4px' }}>
+        <MenuItem label="Open in editor" onClick={openNDV} />
+        <div className="otto-menu-divider" />
         <MenuItem
-          label="Clear pinned output"
-          onClick={() => { clearPinnedDataForNode(nodeId); close(); }}
+          label={actionCount > 1 ? `Duplicate ${actionCount} nodes` : 'Duplicate'}
+          shortcut="⌃D"
+          onClick={() => { duplicateNodes(actionNodeIds); close(); }}
         />
-      )}
-      <div style={{ height: '1px', background: '#2A2A2A', margin: '3px 0' }} />
-      <MenuItem
-        label={actionCount > 1 ? `Delete ${actionCount} nodes` : 'Delete'}
-        shortcut="Del"
-        danger
-        onClick={() => deleteNodes(actionNodeIds)}
-      />
+        <MenuItem
+          label={actionCount > 1 ? `Copy ${actionCount} nodes` : 'Copy'}
+          shortcut="⌃C"
+          onClick={() => { copyNodes(actionNodeIds); close(); }}
+        />
+        <MenuItem
+          label="Paste"
+          shortcut="⌃V"
+          disabled={!hasCopiedNodes}
+          onClick={() => { pasteNodes(); close(); }}
+        />
+        <MenuItem
+          label="Rename"
+          onClick={() => { selectNode(nodeId); close(); }}
+        />
+        <MenuItem
+          label={actionCount > 1
+            ? `${isDisabled ? 'Enable' : 'Disable'} ${actionCount} nodes`
+            : isDisabled ? 'Enable node' : 'Disable node'}
+          onClick={() => { toggleNodesDisabled(actionNodeIds); close(); }}
+        />
+        <div className="otto-menu-divider" />
+        <MenuItem label="Run node" onClick={() => runNode('single_node')} />
+        <MenuItem label="Run to here" onClick={() => runNode('to_node')} />
+        <MenuItem label="Run from here" onClick={() => runNode('from_node')} />
+        <div className="otto-menu-divider" />
+        <MenuItem
+          label={hasPinnedData ? 'Update pinned output' : 'Pin last output'}
+          onClick={pinOutput}
+        />
+        {hasPinnedData && (
+          <MenuItem
+            label="Clear pinned output"
+            onClick={() => { clearPinnedDataForNode(nodeId); close(); }}
+          />
+        )}
+        <div className="otto-menu-divider" />
+        <MenuItem
+          label={actionCount > 1 ? `Delete ${actionCount} nodes` : 'Delete'}
+          shortcut="Del"
+          danger
+          onClick={() => deleteNodes(actionNodeIds)}
+        />
+      </div>
     </div>
   );
 }
@@ -166,34 +154,13 @@ function MenuItem({
 }) {
   return (
     <button
+      type="button"
       disabled={disabled}
-      onClick={() => {
-        if (!disabled) onClick();
-      }}
-      style={{
-        width: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '8px 12px',
-        background: 'transparent',
-        border: 'none',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        color: disabled ? '#666666' : danger ? '#EF4444' : '#FFFFFF',
-        fontFamily: 'inherit',
-        fontSize: 'inherit',
-        textAlign: 'left',
-        transition: 'background 0.08s ease',
-      }}
-      onMouseEnter={(e) => { if (!disabled) (e.currentTarget as HTMLElement).style.background = '#252525'; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+      onClick={() => { if (!disabled) onClick(); }}
+      className={`otto-menu-item${danger ? ' danger' : ''}`}
     >
       <span>{label}</span>
-      {shortcut && (
-        <span style={{ fontSize: '11px', color: '#555', marginLeft: '16px' }}>
-          {shortcut}
-        </span>
-      )}
+      {shortcut && <span className="otto-menu-shortcut">{shortcut}</span>}
     </button>
   );
 }

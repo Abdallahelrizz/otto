@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { Landing } from './pages/Landing';
 import { CanvasApp } from './pages/CanvasApp';
 import { WorkflowsDashboard } from './pages/WorkflowsDashboard';
 import { ExecutionHistory } from './pages/ExecutionHistory';
@@ -27,7 +26,7 @@ export function App() {
 
   return (
     <Routes>
-      <Route path="/" element={<Landing />} />
+      <Route path="/" element={<Navigate to="/app/workflows" replace />} />
 
       {/* App pages — all auth-gated */}
       <Route path="/app" element={<Navigate to="/app/workflows" replace />} />
@@ -44,7 +43,7 @@ export function App() {
       <Route path="/app/settings/audit" element={<AppRoute><SettingsAuditLog /></AppRoute>} />
       <Route path="/app/settings/about" element={<AppRoute><SettingsAbout /></AppRoute>} />
 
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/app/workflows" replace />} />
     </Routes>
   );
 }

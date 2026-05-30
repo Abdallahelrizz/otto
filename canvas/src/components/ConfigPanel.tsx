@@ -15,6 +15,7 @@ import { JsonViewer } from './JsonViewer';
 import { ModelSelect } from './ModelSelect';
 import type { Credential, NodeExecution, OttoNodeData, TriggerSample, WorkflowValidationIssue } from '../types';
 import type { AgentTool, FieldDef } from './nodes/nodeConfig';
+import { PreviewChip } from './ndv/ExpressionEditor';
 
 /* ── Shared style tokens ── */
 const labelStyle: CSSProperties = {
@@ -98,7 +99,7 @@ const subtleButtonStyle: CSSProperties = {
   textTransform: 'uppercase',
 };
 
-function FieldGroup({
+export function FieldGroup({
   label,
   children,
   required,
@@ -533,7 +534,7 @@ function NodeControlsPanel({
   );
 }
 
-type PanelProps = {
+export type PanelProps = {
   config: Record<string, unknown>;
   onChange: (key: string, value: unknown) => void;
   nodeId?: string;
@@ -559,16 +560,31 @@ type ExpressionOption = {
 };
 
 const NODE_CREDENTIAL_TYPE_HINTS: Record<string, string[]> = {
-  http_request: ['api_key', 'bearer_token', 'basic', 'basic_auth', 'oauth2'],
-  parallel_ai: ['openai', 'anthropic', 'openrouter', 'api_key', 'bearer_token'],
-  slack_send_message: ['api_key', 'bearer_token', 'oauth2'],
-  discord_send_message: ['api_key', 'bearer_token', 'oauth2'],
-  telegram_send_message: ['api_key', 'bearer_token', 'oauth2'],
-  github_api: ['api_key', 'bearer_token', 'oauth2'],
-  notion_api: ['api_key', 'bearer_token', 'oauth2'],
-  airtable_records: ['api_key', 'bearer_token', 'oauth2'],
-  graphql_request: ['api_key', 'bearer_token', 'oauth2'],
-  s3_object: ['s3'],
+  http_request:        ['api_key', 'bearer_token', 'basic'],
+  parallel_ai:         ['openai', 'anthropic', 'openrouter', 'api_key', 'bearer_token'],
+  llm_call:            ['openai', 'anthropic', 'openrouter', 'api_key'],
+  ai_agent:            ['openai', 'anthropic', 'openrouter', 'api_key'],
+  vector_search:       ['openai', 'api_key'],
+  memory_read:         ['openai', 'api_key'],
+  memory_write:        ['openai', 'api_key'],
+  slack_send_message:  ['api_key', 'bearer_token'],
+  discord_send_message: ['api_key', 'bearer_token'],
+  telegram_send_message: ['api_key'],
+  github_api:          ['api_key', 'bearer_token'],
+  notion_api:          ['api_key', 'bearer_token'],
+  airtable_records:    ['api_key'],
+  graphql_request:     ['api_key', 'bearer_token', 'basic'],
+  s3_object:           ['s3'],
+  stripe_api:          ['api_key'],
+  sendgrid_email:      ['api_key'],
+  twilio_sms:          ['api_key'],
+  salesforce_api:      ['bearer_token'],
+  hubspot_api:         ['api_key', 'bearer_token'],
+  linear_api:          ['api_key', 'bearer_token'],
+  send_email:          ['smtp', 'resend'],
+  postgres_query:      ['postgres'],
+  redis_get:           ['redis'],
+  redis_set:           ['redis'],
 };
 
 function credentialsForNode(credentials: Credential[], nodeType: string) {
@@ -981,6 +997,10 @@ function ExpressionInput({ value, onChange, style, containerStyle, ...props }: E
     });
   };
 
+  const execId = useStore((s) => s.executionId);
+  const ndvNodeId = useStore((s) => s.ndvNodeId);
+  const nodeForPreview = useStore((s) => s.selectedNodeId);
+
   return (
     <div style={containerStyle}>
       <input
@@ -991,6 +1011,13 @@ function ExpressionInput({ value, onChange, style, containerStyle, ...props }: E
         onChange={(e) => onChange(e.target.value)}
       />
       <ExpressionToolbar value={value} onInsert={insertAtCursor} />
+      {expressionActive && (
+        <PreviewChip
+          value={value}
+          executionId={execId}
+          nodeId={ndvNodeId ?? nodeForPreview}
+        />
+      )}
     </div>
   );
 }
@@ -1005,6 +1032,9 @@ type ExpressionTextareaProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>,
 function ExpressionTextarea({ value, onChange, style, containerStyle, ...props }: ExpressionTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const expressionActive = hasExpression(value);
+  const execId        = useStore((s) => s.executionId);
+  const ndvNodeId     = useStore((s) => s.ndvNodeId);
+  const nodeForPreview = useStore((s) => s.selectedNodeId);
   const insertAtCursor = (expression: string) => {
     const target = textareaRef.current;
     const fallback = appendExpression(value, expression);
@@ -1028,6 +1058,9 @@ function ExpressionTextarea({ value, onChange, style, containerStyle, ...props }
         onChange={(e) => onChange(e.target.value)}
       />
       <ExpressionToolbar value={value} onInsert={insertAtCursor} />
+      {expressionActive && (
+        <PreviewChip value={value} executionId={execId} nodeId={ndvNodeId ?? nodeForPreview} />
+      )}
     </div>
   );
 }
@@ -1441,9 +1474,13 @@ function OperationPicker({
 
 function publicTriggerOrigin() {
   const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+  // Explicit override always wins (production / Railway)
   const apiUrl = env?.VITE_API_URL?.replace(/\/$/, '') ?? '';
   if (apiUrl) return apiUrl.replace(/\/api\/v1$/, '');
-  return window.location.origin;
+  // In dev, Vite runs on :5173 but the backend (webhook handler) is on :3000
+  const origin = window.location.origin;
+  if (origin.includes(':5173')) return origin.replace(':5173', ':3000');
+  return origin;
 }
 
 function triggerPath(config: Record<string, unknown>, fallback: string) {
@@ -1903,41 +1940,23 @@ function LlmCallPanel({ config, onChange, issues = [] }: PanelProps) {
         </select>
       </FieldGroup>
 
-      {/* API Key — OpenAI only, used to fetch model list */}
-      <FieldGroup label="Credential">
+      <FieldGroup label="Credential" helper="Manage credentials on the Credentials page. Keys are encrypted and never exposed here.">
         <select
           style={selectStyle}
           value={(config.credentialId as string) ?? ''}
           onChange={(e) => onChange('credentialId', e.target.value)}
         >
-          <option value="">Use env / inline key</option>
+          <option value="">No credential (use server env var)</option>
           {providerCredentials.map((c) => (
             <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
           ))}
         </select>
       </FieldGroup>
 
-      {provider === 'openai' && (
-        <div>
-          <label style={labelStyle}>API Key</label>
-          <input
-            type="password"
-            style={inputStyle}
-            value={apiKey}
-            placeholder="sk-..."
-            onChange={(e) => onChange('apiKey', e.target.value)}
-          />
-          <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '3px', display: 'block' }}>
-            Used only to fetch the model list
-          </span>
-        </div>
-      )}
-
-      {/* Model — dynamic dropdown */}
+      {/* Model — dynamic dropdown (no inline key needed) */}
       <FieldGroup label="Model">
         <ModelSelect
           provider={provider}
-          apiKey={apiKey}
           value={model}
           onChange={(v) => onChange('model', v)}
         />
@@ -3195,7 +3214,7 @@ function GenericPanel({ config, onChange, nodeType, issues = [] }: PanelProps & 
 }
 
 /* ── Node panel router ── */
-function NodePanel({ nodeType, config, onChange, nodeId, issues = [] }: PanelProps & { nodeType: string }) {
+export function NodePanel({ nodeType, config, onChange, nodeId, issues = [] }: PanelProps & { nodeType: string }) {
   switch (nodeType) {
     case 'webhook_trigger':
       return <WebhookPanel config={config} onChange={onChange} nodeId={nodeId} issues={issues} />;
@@ -3312,8 +3331,7 @@ export function ConfigPanel() {
   };
 
   const pinOutput = () => {
-    const ok = pinNodeOutput(node.id);
-    if (!ok) alert('Run this node before pinning its output.');
+    pinNodeOutput(node.id);
   };
 
   function setField(key: string, value: unknown) {

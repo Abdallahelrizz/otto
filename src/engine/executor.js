@@ -9,7 +9,7 @@ import { db } from '../db/client.js';
 import { isWaitDescriptor } from './wait.js';
 import { emitExecutionEvent } from './events.js';
 import { executionQueue } from '../queue/client.js';
-import { redactObject } from '../utils/redact.js';
+import { redactObject, redactString, credentialSecrets } from '../utils/redact.js';
 import { withSpan } from '../utils/otel.js';
 
 const EXECUTION_MODES = new Set(['full', 'single_node', 'to_node', 'from_node']);
@@ -517,9 +517,10 @@ async function runNode(node, input, rawInputs, ctx) {
         : 1;
       const retryCount = Math.max(0, maxTries - 1);
 
+      const secrets = credentialSecrets(credential);
       const shouldContinue = node.continueOnError || node.onError === 'continueRegular' || node.onError === 'continueErrorOutput';
       if (shouldContinue) {
-        const message = errorMessage(err);
+        const message = redactString(errorMessage(err), secrets);
         const output = node.onError === 'continueErrorOutput'
           ? { error: true, message, type: 'node_error', nodeId: node.id, nodeType: node.type }
           : { error: { message, name: errorName(err) }, input };
@@ -536,7 +537,7 @@ async function runNode(node, input, rawInputs, ctx) {
         return output;
       }
 
-      const message = errorMessage(err);
+      const message = redactString(errorMessage(err), secrets);
       await logNodeEnd(logId, { status: 'error', error: message, retryCount });
       emitExecutionEvent(executionId, 'node:end', {
         nodeId: node.id,

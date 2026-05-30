@@ -37,13 +37,16 @@ async function _jsonFromResponse(response) {
   return { statusCode: response.status, headers: Object.fromEntries(response.headers.entries()), body };
 }
 
+// All outbound integration calls go through safeFetch (SSRF-guarded).
+// Legitimate public APIs (slack.com, stripe.com, …) resolve to public IPs and
+// pass; only private/reserved targets are blocked. Self-hosters that need
+// internal calls set SSRF_ALLOW_PRIVATE=true. requestJson and safeRequestJson
+// are intentionally identical so no call site can accidentally skip the guard.
 export async function requestJson(url, options = {}) {
-  return _jsonFromResponse(await fetch(url, options));
-}
-
-export async function safeRequestJson(url, options = {}) {
   return _jsonFromResponse(await safeFetch(url, options));
 }
+
+export const safeRequestJson = requestJson;
 
 export function bearerHeaders(token, extra = {}) {
   if (!token) throw new Error('API token is required');
