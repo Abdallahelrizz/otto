@@ -1,5 +1,16 @@
 import { safeFetch } from '../utils/safe-fetch.js';
 
+/** Throw if a Content-Length header exceeds maxBytes. Unknown lengths pass (cap is best-effort). */
+export function assertWithinCap(contentLength, maxBytes) {
+  if (!maxBytes) return;
+  const len = Number(contentLength);
+  if (Number.isFinite(len) && len > maxBytes) {
+    const err = new Error(`Response too large: ${len} bytes exceeds cap of ${maxBytes}`);
+    err.code = 'RESPONSE_TOO_LARGE';
+    throw err;
+  }
+}
+
 export function credentialValue(credential, keys = ['value', 'token', 'apiKey']) {
   for (const key of keys) {
     if (credential?.data?.[key]) return credential.data[key];
@@ -17,7 +28,8 @@ export function parseJson(value, fallback = null) {
   }
 }
 
-async function _jsonFromResponse(response) {
+async function _jsonFromResponse(response, maxBytes) {
+  assertWithinCap(response.headers.get('content-length'), maxBytes);
   const text = await response.text();
   let body = text;
   try {
@@ -43,7 +55,8 @@ async function _jsonFromResponse(response) {
 // internal calls set SSRF_ALLOW_PRIVATE=true. requestJson and safeRequestJson
 // are intentionally identical so no call site can accidentally skip the guard.
 export async function requestJson(url, options = {}) {
-  return _jsonFromResponse(await safeFetch(url, options));
+  const { maxBytes, ...fetchOptions } = options;
+  return _jsonFromResponse(await safeFetch(url, fetchOptions), maxBytes);
 }
 
 export const safeRequestJson = requestJson;
