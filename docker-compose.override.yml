@@ -1,0 +1,12 @@
+# Local dev override — auto-merged by `docker compose`.
+# Exposes the containerized Postgres + Redis to the HOST so the backend running
+# on your machine (`npm run dev`) can reach them at localhost. The app itself is
+# NOT containerized here — you keep editing code and hot-reloading as normal.
+# Delete this file to undo.
+services:
+  postgres:
+    ports:
+      - '5432:5432'
+  redis:
+    ports:
+      - '6379:6379'

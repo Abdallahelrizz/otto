@@ -222,19 +222,22 @@ export function DashboardShell({ children }: DashboardShellProps) {
                 <CaretDown size={12} weight="bold" className={`otto-nav-caret${settingsOpen ? ' is-open' : ''}`} />
               )}
             </button>
-            {!isRail && settingsOpen && (
-              <div className="otto-dashboard-subnav">
-                {SETTINGS_ITEMS.map((item) => (
-                  <NavLink
-                    key={item.path}
-                    to={item.path}
-                    className={({ isActive }) =>
-                      `otto-dashboard-subnav-item${isActive ? ' is-active' : ''}`
-                    }
-                  >
-                    {item.label}
-                  </NavLink>
-                ))}
+            {!isRail && (
+              <div className={`otto-dashboard-subnav-wrap${settingsOpen ? ' is-open' : ''}`}>
+                <div className="otto-dashboard-subnav">
+                  {SETTINGS_ITEMS.map((item) => (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      tabIndex={settingsOpen ? 0 : -1}
+                      className={({ isActive }) =>
+                        `otto-dashboard-subnav-item${isActive ? ' is-active' : ''}`
+                      }
+                    >
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </div>
               </div>
             )}
           </div>

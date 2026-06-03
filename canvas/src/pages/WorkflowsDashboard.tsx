@@ -749,7 +749,7 @@ export function WorkflowsDashboard() {
     <DashboardShell>
       <section className="otto-page-hero">
         <div>
-          <p className="otto-eyebrow">workspace dashboard</p>
+          <span className="otto-title-bar" aria-hidden="true" />
           <h1>Workflows</h1>
           <p className="otto-hero-copy">
             Manage runnable automations, check status, and open the editor without losing operational context.

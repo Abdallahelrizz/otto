@@ -49,7 +49,7 @@ export function SettingsAuditLog() {
         <SettingsNav />
         <div className="otto-page-hero">
           <div>
-            <p className="otto-eyebrow">Settings</p>
+            <span className="otto-title-bar" aria-hidden="true" />
             <h1>Audit Log</h1>
             <p className="otto-hero-copy">Security and admin events for this workspace. Owner/admin only.</p>
           </div>

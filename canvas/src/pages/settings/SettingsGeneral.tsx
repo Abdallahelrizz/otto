@@ -21,7 +21,7 @@ export function SettingsGeneral() {
         <SettingsNav />
         <div className="otto-page-hero">
           <div>
-            <p className="otto-eyebrow">Settings</p>
+            <span className="otto-title-bar" aria-hidden="true" />
             <h1>General</h1>
             <p className="otto-hero-copy">Your account and session.</p>
           </div>

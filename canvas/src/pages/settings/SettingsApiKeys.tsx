@@ -131,7 +131,7 @@ export function SettingsApiKeys() {
         <SettingsNav />
         <div className="otto-page-hero">
           <div>
-            <p className="otto-eyebrow">Settings</p>
+            <span className="otto-title-bar" aria-hidden="true" />
             <h1>API Keys</h1>
             <p className="otto-hero-copy">
               Your secret keys for the Otto API and MCP clients. Treat them like a password —

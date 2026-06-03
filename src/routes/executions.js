@@ -2,6 +2,7 @@ import { db } from '../db/client.js';
 import { createExecution, completeExecution } from '../engine/logger.js';
 import { subscribeExecution, unsubscribeExecution } from '../engine/events.js';
 import { executionQueue } from '../queue/client.js';
+import { runWorkflow } from '../engine/executor.js';
 import { randomUUID } from 'crypto';
 import {
   hasBlockingIssues,
@@ -41,27 +42,37 @@ async function enqueueManualExecution({
     pinnedData,
   });
 
-  // Fail fast if Redis is unreachable: ioredis with offline-queue enabled would
-  // otherwise hang the request. Race the enqueue against a short timeout → 503.
-  const enqueue = executionQueue.add(
-    'run',
-    { executionId, workflowId, workspaceId, triggerType: 'manual', input, definition, mode, nodeId, pinnedData },
-    { jobId: executionId }
-  );
-  const timeout = new Promise((_, rej) =>
-    setTimeout(() => {
-      const err = new Error('Queue enqueue timed out — Redis may be unreachable');
-      err.code = 'ETIMEDOUT';
-      rej(err);
-    }, 8000)
-  );
-  await Promise.race([enqueue, timeout]);
+  // Run manual/canvas executions in-process rather than through BullMQ. The queue
+  // hop costs several round trips to a (remote) Redis before a worker even claims
+  // the job — the dominant latency for an interactive Run. Webhooks, schedules,
+  // resumes and eval runs still go through the queue. Fire-and-forget: return the
+  // executionId immediately and let the run stream progress over SSE. runWorkflow
+  // owns its own status/error logging; the catch is just a backstop.
+  // --- DIAGNOSTIC (temporary): confirm the in-process path is live + time it ---
+  console.log(`[otto] IN-PROCESS run kicked off: ${executionId}`);
+  const __runStart = Date.now();
+  runWorkflow({
+    executionId,
+    workflowId,
+    workspaceId,
+    definition,
+    input,
+    triggerType: 'manual',
+    mode,
+    nodeId,
+    pinnedData,
+  })
+    .then(() => console.log(`[otto-timing] run ${executionId} finished in ${Date.now() - __runStart}ms`))
+    .catch((err) => {
+      console.error(`[execute] in-process run ${executionId} failed:`, err?.message ?? err);
+    });
 
   return executionId;
 }
 
 export async function executionRoutes(fastify) {
   fastify.post('/api/v1/execute', async (req, reply) => {
+    const __t0 = Date.now(); // DIAGNOSTIC (temporary)
     const {
       definition,
       workflowId: savedWorkflowId,
@@ -117,6 +128,7 @@ export async function executionRoutes(fastify) {
       pinnedData,
     });
 
+    console.log(`[otto-timing] /execute handler returned in ${Date.now() - __t0}ms (exec ${executionId})`);
     return reply.send({ executionId, workflowId, status: 'pending', validation });
   });
 

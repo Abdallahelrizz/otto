@@ -286,7 +286,7 @@ export function ExecutionHistory() {
         {/* ── Hero ── */}
         <div className="otto-page-hero">
           <div>
-            <p className="otto-eyebrow">Otto</p>
+            <span className="otto-title-bar" aria-hidden="true" />
             <h1>Executions</h1>
             <p className="otto-hero-copy">
               Every workflow run in one place. Inspect inputs, outputs, and timing for each node.

@@ -140,7 +140,7 @@ export function SettingsVariables() {
         <SettingsNav />
         <div className="otto-page-hero">
           <div>
-            <p className="otto-eyebrow">Settings</p>
+            <span className="otto-title-bar" aria-hidden="true" />
             <h1>Variables</h1>
             <p className="otto-hero-copy">
               Workspace key/value variables, available to every workflow via {'{{ }}'} expressions.

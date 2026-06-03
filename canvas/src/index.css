@@ -665,6 +665,9 @@ input[type="range"]::-moz-range-thumb {
     var(--dash-bg);
   background-size: 72px 72px;
   color: var(--dash-text);
+  /* Slide the content column when the sidebar collapses/expands, in sync with the
+     sidebar's own width transition below — otherwise the rail snaps instantly. */
+  transition: grid-template-columns 260ms var(--ease-out);
 }
 
 /* ── Kill transitions during theme switch ── */
@@ -738,26 +741,32 @@ input[type="range"]::-moz-range-thumb {
   background: var(--dash-bg-elevated);
   padding: 18px 0;
   z-index: 10;
+  /* Animate the rail open/closed instead of snapping. The @media (max-width: 900px)
+     rule below intentionally resets this to none on small screens. */
+  transition: width 260ms var(--ease-out);
 }
 
 .otto-dashboard.sidebar-collapsed .otto-dashboard-sidebar {
   width: 64px;
 }
 
-/* ── Labels: instant hide on collapse, clean look ── */
+/* ── Labels fade with the door instead of popping. They keep their layout slot (so the
+   icons never shift) and overflow:hidden on the sidebar clips them as the rail narrows. ── */
 .otto-dashboard-sidebar .otto-brand-copy,
 .otto-dashboard-sidebar .otto-dashboard-nav-item span,
 .otto-dashboard-sidebar .otto-account-email,
 .otto-dashboard-sidebar .otto-account-dots {
   white-space: nowrap;
   flex-shrink: 0;
+  transition: opacity 160ms var(--ease-out);
 }
 
 .otto-dashboard-sidebar.is-collapsed .otto-brand-copy,
 .otto-dashboard-sidebar.is-collapsed .otto-dashboard-nav-item span,
 .otto-dashboard-sidebar.is-collapsed .otto-account-email,
 .otto-dashboard-sidebar.is-collapsed .otto-account-dots {
-  display: none;
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* ── Collapse toggle capsule — inside sidebar at right edge ── */
@@ -795,7 +804,7 @@ input[type="range"]::-moz-range-thumb {
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 10px 8px 18px 15px;
+  padding: 10px 8px 18px 10px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -804,10 +813,8 @@ input[type="range"]::-moz-range-thumb {
   min-width: 0;
 }
 
-.otto-dashboard-sidebar.is-collapsed .otto-brand {
-  justify-content: center;
-  padding: 14px 0 18px;
-}
+/* No layout change on collapse — the brand stays left-aligned and the logo keeps its size,
+   so it holds position (centered on the rail's 32px axis) as the door closes. */
 
 .otto-brand-logo {
   width: 44px;
@@ -817,10 +824,7 @@ input[type="range"]::-moz-range-thumb {
   flex-shrink: 0;
 }
 
-.otto-dashboard-sidebar.is-collapsed .otto-brand-logo {
-  width: 36px;
-  height: 36px;
-}
+/* Logo keeps its 44px size in both states — no resize jump when the rail collapses. */
 
 .otto-brand-copy,
 .otto-workspace-meta {
@@ -997,6 +1001,13 @@ input[type="range"]::-moz-range-thumb {
     color 160ms var(--ease-out);
 }
 
+/* The page icon must never shrink. When the rail collapses, the faded label still keeps
+   its flex slot, so the icon would otherwise be the only flexible child and get squeezed
+   to nothing. */
+.otto-dashboard-nav-item > svg {
+  flex-shrink: 0;
+}
+
 .otto-dashboard-nav-item:hover {
   background: var(--dash-raise);
   color: var(--dash-text);
@@ -1110,6 +1121,16 @@ input[type="range"]::-moz-range-thumb {
   padding: 54px 0 72px;
 }
 
+/* Pages already render inside <main class="otto-dashboard-content">; most also wrap
+   their content in a second .otto-dashboard-content. Neutralize the nested one so its
+   padding/width don't stack — that doubled top padding (54+54px) is why every page
+   except Workflows started lower than the top. */
+.otto-dashboard-content .otto-dashboard-content {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
 .otto-page-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1118,13 +1139,15 @@ input[type="range"]::-moz-range-thumb {
   margin-bottom: 26px;
 }
 
-.otto-eyebrow {
-  margin: 0 0 10px;
-  color: var(--dash-accent);
-  font-size: 11px;
-  font-weight: 740;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+/* Small accent bar above each page title — keeps the brand color as a deliberate
+   mark in place of the old filler eyebrow text ("WORKSPACE DASHBOARD", "OTTO", …). */
+.otto-title-bar {
+  display: block;
+  width: 32px;
+  height: 3px;
+  margin: 0 0 16px;
+  border-radius: 2px;
+  background: var(--dash-accent);
 }
 
 .otto-page-hero h1 {
@@ -2937,11 +2960,35 @@ input[type="range"]::-moz-range-thumb {
 /* ── Settings: collapsible sidebar group ───────────────── */
 .otto-dashboard-nav-group { display: flex; flex-direction: column; }
 .otto-nav-group-toggle {
-  appearance: none; font: inherit; cursor: pointer; text-align: left; background: transparent;
+  /* font-family (not the `font` shorthand) so the button picks up Geist but keeps the
+     nav-item's font-size/weight — otherwise "Settings" rendered in a different font. */
+  appearance: none; font-family: inherit; cursor: pointer; text-align: left; background: transparent;
 }
 .otto-nav-caret { margin-left: auto; color: var(--dash-faint); transition: transform 0.16s var(--ease-out); }
 .otto-nav-caret.is-open { transform: rotate(180deg); }
-.otto-dashboard-subnav { display: flex; flex-direction: column; gap: 1px; margin: 3px 8px 6px 0; padding-left: 26px; }
+/* Smooth expand/collapse for the Settings sub-nav. grid-template-rows 0fr→1fr animates
+   to the content's natural height without hardcoding it; the inner overflow:hidden clips
+   during the transition. Vertical spacing lives in the inner padding so it collapses too. */
+.otto-dashboard-subnav-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms var(--ease-out);
+}
+.otto-dashboard-subnav-wrap.is-open { grid-template-rows: 1fr; }
+.otto-dashboard-subnav {
+  display: flex; flex-direction: column; gap: 1px;
+  margin: 0 8px 0 0; padding: 3px 0 6px 26px;
+  overflow: hidden; min-height: 0;
+  opacity: 0;
+  transition: opacity 160ms var(--ease-out);
+}
+.otto-dashboard-subnav-wrap.is-open .otto-dashboard-subnav { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .otto-dashboard,
+  .otto-dashboard-sidebar,
+  .otto-dashboard-subnav-wrap,
+  .otto-dashboard-subnav { transition: none; }
+}
 .otto-dashboard-subnav-item {
   display: block; padding: 7px 10px; border-left: 1px solid var(--dash-border);
   color: var(--dash-muted); font-size: 12.5px; font-weight: 540; text-decoration: none;

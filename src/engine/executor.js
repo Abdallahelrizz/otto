@@ -122,6 +122,10 @@ export async function runWorkflow({
     try {
       const dag = parseDAG(scopedDefinition);
       const timeoutSeconds = definition?.settings?.timeoutSeconds;
+      // Fetch workspace variables once per execution and share them with every
+      // node, instead of re-querying Postgres inside each node (one WAN round
+      // trip per node on remote Postgres).
+      const vars = await fetchWorkspaceVariables(workspaceId);
       const dagPromise = executeDAG(dag, {
         executionId,
         workspaceId,
@@ -129,6 +133,7 @@ export async function runWorkflow({
         triggerInput: input,
         pinnedData,
         recursionDepth,
+        vars,
       });
       const outputs = (timeoutSeconds > 0)
         ? await Promise.race([
@@ -370,6 +375,30 @@ function collectInput(depResults) {
   return { input: Object.assign({}, ...activeInputs), rawInputs, skipped: false };
 }
 
+// Fetch + coerce all workspace variables for a run. Called once per execution
+// (hoisted into ctx by runWorkflow) and reused by every node. Workspace
+// variables are config — only routes/variables.js writes them, never a node
+// mid-run — so one fetch per run is semantically identical to one per node.
+async function fetchWorkspaceVariables(workspaceId) {
+  if (!workspaceId) return {};
+  try {
+    const { rows: varRows } = await db.query(
+      'SELECT name, value, type FROM variables WHERE workspace_id = $1',
+      [workspaceId]
+    );
+    return Object.fromEntries(varRows.map(r => [
+      r.name,
+      r.type === 'number' ? Number(r.value)
+        : r.type === 'boolean' ? r.value === 'true'
+        : r.type === 'json' ? JSON.parse(r.value)
+        : r.value,
+    ]));
+  } catch {
+    // Non-fatal: variables unavailable (e.g. migration not yet applied)
+    return {};
+  }
+}
+
 async function runNode(node, input, rawInputs, ctx) {
   const { executionId, workspaceId, nodesCtx = {} } = ctx;
 
@@ -380,25 +409,10 @@ async function runNode(node, input, rawInputs, ctx) {
     'workflow.id': ctx.workflowId,
     'execution.id': executionId,
   }, async (span) => {
-    // Fetch workspace variables for expression resolution
-    let vars = {};
-    if (workspaceId) {
-      try {
-        const { rows: varRows } = await db.query(
-          'SELECT name, value, type FROM variables WHERE workspace_id = $1',
-          [workspaceId]
-        );
-        vars = Object.fromEntries(varRows.map(r => [
-          r.name,
-          r.type === 'number' ? Number(r.value)
-            : r.type === 'boolean' ? r.value === 'true'
-            : r.type === 'json' ? JSON.parse(r.value)
-            : r.value,
-        ]));
-      } catch {
-        // Non-fatal: variables unavailable (e.g. migration not yet applied)
-      }
-    }
+    // Use the variables fetched once per execution (ctx.vars). Fall back to a
+    // per-node fetch only for direct callers that don't supply it (e.g. tests),
+    // preserving the original behavior exactly for those paths.
+    const vars = ctx.vars ?? await fetchWorkspaceVariables(workspaceId);
 
     const expressionCtx = {
       input,

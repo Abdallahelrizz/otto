@@ -14,7 +14,7 @@ export function SettingsAbout() {
         <SettingsNav />
         <div className="otto-page-hero">
           <div>
-            <p className="otto-eyebrow">Settings</p>
+            <span className="otto-title-bar" aria-hidden="true" />
             <h1>About</h1>
             <p className="otto-hero-copy">
               Open-source workflow orchestrator — n8n, but built for the AI era.

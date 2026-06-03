@@ -424,7 +424,7 @@ export function CredentialsPage() {
         {/* ── Hero ── */}
         <div className="otto-page-hero">
           <div>
-            <p className="otto-eyebrow">Otto</p>
+            <span className="otto-title-bar" aria-hidden="true" />
             <h1>Credentials</h1>
             <p className="otto-hero-copy">
               Securely store API keys, passwords, and secrets. Otto encrypts every credential

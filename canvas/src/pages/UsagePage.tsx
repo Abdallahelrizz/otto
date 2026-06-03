@@ -69,7 +69,7 @@ export function UsagePage() {
       <div className="otto-dashboard-content">
         <div className="otto-page-hero">
           <div>
-            <p className="otto-eyebrow">Otto</p>
+            <span className="otto-title-bar" aria-hidden="true" />
             <h1>Usage</h1>
             <p className="otto-hero-copy">Token usage by workflow for the selected month.</p>
           </div>
