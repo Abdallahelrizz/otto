@@ -94,12 +94,21 @@ fastify.setErrorHandler((err, req, reply) => {
 });
 
 // ── Process-level guards ──────────────────────────────────────────────────
-// A stray rejection/exception logs instead of silently killing the process.
+// A stray rejection logs instead of silently killing the process — these are
+// usually a missing await and the process is still in a sane state.
 process.on('unhandledRejection', (reason) => {
   fastify.log.error({ err: reason }, 'unhandledRejection');
 });
+// An *uncaught exception* leaves the process in an undefined state (Node's own
+// guidance: do not resume normal operation). In production we log then exit so
+// the supervisor (Docker restart policy / Railway) brings up a clean process.
+// In dev we keep it alive so an editor-driven crash doesn't kill the dev server
+// mid-iteration (`node --watch` would restart it anyway).
 process.on('uncaughtException', (err) => {
   fastify.log.error({ err }, 'uncaughtException');
+  if (process.env.NODE_ENV === 'production') {
+    process.exit(1);
+  }
 });
 
 await fastify.register(cors, { origin: allowedOrigins, credentials: true });
@@ -350,10 +359,20 @@ fastify.get('/*', async (req, reply) => {
   }
   if (!existsSync(publicDir)) return reply.code(404).send({ error: 'Frontend build not found' });
 
-  const decoded = decodeURIComponent(pathname);
-  const requested = decoded === '/' ? '/index.html' : decoded;
+  let requested;
+  try {
+    const decoded = decodeURIComponent(pathname);
+    requested = decoded === '/' ? '/index.html' : decoded;
+  } catch {
+    // Malformed percent-encoding (e.g. a lone "%") — serve the SPA shell rather than 500.
+    requested = '/index.html';
+  }
   const filePath = path.resolve(publicDir, `.${requested}`);
-  const safePath = filePath.startsWith(publicDir) ? filePath : path.join(publicDir, 'index.html');
+  // Reject anything that resolves outside publicDir. Compare against `publicDir + sep`
+  // (not a bare startsWith) so a sibling dir sharing the prefix — e.g. /app/public-secret
+  // vs /app/public — can't slip through.
+  const withinPublic = filePath === publicDir || filePath.startsWith(publicDir + path.sep);
+  const safePath = withinPublic ? filePath : path.join(publicDir, 'index.html');
   const finalPath = existsSync(safePath) ? safePath : path.join(publicDir, 'index.html');
   const ext = path.extname(finalPath);
 

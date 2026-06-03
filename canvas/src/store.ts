@@ -530,10 +530,16 @@ export const useStore = create<OttoStore>((set, get) => ({
   isSaving: false,
 
   saveWorkflow: async () => {
+    // Re-entrancy guard. A second save firing before the first resolves (Ctrl+S
+    // double-press, or an Active toggle mid-save) would re-read a stale
+    // savedWorkflowId === null and POST a *second* duplicate workflow. Mirror the
+    // runExecution guard and bail if a save is already in flight. Set the flag
+    // synchronously (no await before it) so concurrent calls can't slip through.
+    if (get().isSaving) return;
+    set({ isSaving: true });
     const { nodes, edges, workflowName, savedWorkflowId, pinnedData, workflowImportReport, workflowSettings } = get();
     const definition = buildDefinition(nodes, edges, pinnedData, workflowImportReport, workflowSettings);
     const validationIssues = get().validateCurrentWorkflow('full', null);
-    set({ isSaving: true });
     try {
       if (savedWorkflowId) {
         const res = await api.updateWorkflow(savedWorkflowId, { name: workflowName, definition });

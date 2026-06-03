@@ -63,7 +63,10 @@ function NewWorkflowModal({ onClose, onCreated }: NewWorkflowModalProps) {
 
   const handleCreate = async () => {
     const cleanName = name.trim();
-    if (!cleanName) return;
+    // `saving` guard: the Enter key handler fires regardless of the (disabled)
+    // button state, so a quick double-Enter would otherwise POST two blank
+    // workflows before the first request resolves.
+    if (!cleanName || saving) return;
 
     setSaving(true);
     setError('');
