@@ -1,5 +1,6 @@
 import dns from 'dns/promises';
 import net from 'net';
+import { stripAuthAcrossHost } from './redirect-auth.js';
 
 // IPv4 blocked ranges as [network_int, prefix_bits]
 const BLOCKED_CIDRS_V4 = [
@@ -129,10 +130,14 @@ export async function safeFetch(url, options = {}) {
 
   const resp = await fetch(url, { ...options, redirect: 'manual' });
 
-  // Follow redirects safely — each hop goes through safeFetch
+  // Follow redirects safely — each hop re-checks the IP, and auth headers are
+  // stripped when the hop crosses to a different host.
   if (resp.status >= 300 && resp.status < 400) {
     const location = resp.headers.get('location');
-    if (location) return safeFetch(location, options);
+    if (location) {
+      const nextUrl = new URL(location, url).toString();
+      return safeFetch(nextUrl, stripAuthAcrossHost(options, url, nextUrl));
+    }
   }
 
   return resp;
