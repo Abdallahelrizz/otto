@@ -1,3 +1,5 @@
+import { GENERATED_SERVICE_DEFS } from '../../generated/serviceNodeDefs';
+
 export interface HandleDef {
   id: string;
   label?: string;
@@ -113,6 +115,10 @@ export const NODE_SERVICE_LOGO: Record<string, string> = {
   redis_set:             'redis',
   s3_object:             'aws',
 };
+
+for (const def of GENERATED_SERVICE_DEFS) {
+  if (def.serviceCatalog) NODE_SERVICE_LOGO[def.type] = def.serviceCatalog;
+}
 
 // Resolve the display color for a node, theme-aware
 export function nodeColor(def: NodeTypeDef, theme: 'dark' | 'light'): string {
@@ -1180,67 +1186,6 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
 
   // ─── DATA ──────────────────────────────────────────────────
   {
-    type: 'github_api',
-    category: 'integrations',
-    label: 'GitHub API',
-    description: 'Call GitHub REST API endpoints',
-    color: SERVICE.github,
-    tint: 'service',
-    serviceColor: SERVICE.github,
-    slug: 'GH',
-    tag: 'API',
-    subtitle: (c) => `${(c.method as string) || 'GET'} ${(c.path as string) || '/user'}`,
-    handles: {
-      in: [{ id: 'input' }],
-      out: [{ id: 'output' }],
-    },
-    defaultConfig: {
-      credentialId: '',
-      token: '',
-      operation: 'generic',
-      owner: '',
-      repo: '',
-      method: 'GET',
-      path: '/user',
-      body: '{}',
-    },
-    fields: [
-      { key: 'credentialId', label: 'Credential', type: 'text' },
-      { key: 'token', label: 'Token override', type: 'text' },
-      { key: 'operation', label: 'Operation', type: 'select', options: [
-        { value: 'generic', label: 'Generic (method + path)' },
-        { value: 'create_issue', label: 'Create issue' },
-        { value: 'get_issue', label: 'Get issue' },
-        { value: 'close_issue', label: 'Close issue' },
-        { value: 'list_issues', label: 'List issues' },
-        { value: 'update_issue', label: 'Update issue' },
-        { value: 'add_comment', label: 'Add comment' },
-        { value: 'create_pr', label: 'Create PR' },
-        { value: 'get_pr', label: 'Get PR' },
-        { value: 'list_prs', label: 'List PRs' },
-        { value: 'get_repo', label: 'Get repo' },
-        { value: 'list_repos', label: 'List repos' },
-        { value: 'create_release', label: 'Create release' },
-      ] },
-      { key: 'owner', label: 'Owner', type: 'text' },
-      { key: 'repo', label: 'Repo', type: 'text' },
-      { key: 'issueNumber', label: 'Issue number', type: 'number' },
-      { key: 'pullNumber', label: 'PR number', type: 'number' },
-      { key: 'title', label: 'Title', type: 'text' },
-      { key: 'body', label: 'Body / comment', type: 'textarea' },
-      { key: 'state', label: 'State', type: 'select', options: [{ value: 'open', label: 'Open' }, { value: 'closed', label: 'Closed' }] },
-      { key: 'tagName', label: 'Tag name (release)', type: 'text' },
-      { key: 'method', label: 'Method (generic)', type: 'select', options: [
-        { value: 'GET', label: 'GET' },
-        { value: 'POST', label: 'POST' },
-        { value: 'PUT', label: 'PUT' },
-        { value: 'PATCH', label: 'PATCH' },
-        { value: 'DELETE', label: 'DELETE' },
-      ] },
-      { key: 'path', label: 'Path (generic)', type: 'text' },
-    ],
-  },
-  {
     type: 'notion_api',
     category: 'integrations',
     label: 'Notion API',
@@ -2016,6 +1961,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
       { key: 'limit', label: 'Limit', type: 'number' },
     ],
   },
+  ...GENERATED_SERVICE_DEFS,
 ];
 
 export const NODE_TYPE_MAP = Object.fromEntries(NODE_TYPE_DEFS.map(d => [d.type, d]));
