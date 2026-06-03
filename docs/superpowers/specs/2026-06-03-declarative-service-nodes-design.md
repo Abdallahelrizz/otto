@@ -109,10 +109,16 @@ export default {
   type: 'github',                 // node type id (unique)
   label: 'GitHub',
   category: 'integrations',
-  base: 'https://api.github.com', // FIXED. Never user-substitutable.
+  base: 'https://api.github.com', // fixed host by default. A descriptor MAY instead
+                                  // set baseFrom:'<field>' for a user-supplied
+                                  // instance/region/webhook URL (e.g. Salesforce
+                                  // instanceUrl); user-supplied bases still pass
+                                  // through safeFetch (see §6.1).
   credential: { catalog: 'githubApi', keys: ['token', 'value', 'apiKey'] },
   auth: {
-    kind: 'bearer',               // bearer | header | basic | query | oauth2(deferred)
+    // how the credential is applied: bearer | header | basic | query | path | oauth2(deferred).
+    // The auth layer injects the credential; field interpolation (§5) never does.
+    kind: 'bearer',
     headers: {                    // static headers applied to every request
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
@@ -182,11 +188,15 @@ Centralizing the executor means each control is implemented once and inherited b
 every service. The following are **required engine behaviors**, not optional.
 
 ### 6.1 Interpolation — injection & SSRF
-- `encodeURIComponent` every interpolated **path segment** and **query value**.
-- `base`/host is **descriptor-fixed**, never user-substitutable.
+- `encodeURIComponent` every interpolated **user-config** path segment and query
+  value. (Credentials the auth layer places in the path/query — e.g. a Telegram bot
+  token — are injected separately and are not user-typed config.)
+- Host is **descriptor-fixed by default**. A descriptor may declare a user-supplied
+  base via `baseFrom` (instance/region/self-hosted/webhook URL). When it does, that
+  value MUST be `https`, MUST pass through `safeFetch`'s SSRF guard, and cannot be
+  widened by path interpolation. Path/query interpolation can never change the host.
 - `urlJoin`'s absolute-URL passthrough (`^https?://`) applies only to descriptor
-  *literals*, never to interpolated user values — so a user value cannot become the
-  host or an absolute URL.
+  *literals* and the validated `baseFrom` value — never to interpolated field values.
 - This blocks path traversal (`../`), query injection (`&admin=true`), and
   absolute-URL override.
 
@@ -202,6 +212,8 @@ every service. The following are **required engine behaviors**, not optional.
 - The resolved token and auth headers must never appear in node `output`,
   `node_executions` rows, or error messages. Redact auth fields before logging;
   return response body only.
+- URLs that embed a credential (e.g. Telegram's `/bot<token>/…`) are redacted before
+  the request URL is logged anywhere.
 
 ### 6.4 No SSTI / expression collision
 - `{field}` substitution is literal, no eval, scoped to this node's config; must not
@@ -248,11 +260,14 @@ every service. The following are **required engine behaviors**, not optional.
 
 ## 8. Existing Nodes
 
-- **Migrate to descriptors (HTTP REST, 13):** Slack, Discord, Telegram, GitHub,
-  Notion, Airtable, GraphQL, Stripe, SendGrid, Twilio, Salesforce, HubSpot, Linear.
-  Behavior-preserving; existing tests are the oracle.
-- **Stay bespoke (non-HTTP, escape hatch):** `postgres_query`, `redis_get`,
-  `redis_set`, `s3_object`.
+- **Migrate to descriptors (fixed-base HTTP, 10):** Slack, Telegram, GitHub, Notion,
+  Airtable, Stripe, SendGrid, Twilio, HubSpot, Linear. Behavior-preserving; existing
+  tests are the oracle. (Telegram embeds its bot token in the path — see §6.1/§6.3.)
+- **Migrate as configurable-base descriptors (2):** Discord (user webhook URL),
+  Salesforce (user `instanceUrl`) — via `baseFrom` (§4, §6.1).
+- **Stay bespoke (escape hatch):** `graphql_request` (generic, fully user-supplied
+  endpoint + a single operation — like `http_request`, not a fixed service);
+  `postgres_query`, `redis_get`, `redis_set`, `s3_object` (non-HTTP).
 - Hand-written core/AI/trigger nodes are unaffected.
 
 ---
@@ -263,7 +278,8 @@ every service. The following are **required engine behaviors**, not optional.
   `gen:nodes` codegen, generic `<ServiceNodePanel>`, credential-picker binding,
   `safe-fetch` redirect auth-strip. Convert **GitHub** as proof; assert identical
   behavior.
-- **Batch 1 — Migrate the 13 HTTP services** to descriptors; delete the old handlers.
+- **Batch 1 — Migrate the 12 HTTP services** to descriptors (10 fixed-base + 2
+  configurable-base); delete the old handlers. GraphQL stays bespoke.
 - **Batch 2+ — New API-key services,** grouped ~8–12 per batch (dev tools, support,
   commerce, …).
 - **Batch N — OAuth2 foundation,** then Google Workspace / Microsoft as descriptors.
