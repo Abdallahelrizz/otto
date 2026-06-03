@@ -51,8 +51,8 @@ logic into one executor means:
   scoped to a later batch. The framework reserves `auth.kind: 'oauth2'` for them.
 - Non-HTTP services (`postgres_query`, `redis_get/set`, `s3_object`) — they stay
   bespoke (the escape hatch).
-- User-supplied / community descriptors at runtime (explicit trust-boundary
-  decision; see §6).
+- Runtime installation of unverified / community descriptors (npm distribution) —
+  a flagged future direction with its own trust design; see §6.7 and §12.
 
 ---
 
@@ -309,3 +309,42 @@ every service. The following are **required engine behaviors**, not optional.
 - **Catalog provenance.** The 398-entry catalog mirrors n8n's credential list and
   brushes against the "no n8n source" constraint. Decide whether to keep, curate, or
   trim to a self-owned set (separate from this framework, but related).
+
+---
+
+## 12. Extensibility / Community Authoring
+
+A descriptor is a **blueprint**. Because a node is one self-contained data file
+(`base`, `auth`, `operations`) with no executor, frontend, or icon code, the
+descriptor format is itself the authoring surface — for Otto maintainers and for the
+community. There are two tiers with very different trust models:
+
+### 12.1 Verified nodes — a first-class goal (now)
+
+In-repo `*.service.js` descriptors added via **reviewed PRs**. These are trusted
+code, run through the secured executor (§5–§6), and ship with the product. Lowering
+node authoring to "write one data file" is an explicit goal of this framework: it is
+the path by which both the core team and outside contributors add integrations
+without learning the engine, the frontend, or the icon system.
+
+### 12.2 Unverified / community nodes — flagged future direction
+
+Distribute third-party descriptors as installable packages (e.g. npm,
+`otto-node-<service>`) that a workspace downloads at runtime. This is **future work**,
+deliberately out of scope here, and gated on a dedicated trust design — because a
+descriptor issues outbound requests carrying user credentials. Minimum bar before it
+ships:
+
+- **Declarative-only:** the `handler:` escape hatch is disallowed for unverified
+  packages (data descriptors only — no arbitrary code execution).
+- **Egress allowlist:** the descriptor's `base` / `baseFrom` host(s) must be declared
+  up front and are the only hosts the node may reach (enforced via `safeFetch` + a
+  per-node host pin).
+- **Explicit credential grants:** an unverified node can only use credentials the
+  user deliberately grants it — no ambient access to the workspace credential store.
+- **Provenance + UI:** package signing, a clear "Unverified" badge in the library, and
+  install-time disclosure of the hosts/credentials it will use.
+- **Operability:** review/quarantine, version pinning, and a kill switch.
+
+Until that design exists, the **build-time, in-repo, reviewed model (§6.7) is the
+only trusted path.** The npm/runtime mechanism is its own spec when we reach it.
