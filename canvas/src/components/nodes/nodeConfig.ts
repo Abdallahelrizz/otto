@@ -13,7 +13,7 @@ export interface AgentTool {
 
 export interface NodeTypeDef {
   type: string;
-  category: 'triggers' | 'core' | 'ai' | 'data';
+  category: 'triggers' | 'core' | 'ai' | 'integrations';
   label: string;
   description: string;
   color: string;
@@ -54,10 +54,10 @@ export const OTTO_AMBER_HOVER = '#B74D51';
 
 // Shape encodes what a node DOES — driven by category
 export const CATEGORY_SHAPE: Record<string, 'rounded' | 'circle' | 'square-soft' | 'square-tight'> = {
-  triggers: 'rounded',
-  ai:       'circle',
-  core:     'square-soft',
-  data:     'square-tight',
+  triggers:     'rounded',
+  ai:           'circle',
+  core:         'square-soft',
+  integrations: 'square-tight',
 };
 
 // Color encodes WHAT a node IS — per-node tint
@@ -109,8 +109,6 @@ export const NODE_SERVICE_LOGO: Record<string, string> = {
   redis_get:             'redis',
   redis_set:             'redis',
   s3_object:             'aws',
-  llm_call:              'openAiApi',
-  ai_agent:              'openAiApi',
 };
 
 // Resolve the display color for a node, theme-aware
@@ -132,31 +130,31 @@ export function nodeRadius(def: NodeTypeDef): string {
 // ─── Legacy exports — kept for backwards compatibility ────────────────────────
 
 export const CATEGORY_COLORS: Record<string, string> = {
-  triggers: OTTO_AMBER,
-  core:     '#A1A1AA',
-  ai:       OTTO_AMBER,
-  data:     '#A1A1AA',
+  triggers:     OTTO_AMBER,
+  core:         '#A1A1AA',
+  ai:           OTTO_AMBER,
+  integrations: '#A1A1AA',
 };
 
 export const CATEGORY_EDGE_COLOR: Record<string, string> = {
-  triggers: EDGE_COLOR_DARK,
-  core:     EDGE_COLOR_DARK,
-  ai:       EDGE_COLOR_DARK,
-  data:     EDGE_COLOR_DARK,
+  triggers:     EDGE_COLOR_DARK,
+  core:         EDGE_COLOR_DARK,
+  ai:           EDGE_COLOR_DARK,
+  integrations: EDGE_COLOR_DARK,
 };
 
 export const CATEGORY_ICON_WEIGHT: Record<string, string> = {
-  triggers: 'bold',
-  core:     'bold',
-  ai:       'bold',
-  data:     'bold',
+  triggers:     'bold',
+  core:         'bold',
+  ai:           'bold',
+  integrations: 'bold',
 };
 
 export const NODE_CATEGORIES = [
-  { id: 'triggers',    label: 'TRIGGERS' },
-  { id: 'core',        label: 'CORE' },
-  { id: 'ai',          label: 'AI' },
-  { id: 'data',        label: 'DATA' },
+  { id: 'triggers',     label: 'TRIGGERS' },
+  { id: 'core',         label: 'CORE' },
+  { id: 'ai',           label: 'AI' },
+  { id: 'integrations', label: 'INTEGRATIONS' },
 ] as const;
 
 export const NODE_TYPE_DEFS: NodeTypeDef[] = [
@@ -743,7 +741,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'slack_send_message',
-    category: 'core',
+    category: 'integrations',
     label: 'Slack Send Message',
     description: 'Post a message to a Slack channel',
     color: SERVICE.slack,
@@ -773,7 +771,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'discord_send_message',
-    category: 'core',
+    category: 'integrations',
     label: 'Discord Send Message',
     description: 'Send a message through a Discord webhook',
     color: SERVICE.discord,
@@ -818,7 +816,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'telegram_send_message',
-    category: 'core',
+    category: 'integrations',
     label: 'Telegram Send Message',
     description: 'Send a message with a Telegram bot',
     color: SERVICE.telegram,
@@ -868,7 +866,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
 
   {
     type: 'stripe_api',
-    category: 'core',
+    category: 'integrations',
     label: 'Stripe API',
     description: 'Create payment intents, manage customers',
     color: SERVICE.stripe,
@@ -916,7 +914,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'sendgrid_email',
-    category: 'core',
+    category: 'integrations',
     label: 'SendGrid Email',
     description: 'Send transactional email or add marketing contacts',
     color: SERVICE.sendgrid,
@@ -963,7 +961,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'twilio_sms',
-    category: 'core',
+    category: 'integrations',
     label: 'Twilio SMS',
     description: 'Send SMS messages and query message history',
     color: SERVICE.twilio,
@@ -1180,7 +1178,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   // ─── DATA ──────────────────────────────────────────────────
   {
     type: 'github_api',
-    category: 'data',
+    category: 'integrations',
     label: 'GitHub API',
     description: 'Call GitHub REST API endpoints',
     color: SERVICE.github,
@@ -1241,7 +1239,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'notion_api',
-    category: 'data',
+    category: 'integrations',
     label: 'Notion API',
     description: 'Call Notion API endpoints',
     color: SERVICE.notion,
@@ -1303,7 +1301,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'airtable_records',
-    category: 'data',
+    category: 'integrations',
     label: 'Airtable Records',
     description: 'List, create, update, or delete Airtable records',
     color: SERVICE.airtable,
@@ -1351,7 +1349,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'graphql_request',
-    category: 'data',
+    category: 'integrations',
     label: 'GraphQL Request',
     description: 'Run a GraphQL query or mutation',
     color: SERVICE.graphql,
@@ -1383,7 +1381,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'csv_parse',
-    category: 'data',
+    category: 'core',
     label: 'CSV Parse',
     description: 'Convert CSV text into rows and items',
     color: '#A1A1AA',
@@ -1420,7 +1418,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'csv_stringify',
-    category: 'data',
+    category: 'core',
     label: 'CSV Stringify',
     description: 'Convert rows or items into CSV text',
     color: '#A1A1AA',
@@ -1452,7 +1450,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'xml_parse',
-    category: 'data',
+    category: 'core',
     label: 'XML Parse',
     description: 'Convert XML text into JSON',
     color: '#A1A1AA',
@@ -1472,7 +1470,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'xml_stringify',
-    category: 'data',
+    category: 'core',
     label: 'XML Stringify',
     description: 'Convert JSON into XML text',
     color: '#A1A1AA',
@@ -1493,7 +1491,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'html_extract',
-    category: 'data',
+    category: 'core',
     label: 'HTML Extract',
     description: 'Extract text, HTML, or attributes from HTML',
     color: '#A1A1AA',
@@ -1531,7 +1529,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'json_transform',
-    category: 'data',
+    category: 'core',
     label: 'JSON Transform',
     description: 'Get, set, pick, omit, parse, stringify, or merge JSON',
     color: '#A1A1AA',
@@ -1572,7 +1570,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'compression',
-    category: 'data',
+    category: 'core',
     label: 'Compression',
     description: 'Gzip, gunzip, deflate, or inflate text payloads',
     color: '#A1A1AA',
@@ -1612,7 +1610,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'postgres_query',
-    category: 'data',
+    category: 'integrations',
     label: 'Postgres Query',
     description: 'Run a SQL query',
     color: SERVICE.postgres,
@@ -1637,7 +1635,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'redis_get',
-    category: 'data',
+    category: 'integrations',
     label: 'Redis Get',
     description: 'Read a value from Redis',
     color: SERVICE.redis,
@@ -1655,7 +1653,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'redis_set',
-    category: 'data',
+    category: 'integrations',
     label: 'Redis Set',
     description: 'Write a value to Redis',
     color: SERVICE.redis,
@@ -1677,7 +1675,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'read_file',
-    category: 'data',
+    category: 'core',
     label: 'Read File',
     description: 'Read a workspace file into binary data',
     color: '#A1A1AA',
@@ -1698,7 +1696,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'write_file',
-    category: 'data',
+    category: 'core',
     label: 'Write File',
     description: 'Write binary data to a workspace file',
     color: '#A1A1AA',
@@ -1718,7 +1716,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'move_binary_data',
-    category: 'data',
+    category: 'core',
     label: 'Move Binary Data',
     description: 'Convert JSON fields to binary data or binary data back to text',
     color: '#A1A1AA',
@@ -1757,7 +1755,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'list_files',
-    category: 'data',
+    category: 'core',
     label: 'List Files',
     description: 'List files in the workspace file directory',
     color: '#A1A1AA',
@@ -1794,7 +1792,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'binary_metadata',
-    category: 'data',
+    category: 'core',
     label: 'Binary Metadata',
     description: 'Inspect binary data references without downloading file content',
     color: '#A1A1AA',
@@ -1834,7 +1832,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 's3_object',
-    category: 'data',
+    category: 'integrations',
     label: 'S3 Object',
     description: 'List, upload, download, inspect, or delete S3-compatible objects',
     color: SERVICE.s3,
@@ -1896,7 +1894,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'salesforce_api',
-    category: 'data',
+    category: 'integrations',
     label: 'Salesforce API',
     description: 'Query and manage Salesforce CRM records via REST API',
     color: SERVICE.salesforce,
@@ -1936,7 +1934,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'hubspot_api',
-    category: 'data',
+    category: 'integrations',
     label: 'HubSpot API',
     description: 'Manage HubSpot CRM contacts and deals',
     color: SERVICE.hubspot,
@@ -1975,7 +1973,7 @@ export const NODE_TYPE_DEFS: NodeTypeDef[] = [
   },
   {
     type: 'linear_api',
-    category: 'data',
+    category: 'integrations',
     label: 'Linear API',
     description: 'Manage Linear issues, teams, and projects via GraphQL',
     color: SERVICE.linear,

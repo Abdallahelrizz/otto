@@ -144,8 +144,11 @@ interface OttoStore {
   // Sidebar
   sidebarOpen: boolean;
   toggleSidebar: () => void;
+  setSidebarOpen: (open: boolean) => void;
   activeSidebarTab: string;
   setActiveSidebarTab: (tab: string) => void;
+  libraryFocusCategory: string | null;
+  setLibraryFocusCategory: (cat: string | null) => void;
 
   // Canvas mode tabs + test input
   activeCanvasTab: 'editor' | 'executions' | 'test';
@@ -745,8 +748,11 @@ export const useStore = create<OttoStore>((set, get) => ({
 
   sidebarOpen: false,
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+  setSidebarOpen: (open) => set({ sidebarOpen: open }),
   activeSidebarTab: 'library',
   setActiveSidebarTab: (tab) => set({ activeSidebarTab: tab }),
+  libraryFocusCategory: null,
+  setLibraryFocusCategory: (cat) => set({ libraryFocusCategory: cat }),
 
   activeCanvasTab: 'editor',
   setActiveCanvasTab: (tab) => set({ activeCanvasTab: tab }),

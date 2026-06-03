@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { Lightning, Toolbox, Robot, Globe, GearSix, type Icon as PhosphorIcon } from '@phosphor-icons/react';
 import { NODE_TYPE_DEFS, NODE_CATEGORIES, nodeColor, nodeRadius, NODE_SERVICE_LOGO, OTTO_AMBER, OTTO_AMBER_HOVER, type NodeTypeDef } from './nodes/nodeConfig';
 import { NodeIcon } from './NodeIcon';
 import { ServiceLogo } from './ServiceLogo';
@@ -23,6 +24,26 @@ const NAV_ITEMS = [
   { id: 'library', label: 'Node library', badge: null },
   { id: 'history', label: 'History',      badge: null },
 ];
+
+// Natural-case display names for category labels (source labels are ALL-CAPS).
+const CAT_DISPLAY: Record<string, string> = {
+  all: 'All',
+  triggers: 'Triggers',
+  core: 'Core',
+  ai: 'AI',
+  data: 'Data',
+  integrations: 'Integrations',
+};
+const catDisplay = (id: string, fallback: string) =>
+  CAT_DISPLAY[id] ?? (fallback.charAt(0) + fallback.slice(1).toLowerCase());
+
+// Bucket-level icon + one-line description for the node-library category rows.
+const CATEGORY_META: Record<string, { description: string; Icon: PhosphorIcon }> = {
+  triggers:     { description: 'Start a workflow on an event, schedule, or request.', Icon: Lightning },
+  core:         { description: 'Logic, data, code, HTTP, and files — the built-in blocks.', Icon: Toolbox },
+  ai:           { description: 'Models, agents, memory, and semantic search.', Icon: Robot },
+  integrations: { description: 'Act in apps like Slack, Notion, GitHub, or Postgres.', Icon: Globe },
+};
 
 function NavIcon({ id }: { id: string }) {
   const paths: Record<string, React.ReactNode> = {
@@ -557,18 +578,18 @@ function HistoryTab() {
           >
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor[ex.status] ?? 'var(--text-muted)', flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ fontSize: '11px', fontFamily: "'JetBrains Mono'", color: 'var(--text-muted)', letterSpacing: '0.01em' }}>
+              <span style={{ fontSize: '11px', fontFamily: "'Inter'", fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0' }}>
                 {ex.id.slice(0, 8)}…
               </span>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: "'Inter'" }}>{ts}</div>
             </div>
             {ex.execution_type && (
               <span style={{
-                fontSize: '9.5px',
-                fontFamily: "'JetBrains Mono'",
+                fontSize: '10px',
+                fontFamily: "'Inter'",
                 fontWeight: 500,
                 color: 'var(--text-muted)',
-                letterSpacing: '0.03em',
+                letterSpacing: '0',
                 flexShrink: 0,
               }}>
                 {EXEC_TYPE_LABELS[ex.execution_type] ?? ex.execution_type}
@@ -576,10 +597,10 @@ function HistoryTab() {
             )}
             <span style={{
               fontSize: '10px',
-              fontFamily: "'JetBrains Mono'",
+              fontFamily: "'Inter'",
               fontWeight: 600,
               color: statusColor[ex.status] ?? 'var(--text-muted)',
-              letterSpacing: '0.06em',
+              letterSpacing: '0.02em',
               textTransform: 'uppercase',
             }}>
               {ex.status}
@@ -2654,18 +2675,28 @@ export function Sidebar() {
   const nodes = useStore((s) => s.nodes);
   const activeSidebarTab = useStore((s) => s.activeSidebarTab);
   const setActiveSidebarTab = useStore((s) => s.setActiveSidebarTab);
-  const newWorkflow = useStore((s) => s.newWorkflow);
+  const libraryFocusCategory = useStore((s) => s.libraryFocusCategory);
+  const setLibraryFocusCategory = useStore((s) => s.setLibraryFocusCategory);
   const theme = useStore((s) => s.theme);
   const isDark = theme === 'dark';
 
   const [openCat, setOpenCat] = useState<string | null>(readStorage);
   const [libraryQuery, setLibraryQuery] = useState('');
-  const [libraryCategory, setLibraryCategory] = useState<string>('all');
+  const [searchFocused, setSearchFocused] = useState(false);
+
+  // When something elsewhere (e.g. the canvas "Start with a trigger" box) asks to
+  // focus a category, switch to the library tab, expand that category, clear signal.
+  useEffect(() => {
+    if (!libraryFocusCategory) return;
+    setActiveSidebarTab('library');
+    setOpenCat(libraryFocusCategory);
+    writeStorage(libraryFocusCategory);
+    setLibraryFocusCategory(null);
+  }, [libraryFocusCategory, setActiveSidebarTab, setLibraryFocusCategory]);
 
   const libraryMatches = useMemo(() => {
     const q = libraryQuery.trim().toLowerCase();
     return NODE_TYPE_DEFS.filter((def) => {
-      if (libraryCategory !== 'all' && def.category !== libraryCategory) return false;
       if (!q) return true;
       const haystack = [
         def.label,
@@ -2677,13 +2708,7 @@ export function Sidebar() {
       ].filter(Boolean).join(' ').toLowerCase();
       return haystack.includes(q);
     });
-  }, [libraryCategory, libraryQuery]);
-
-  const libraryCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const def of NODE_TYPE_DEFS) counts.set(def.category, (counts.get(def.category) ?? 0) + 1);
-    return counts;
-  }, []);
+  }, [libraryQuery]);
 
   const toggle = (id: string) => {
     setOpenCat((prev) => {
@@ -2788,7 +2813,7 @@ export function Sidebar() {
 
       {/* Tab content */}
       {activeSidebarTab === 'library' && (
-        <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '8px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '8px', scrollbarGutter: 'stable' }}>
           <div style={{
             padding: '10px 10px 8px',
             borderBottom: '1px solid var(--border)',
@@ -2796,71 +2821,82 @@ export function Sidebar() {
             flexDirection: 'column',
             gap: '8px',
           }}>
-            <input
-              value={libraryQuery}
-              onChange={(event) => setLibraryQuery(event.target.value)}
-              placeholder="Search nodes"
-              style={{
-                width: '100%',
-                border: '1px solid var(--border-input)',
-                borderRadius: '5px',
-                background: 'var(--bg-input)',
-                color: 'var(--text-primary)',
-                fontFamily: "'Inter'",
-                fontSize: '12px',
-                outline: 'none',
-                padding: '7px 9px',
-              }}
-            />
-            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-              {[{ id: 'all', label: 'All', count: NODE_TYPE_DEFS.length }, ...NODE_CATEGORIES.map((cat) => ({
-                id: cat.id,
-                label: cat.label,
-                count: libraryCounts.get(cat.id) ?? 0,
-              }))].map((cat) => {
-                const active = libraryCategory === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => {
-                      setLibraryCategory(cat.id);
-                      if (cat.id !== 'all') setOpenCat(cat.id);
-                    }}
-                    style={{
-                      border: `1px solid ${active ? AMBER : 'var(--border)'}`,
-                      borderRadius: '4px',
-                      background: active ? `${AMBER}1a` : 'transparent',
-                      color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      cursor: 'pointer',
-                      fontFamily: 'Geist Mono',
-                      fontSize: '9px',
-                      fontWeight: 700,
-                      letterSpacing: '0.05em',
-                      padding: '4px 6px',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {cat.label} {cat.count}
-                  </button>
-                );
-              })}
-            </div>
             <div style={{
-              color: 'var(--text-muted)',
-              fontFamily: 'Geist Mono',
-              fontSize: '9.5px',
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
+              position: 'relative',
+              display: 'flex',
+              alignItems: 'center',
+              border: `1px solid ${searchFocused ? AMBER : 'var(--border-input)'}`,
+              borderRadius: '8px',
+              background: 'var(--bg-input)',
+              boxShadow: searchFocused ? `0 0 0 3px ${AMBER}24` : 'none',
+              transition: 'border-color 130ms ease, box-shadow 130ms ease',
             }}>
-              {libraryMatches.length} runnable node{libraryMatches.length === 1 ? '' : 's'}
+              <span style={{
+                display: 'flex',
+                alignItems: 'center',
+                paddingLeft: '10px',
+                color: searchFocused ? AMBER : 'var(--text-muted)',
+                transition: 'color 130ms ease',
+                flexShrink: 0,
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+              </span>
+              <input
+                value={libraryQuery}
+                onChange={(event) => setLibraryQuery(event.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+                placeholder="Search nodes"
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--text-primary)',
+                  fontFamily: "'Inter'",
+                  fontSize: '12.5px',
+                  outline: 'none',
+                  padding: '8px 8px 8px 8px',
+                }}
+              />
+              {libraryQuery && (
+                <button
+                  type="button"
+                  onClick={() => setLibraryQuery('')}
+                  aria-label="Clear search"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: '6px',
+                    padding: '3px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '5px',
+                    cursor: 'pointer',
+                    color: 'var(--text-muted)',
+                    flexShrink: 0,
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              )}
             </div>
           </div>
           {NODE_CATEGORIES.map((cat) => {
             const items = libraryMatches.filter((d) => d.category === cat.id);
             if (items.length === 0) return null;
-            const isFiltering = libraryQuery.trim() || libraryCategory !== 'all';
+            const isFiltering = Boolean(libraryQuery.trim());
             const isOpen = Boolean(isFiltering) || openCat === cat.id;
+
+            const meta = CATEGORY_META[cat.id];
+            const BucketIcon = meta?.Icon;
 
             return (
               <div key={cat.id}>
@@ -2868,46 +2904,64 @@ export function Sidebar() {
                   onClick={() => toggle(cat.id)}
                   style={{
                     width: '100%',
-                    height: '34px',
                     display: 'flex',
-                    alignItems: 'center',
-                    padding: '0 10px',
-                    gap: '8px',
+                    alignItems: 'flex-start',
+                    padding: '11px 12px',
+                    gap: '12px',
                     background: 'none',
                     border: 'none',
                     cursor: 'pointer',
                     fontFamily: "'Inter'",
+                    textAlign: 'left',
                     transition: 'background 120ms ease-out',
                   }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
                 >
-                  <span style={{
-                    fontFamily: "'JetBrains Mono'",
-                    fontSize: '10px',
-                    fontWeight: 600,
-                    color: 'var(--text-muted)',
-                    letterSpacing: '0.14em',
-                    flex: 1,
-                    textAlign: 'left',
-                    textTransform: 'uppercase',
-                  }}>
-                    {cat.label}
-                  </span>
-                  {!isOpen && (
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 500 }}>
-                      {items.length}
+                  {BucketIcon && (
+                    <span style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      marginTop: '1px',
+                      color: 'var(--text-secondary)',
+                    }}>
+                      <BucketIcon size={20} weight="regular" />
                     </span>
                   )}
+                  <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <span style={{
+                      fontFamily: "'Inter'",
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      color: 'var(--text-primary)',
+                      letterSpacing: '-0.006em',
+                    }}>
+                      {catDisplay(cat.id, cat.label)}
+                    </span>
+                    {meta?.description && (
+                      <span style={{
+                        fontFamily: "'Inter'",
+                        fontSize: '11px',
+                        fontWeight: 400,
+                        color: 'var(--text-muted)',
+                        lineHeight: 1.35,
+                      }}>
+                        {meta.description}
+                      </span>
+                    )}
+                  </span>
                   <span style={{
                     color: 'var(--text-muted)',
                     display: 'flex',
                     alignItems: 'center',
                     flexShrink: 0,
+                    marginTop: '3px',
                     transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
                     transition: 'transform 150ms cubic-bezier(0.23, 1, 0.32, 1)',
                   }}>
-                    <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                    <svg width="9" height="9" viewBox="0 0 8 8" fill="none">
                       <path d="M2 1.5L5.5 4L2 6.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </span>
@@ -2927,86 +2981,7 @@ export function Sidebar() {
               </div>
             );
           })}
-          {/* ── Integrations group — service-tinted nodes with brand logos ── */}
-          {(() => {
-            const integrationDefs = NODE_TYPE_DEFS.filter((d) => {
-              if (d.tint !== 'service') return false;
-              if (!libraryQuery.trim()) return true;
-              const q = libraryQuery.toLowerCase();
-              return (
-                d.label.toLowerCase().includes(q) ||
-                d.description?.toLowerCase().includes(q) ||
-                d.type.toLowerCase().includes(q) ||
-                d.slug?.toLowerCase().includes(q)
-              );
-            });
-            if (integrationDefs.length === 0) return null;
-            const isOpen = Boolean(libraryQuery.trim()) || openCat === 'integrations';
-            return (
-              <div key="integrations">
-                <button
-                  onClick={() => toggle('integrations')}
-                  style={{
-                    width: '100%',
-                    height: '34px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '0 10px',
-                    gap: '8px',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    transition: 'background 120ms ease-out',
-                  }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
-                >
-                  <span style={{
-                    fontFamily: 'Geist, system-ui, sans-serif',
-                    fontSize: '10px',
-                    fontWeight: 700,
-                    color: 'var(--text-muted)',
-                    letterSpacing: '0.10em',
-                    flex: 1,
-                    textAlign: 'left',
-                    textTransform: 'uppercase',
-                  }}>
-                    Integrations
-                  </span>
-                  {!isOpen && (
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 500 }}>
-                      {integrationDefs.length}
-                    </span>
-                  )}
-                  <span style={{
-                    color: 'var(--text-muted)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    flexShrink: 0,
-                    transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
-                    transition: 'transform 150ms cubic-bezier(0.23, 1, 0.32, 1)',
-                  }}>
-                    <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                      <path d="M2 1.5L5.5 4L2 6.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </span>
-                </button>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateRows: isOpen ? '1fr' : '0fr',
-                  transition: 'grid-template-rows 150ms cubic-bezier(0.23, 1, 0.32, 1)',
-                }}>
-                  <div style={{ overflow: 'hidden' }}>
-                    {integrationDefs.map((def) => (
-                      <NodeRow key={def.type} def={def} theme={theme} onDragStart={onDragStart} onClick={addToCanvas} />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-
-          {libraryMatches.filter(d => d.tint !== 'service').length === 0 && (
+          {libraryMatches.length === 0 && (
             <div style={{
               color: 'var(--text-muted)',
               fontSize: '12px',
@@ -3059,45 +3034,29 @@ export function Sidebar() {
             }}>
               Abdallah Elrizz
             </span>
-            <span style={{
-              fontFamily: "'JetBrains Mono'",
-              fontSize: '10px',
-              fontWeight: 500,
-              color: 'var(--text-muted)',
-              letterSpacing: '0.02em',
-            }}>
-              Pro · 38%
-            </span>
           </div>
+          <button
+            type="button"
+            title="Account settings"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              padding: '5px',
+              background: 'transparent',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              color: 'var(--text-secondary)',
+              transition: 'background 100ms ease, color 100ms ease',
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)'; }}
+          >
+            <GearSix size={18} weight="duotone" />
+          </button>
         </div>
-
-        <button
-          onClick={newWorkflow}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            width: '100%',
-            padding: '8px 12px',
-            background: AMBER,
-            border: 'none',
-            color: '#fff',
-            fontFamily: 'Inter',
-            fontSize: '12.5px',
-            fontWeight: 600,
-            letterSpacing: '-0.005em',
-            borderRadius: '5px',
-            cursor: 'pointer',
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = OTTO_AMBER_HOVER; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = AMBER; }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-          New workflow
-        </button>
       </div>
     </aside>
   );
@@ -3184,19 +3143,6 @@ function NodeRow({
           }}>
             {def.label}
           </span>
-          {def.tag && (
-            <span style={{
-              color: 'var(--text-muted)',
-              fontFamily: 'Geist Mono',
-              fontSize: '8.5px',
-              fontWeight: 700,
-              letterSpacing: '0.05em',
-              textTransform: 'uppercase',
-              flexShrink: 0,
-            }}>
-              {def.tag}
-            </span>
-          )}
         </span>
         <span style={{
           color: 'var(--text-muted)',

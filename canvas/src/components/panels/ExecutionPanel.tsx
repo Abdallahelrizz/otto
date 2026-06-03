@@ -124,7 +124,7 @@ export function ExecutionPanel() {
           {selectedExecutionDetail ? 'Execution detail' : 'Live execution'}
         </span>
         <span style={{
-          fontFamily: "'JetBrains Mono'",
+          fontFamily: "'Inter'",
           fontSize: '9.5px',
           color: execColor,
           letterSpacing: '0.06em',
@@ -143,7 +143,7 @@ export function ExecutionPanel() {
           const label = EXEC_TYPE_LABELS[execType] ?? execType;
           return (
             <span style={{
-              fontFamily: "'JetBrains Mono'",
+              fontFamily: "'Inter'",
               fontSize: '9.5px',
               color: 'var(--node-running)',
               letterSpacing: '0.04em',
@@ -160,7 +160,7 @@ export function ExecutionPanel() {
         <div style={{ flex: 1 }} />
         {executionId && (
           <span style={{
-            fontFamily: "'JetBrains Mono'",
+            fontFamily: "'Inter'",
             fontSize: '9.5px',
             color: 'var(--text-muted)',
             letterSpacing: '0.04em',
@@ -222,7 +222,7 @@ export function ExecutionPanel() {
                 </span>
                 {step.duration_ms != null && (
                   <span style={{
-                    fontFamily: "'JetBrains Mono'",
+                    fontFamily: "'Inter'",
                     fontSize: '9.5px',
                     fontWeight: 500,
                     color: 'var(--text-muted)',
@@ -252,7 +252,7 @@ export function ExecutionPanel() {
           }}>
             <div style={{
               flex: 1,
-              fontFamily: "'JetBrains Mono'",
+              fontFamily: "'Inter'",
               fontSize: '9.5px',
               fontWeight: 600,
               color: 'var(--text-muted)',
@@ -276,11 +276,11 @@ export function ExecutionPanel() {
                     background: inspectTab === tab.id ? 'var(--bg-hover)' : 'transparent',
                     color: inspectTab === tab.id ? 'var(--text-primary)' : 'var(--text-secondary)',
                     cursor: 'pointer',
-                    fontFamily: 'Geist Mono',
-                    fontSize: '9.5px',
-                    fontWeight: 700,
-                    letterSpacing: '0.05em',
-                    padding: '4px 7px',
+                    fontFamily: "'Inter'",
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    letterSpacing: '0.02em',
+                    padding: '4px 8px',
                     textTransform: 'uppercase',
                   }}
                 >

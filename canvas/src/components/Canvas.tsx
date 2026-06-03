@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
-  Controls,
   MiniMap,
   useReactFlow,
   type NodeMouseHandler,
@@ -16,7 +15,7 @@ import { api } from '../api';
 import type { Execution } from '../types';
 import { OttoNode } from './nodes/OttoNode';
 import { AgentNode } from './nodes/AgentNode';
-import { NODE_TYPE_MAP, getNodeDef, nodeColor } from './nodes/nodeConfig';
+import { NODE_TYPE_MAP, getNodeDef, nodeColor, OTTO_AMBER } from './nodes/nodeConfig';
 
 const nodeTypes = {
   ottoNode: OttoNode,
@@ -486,10 +485,13 @@ export function Canvas() {
   const nodeClipboard = useStore((s) => s.nodeClipboard);
   const setContextMenu = useStore((s) => s.setContextMenu);
   const setNdvNodeId = useStore((s) => s.setNdvNodeId);
+  const setActiveSidebarTab = useStore((s) => s.setActiveSidebarTab);
+  const setLibraryFocusCategory = useStore((s) => s.setLibraryFocusCategory);
+  const setSidebarOpen = useStore((s) => s.setSidebarOpen);
   const setFitViewCallback = useStore((s) => s.setFitViewCallback);
   const activeCanvasTab = useStore((s) => s.activeCanvasTab);
 
-  const dotColor = theme === 'dark' ? 'rgba(255,255,255,0.035)' : 'rgba(15,15,10,0.06)';
+  const dotColor = theme === 'dark' ? 'rgba(128,130,140,0.32)' : 'rgba(20,18,12,0.55)';
   const minimapMask = theme === 'dark' ? 'rgba(10,9,8,0.75)' : 'rgba(244,243,240,0.75)';
   const selectedNodes = useMemo(
     () => {
@@ -655,11 +657,9 @@ export function Canvas() {
         <Background
           variant={BackgroundVariant.Dots}
           color={dotColor}
-          gap={18}
-          size={1}
-          style={{ opacity: 0.20 }}
+          gap={20}
+          size={1.4}
         />
-        <Controls position="bottom-left" showInteractive={false} />
         <MiniMap
           nodeColor={(n) => nodeColor(getNodeDef(n.data?.nodeType ?? ''), theme) + '90'}
           maskColor={minimapMask}
@@ -667,40 +667,65 @@ export function Canvas() {
           style={{ width: 156, height: 96 }}
         />
 
-        {nodes.length === 0 && (
-          <div style={{
-            position: 'absolute', inset: 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            pointerEvents: 'none', userSelect: 'none',
-          }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '10px' }}>
-              <p style={{
-                fontFamily: "'Inter'",
-                fontSize: '22px',
-                fontWeight: 700,
-                letterSpacing: '-0.018em',
-                lineHeight: 1.1,
-                color: 'var(--text-primary)',
-                margin: 0,
-                opacity: 0.7,
-              }}>
-                Start with a trigger.
-              </p>
-              <p style={{
-                fontFamily: "'Inter'",
-                fontSize: '14px',
-                fontWeight: 400,
-                color: 'var(--text-secondary)',
-                letterSpacing: '-0.005em',
-                lineHeight: 1.45,
-                margin: 0,
-              }}>
-                Drop a Webhook or Manual trigger from the library.
-              </p>
-            </div>
-          </div>
-        )}
       </ReactFlow>
+
+      {nodes.length === 0 && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          gap: '11px',
+          pointerEvents: 'none', userSelect: 'none', zIndex: 4,
+        }}>
+          <button
+            type="button"
+            title="Start with a trigger"
+            onClick={() => {
+              setSidebarOpen(true);
+              setActiveSidebarTab('library');
+              setLibraryFocusCategory('triggers');
+            }}
+            style={{
+              pointerEvents: 'auto',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 64,
+              height: 64,
+              background: 'transparent',
+              border: '1.5px dashed var(--border-input)',
+              borderRadius: '14px',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              transition: 'border-color 130ms ease, background 130ms ease, color 130ms ease',
+            }}
+            onMouseEnter={(e) => {
+              const el = e.currentTarget as HTMLElement;
+              el.style.borderColor = OTTO_AMBER;
+              el.style.background = `${OTTO_AMBER}14`;
+              el.style.color = OTTO_AMBER;
+            }}
+            onMouseLeave={(e) => {
+              const el = e.currentTarget as HTMLElement;
+              el.style.borderColor = 'var(--border-input)';
+              el.style.background = 'transparent';
+              el.style.color = 'var(--text-muted)';
+            }}
+          >
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
+          <span style={{
+            fontFamily: "'Inter'",
+            fontSize: '12.5px',
+            fontWeight: 500,
+            color: 'var(--text-secondary)',
+            letterSpacing: '-0.005em',
+          }}>
+            Start with a trigger
+          </span>
+        </div>
+      )}
 
       {/* Floating canvas tabs */}
       <CanvasTabs />

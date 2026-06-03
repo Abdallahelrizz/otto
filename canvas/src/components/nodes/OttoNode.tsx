@@ -1,8 +1,9 @@
 import { memo, useCallback, Fragment } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
 import { useStore } from '../../store';
-import { getNodeDef, nodeColor, nodeRadius, OTTO_AMBER } from './nodeConfig';
+import { getNodeDef, nodeColor, nodeRadius, OTTO_AMBER, NODE_SERVICE_LOGO } from './nodeConfig';
 import { NodeIcon } from '../NodeIcon';
+import { ServiceLogo } from '../ServiceLogo';
 import type { OttoNodeData } from '../../types';
 
 function hexA(hex: string, a: number): string {
@@ -120,6 +121,8 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
   const subtitleText = def.subtitle ? def.subtitle(data.config ?? {}) : '';
   // Icon container radius: scale up proportionally from nodeRadius
   const iconRadius = nodeRadius(def).replace(/\d+px/, (v) => `${Math.round(parseInt(v) * 1.4)}px`);
+  // Brand logo (Slack, GitHub, …) when this node maps to a service catalog entry
+  const serviceLogo = NODE_SERVICE_LOGO[data.nodeType];
 
   return (
     <div
@@ -225,21 +228,39 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
           </span>
         )}
 
-        {/* Icon container */}
-        <span style={{
-          width: ICON_SIZE,
-          height: ICON_SIZE,
-          minWidth: ICON_SIZE,
-          borderRadius: iconRadius,
-          background: hexA(cardColor, theme === 'dark' ? 0.14 : 0.11),
-          border: `1px solid ${hexA(cardColor, theme === 'dark' ? 0.22 : 0.18)}`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-        }}>
-          <NodeIcon type={data.nodeType} size={16} color={cardColor} />
-        </span>
+        {/* Icon container — brand logo for service nodes, else the type icon */}
+        {serviceLogo ? (
+          <span style={{
+            width: ICON_SIZE,
+            height: ICON_SIZE,
+            minWidth: ICON_SIZE,
+            borderRadius: iconRadius,
+            background: 'var(--bg-hover)',
+            border: '1px solid var(--border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            overflow: 'hidden',
+          }}>
+            <ServiceLogo catalogId={serviceLogo} name={def.label} fallbackColor={cardColor} size={20} />
+          </span>
+        ) : (
+          <span style={{
+            width: ICON_SIZE,
+            height: ICON_SIZE,
+            minWidth: ICON_SIZE,
+            borderRadius: iconRadius,
+            background: hexA(cardColor, theme === 'dark' ? 0.14 : 0.11),
+            border: `1px solid ${hexA(cardColor, theme === 'dark' ? 0.22 : 0.18)}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}>
+            <NodeIcon type={data.nodeType} size={16} color={cardColor} />
+          </span>
+        )}
 
         {/* Label + tag + subtitle */}
         <div style={{ flex: 1, minWidth: 0 }}>

@@ -464,8 +464,8 @@ export function Toolbar() {
 
         {/* Version pill */}
         <span style={{
-          fontFamily: "'JetBrains Mono'",
-          fontSize: '9.5px',
+          fontFamily: "'Inter'",
+          fontSize: '10px',
           color: 'var(--text-muted)',
           letterSpacing: '0.06em',
           fontWeight: 600,
