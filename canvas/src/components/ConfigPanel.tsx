@@ -1244,11 +1244,6 @@ const FIELD_HELP_BY_NODE: Record<string, Record<string, string>> = {
     parseMode: 'Formatting mode: MarkdownV2, HTML, or leave empty for plain text.',
     disableNotification: 'Set to true to send silently.',
   },
-  github_api: {
-    method: 'HTTP method for the GitHub REST API call.',
-    path: 'GitHub API path, e.g. /repos/{owner}/{repo}/issues. Expressions allowed.',
-    body: 'Request body as a JSON object. Used for POST/PATCH/PUT requests.',
-  },
   notion_api: {
     method: 'HTTP method for the Notion API call.',
     path: 'Notion API path, e.g. /v1/databases/{database_id}/query. Expressions allowed.',
@@ -1299,7 +1294,6 @@ const REQUIRED_FIELDS_BY_NODE: Record<string, string[]> = {
   slack_send_message: ['channel', 'text'],
   discord_send_message: ['content'],
   telegram_send_message: ['chatId', 'text'],
-  github_api: ['method', 'path'],
   notion_api: ['method', 'path', 'notionVersion'],
   airtable_records: ['operation', 'baseId', 'tableName'],
   graphql_request: ['endpoint', 'query'],

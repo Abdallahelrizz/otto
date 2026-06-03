@@ -81,7 +81,6 @@ const NODE_SCHEMAS: Record<string, Schema> = {
   slack_send_message: { required: ['channel', 'text'], credentialAny: ['credentialId', 'token'], jsonFields: ['blocksJson'] },
   discord_send_message: { required: ['content'], credentialAny: ['credentialId', 'webhookUrl'], jsonFields: ['embedsJson'] },
   telegram_send_message: { required: ['chatId', 'text'], credentialAny: ['credentialId', 'botToken'] },
-  github_api: { required: ['method', 'path'], jsonFields: ['body'] },
   notion_api: { required: ['method', 'path', 'notionVersion'], credentialAny: ['credentialId', 'token'], jsonFields: ['body'] },
   airtable_records: {
     required: ['operation', 'baseId', 'tableName'],

@@ -8,9 +8,9 @@ export const GENERATED_SERVICE_DEFS: NodeTypeDef[] = [
     "category": "integrations",
     "label": "GitHub",
     "description": "Work with GitHub",
-    "color": "#64748b",
+    "color": "#1F2328",
     "tint": "service",
-    "serviceColor": "#64748b",
+    "serviceColor": "#1F2328",
     "serviceCatalog": "githubApi",
     "credentialTypes": [
       "api_key",

@@ -3,6 +3,7 @@ export default {
   type: 'github_api',
   label: 'GitHub',
   category: 'integrations',
+  serviceColor: '#1F2328',
   base: 'https://api.github.com',
   credential: { catalog: 'githubApi', keys: ['token', 'value', 'apiKey'] },
   auth: {
