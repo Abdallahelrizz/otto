@@ -46,5 +46,43 @@ export default {
       fields: [{ key: 'org', required: true }],
       query: { per_page: '{perPage}' },
     },
+    close_issue: {
+      method: 'PATCH', path: '/repos/{owner}/{repo}/issues/{issueNumber}',
+      fields: [{ key: 'owner', required: true }, { key: 'repo', required: true }, { key: 'issueNumber', required: true }],
+      body: { state: 'closed' },
+    },
+    update_issue: {
+      method: 'PATCH', path: '/repos/{owner}/{repo}/issues/{issueNumber}',
+      fields: [
+        { key: 'owner', required: true }, { key: 'repo', required: true }, { key: 'issueNumber', required: true },
+        { key: 'title' }, { key: 'body' }, { key: 'state' },
+      ],
+      body: { title: '{title}', body: '{body}', state: '{state}' },
+    },
+    create_pr: {
+      method: 'POST', path: '/repos/{owner}/{repo}/pulls',
+      fields: [
+        { key: 'owner', required: true }, { key: 'repo', required: true }, { key: 'title', required: true },
+        { key: 'head', required: true }, { key: 'base', required: true }, { key: 'body' }, { key: 'draft' },
+      ],
+      body: { title: '{title}', head: '{head}', base: '{base}', body: '{body}', draft: '{draft}' },
+    },
+    get_pr: {
+      method: 'GET', path: '/repos/{owner}/{repo}/pulls/{pullNumber}',
+      fields: [{ key: 'owner', required: true }, { key: 'repo', required: true }, { key: 'pullNumber', required: true }],
+    },
+    list_prs: {
+      method: 'GET', path: '/repos/{owner}/{repo}/pulls',
+      fields: [{ key: 'owner', required: true }, { key: 'repo', required: true }],
+      query: { state: '{state}', per_page: '{perPage}' },
+    },
+    create_release: {
+      method: 'POST', path: '/repos/{owner}/{repo}/releases',
+      fields: [
+        { key: 'owner', required: true }, { key: 'repo', required: true }, { key: 'tagName', required: true },
+        { key: 'name' }, { key: 'body' }, { key: 'draft' }, { key: 'prerelease' },
+      ],
+      body: { tag_name: '{tagName}', name: '{name}', body: '{body}', draft: '{draft}', prerelease: '{prerelease}' },
+    },
   },
 };

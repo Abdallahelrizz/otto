@@ -49,3 +49,29 @@ test('sends the GitHub static headers', async () => {
   assert.equal(request.calls[0].options.headers.Accept, 'application/vnd.github+json');
   assert.equal(request.calls[0].options.headers['X-GitHub-Api-Version'], '2022-11-28');
 });
+
+test('close_issue → PATCH with state:closed body', async () => {
+  const request = fakeRequest();
+  const handler = makeServiceHandler(githubDescriptor, { request });
+  await handler({ config: { operation: 'close_issue', owner: 'o', repo: 'r', issueNumber: 5 }, credential: cred });
+  assert.equal(request.calls[0].url, 'https://api.github.com/repos/o/r/issues/5');
+  assert.equal(request.calls[0].options.method, 'PATCH');
+  assert.equal(JSON.parse(request.calls[0].options.body).state, 'closed');
+});
+
+test('list_prs → GET /repos/:owner/:repo/pulls', async () => {
+  const request = fakeRequest();
+  const handler = makeServiceHandler(githubDescriptor, { request });
+  await handler({ config: { operation: 'list_prs', owner: 'o', repo: 'r', state: 'open' }, credential: cred });
+  assert.match(request.calls[0].url, /^https:\/\/api\.github\.com\/repos\/o\/r\/pulls/);
+  assert.equal(request.calls[0].options.method, 'GET');
+});
+
+test('create_release → POST /releases with tag_name in body', async () => {
+  const request = fakeRequest();
+  const handler = makeServiceHandler(githubDescriptor, { request });
+  await handler({ config: { operation: 'create_release', owner: 'o', repo: 'r', tagName: 'v1.0' }, credential: cred });
+  assert.equal(request.calls[0].url, 'https://api.github.com/repos/o/r/releases');
+  assert.equal(request.calls[0].options.method, 'POST');
+  assert.equal(JSON.parse(request.calls[0].options.body).tag_name, 'v1.0');
+});
