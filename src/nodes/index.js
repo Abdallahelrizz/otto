@@ -32,7 +32,6 @@ import { jwtNode } from './jwt.js';
 import { slackSendMessage } from './slack-send-message.js';
 import { discordSendMessage } from './discord-send-message.js';
 import { telegramSendMessage } from './telegram-send-message.js';
-import { githubApi } from './github-api.js';
 import { notionApi } from './notion-api.js';
 import { airtableRecords } from './airtable-records.js';
 import { graphqlRequest } from './graphql-request.js';
@@ -47,6 +46,7 @@ import { stopError } from './stop-error.js';
 import { waitNode } from './wait.js';
 import { humanApproval } from './human-approval.js';
 import { codeNode } from './code.js';
+import { serviceHandlers } from './services/_load.js';
 import {
   csvParse,
   csvStringify,
@@ -96,7 +96,6 @@ const registry = new Map([
   ['slack_send_message', slackSendMessage],
   ['discord_send_message', discordSendMessage],
   ['telegram_send_message', telegramSendMessage],
-  ['github_api',       githubApi],
   ['notion_api',       notionApi],
   ['airtable_records', airtableRecords],
   ['graphql_request',  graphqlRequest],
@@ -116,6 +115,10 @@ const registry = new Map([
   ['code',             codeNode],
   ['placeholder',      placeholderNode],
 ]);
+
+for (const [type, handler] of serviceHandlers) {
+  registry.set(type, handler);
+}
 
 export function getNodeHandler(type) {
   const handler = registry.get(type);
