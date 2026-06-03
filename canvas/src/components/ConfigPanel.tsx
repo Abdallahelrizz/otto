@@ -570,7 +570,6 @@ const NODE_CREDENTIAL_TYPE_HINTS: Record<string, string[]> = {
   slack_send_message:  ['api_key', 'bearer_token'],
   discord_send_message: ['api_key', 'bearer_token'],
   telegram_send_message: ['api_key'],
-  github_api:          ['api_key', 'bearer_token'],
   notion_api:          ['api_key', 'bearer_token'],
   airtable_records:    ['api_key'],
   graphql_request:     ['api_key', 'bearer_token', 'basic'],
@@ -587,8 +586,8 @@ const NODE_CREDENTIAL_TYPE_HINTS: Record<string, string[]> = {
   redis_set:           ['redis'],
 };
 
-function credentialsForNode(credentials: Credential[], nodeType: string) {
-  const allowed = NODE_CREDENTIAL_TYPE_HINTS[nodeType];
+function credentialsForNode(credentials: Credential[], nodeType: string, fallbackTypes?: string[]) {
+  const allowed = NODE_CREDENTIAL_TYPE_HINTS[nodeType] ?? fallbackTypes;
   if (!allowed) return credentials;
   const allowedSet = new Set(allowed);
   return credentials.filter((credential) => allowedSet.has(credential.type));
@@ -2838,130 +2837,6 @@ function CodePanel({ config, onChange, issues = [] }: PanelProps) {
   );
 }
 
-/* ── Generic fallback (for non-custom nodes) ── */
-/* ── GitHub API ── */
-function GithubApiPanel({ config, onChange }: PanelProps) {
-  const credentials = useStore((s) => s.credentials);
-  const operation = (config.operation as string) ?? 'generic';
-  const ghCreds = credentials.filter((c) => ['api_key', 'bearer_token', 'oauth2'].includes(c.type));
-  const ownerRepoOps = ['create_issue', 'get_issue', 'close_issue', 'list_issues', 'create_pr', 'list_prs'];
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <FieldGroup label="Credential" helper="GitHub API token.">
-        <select style={selectStyle} value={(config.credentialId as string) ?? ''}
-          onChange={(e) => onChange('credentialId', e.target.value)}>
-          <option value="">No saved credential</option>
-          {ghCreds.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.type})</option>)}
-        </select>
-      </FieldGroup>
-
-      <FieldGroup label="Operation">
-        <select style={selectStyle} value={operation}
-          onChange={(e) => onChange('operation', e.target.value)}>
-          <option value="generic">Generic (method + path)</option>
-          <option value="create_issue">Create issue</option>
-          <option value="get_issue">Get issue</option>
-          <option value="close_issue">Close issue</option>
-          <option value="list_issues">List issues</option>
-          <option value="create_pr">Create PR</option>
-          <option value="list_prs">List PRs</option>
-          <option value="list_repos">List repos</option>
-        </select>
-      </FieldGroup>
-
-      {ownerRepoOps.includes(operation) && <>
-        <FieldGroup label="Owner" helper="GitHub username or organisation.">
-          <ExpressionInput style={inputStyle} value={(config.owner as string) ?? ''}
-            placeholder="{{ input.owner }}" onChange={(v) => onChange('owner', v)} />
-        </FieldGroup>
-        <FieldGroup label="Repo" helper="Repository name (without owner prefix).">
-          <ExpressionInput style={inputStyle} value={(config.repo as string) ?? ''}
-            placeholder="{{ input.repo }}" onChange={(v) => onChange('repo', v)} />
-        </FieldGroup>
-      </>}
-
-      {['get_issue', 'close_issue'].includes(operation) && (
-        <FieldGroup label="Issue number" required>
-          <ExpressionInput style={inputStyle} value={(config.issueNumber as string) ?? ''}
-            placeholder="{{ input.number }}" onChange={(v) => onChange('issueNumber', v)} />
-        </FieldGroup>
-      )}
-
-      {operation === 'create_issue' && <>
-        <FieldGroup label="Title" required>
-          <ExpressionInput style={inputStyle} value={(config.title as string) ?? ''}
-            placeholder="Bug: …" onChange={(v) => onChange('title', v)} />
-        </FieldGroup>
-        <FieldGroup label="Body">
-          <ExpressionTextarea style={{ ...inputStyle, ...monoStyle }} value={(config.body as string) ?? ''}
-            placeholder="Issue description…" onChange={(v) => onChange('body', v)} />
-        </FieldGroup>
-        <FieldGroup label="Labels" helper='JSON array of label names, e.g. ["bug","help wanted"]'>
-          <ExpressionInput style={inputStyle} value={(config.labels as string) ?? ''}
-            placeholder='["bug"]' onChange={(v) => onChange('labels', v)} />
-        </FieldGroup>
-      </>}
-
-      {operation === 'create_pr' && <>
-        <FieldGroup label="Title" required>
-          <ExpressionInput style={inputStyle} value={(config.title as string) ?? ''}
-            placeholder="feat: …" onChange={(v) => onChange('title', v)} />
-        </FieldGroup>
-        <FieldGroup label="Head branch" required helper="Branch containing the changes.">
-          <ExpressionInput style={inputStyle} value={(config.head as string) ?? ''}
-            placeholder="feature-branch" onChange={(v) => onChange('head', v)} />
-        </FieldGroup>
-        <FieldGroup label="Base branch" required helper="Branch to merge into.">
-          <ExpressionInput style={inputStyle} value={(config.base as string) ?? ''}
-            placeholder="main" onChange={(v) => onChange('base', v)} />
-        </FieldGroup>
-        <FieldGroup label="Body">
-          <ExpressionTextarea style={{ ...inputStyle, ...monoStyle }} value={(config.body as string) ?? ''}
-            placeholder="PR description…" onChange={(v) => onChange('body', v)} />
-        </FieldGroup>
-      </>}
-
-      {['list_issues', 'list_prs'].includes(operation) && (
-        <FieldGroup label="State">
-          <select style={selectStyle} value={(config.state as string) ?? 'open'}
-            onChange={(e) => onChange('state', e.target.value)}>
-            <option value="open">Open</option>
-            <option value="closed">Closed</option>
-            <option value="all">All</option>
-          </select>
-        </FieldGroup>
-      )}
-
-      {operation === 'list_repos' && (
-        <FieldGroup label="Org / owner" required helper="GitHub organisation or user whose repos to list.">
-          <ExpressionInput style={inputStyle} value={(config.org as string) ?? (config.owner as string) ?? ''}
-            placeholder="{{ input.org }}" onChange={(v) => onChange('org', v)} />
-        </FieldGroup>
-      )}
-
-      {operation === 'generic' && <>
-        <FieldGroup label="Method">
-          <select style={selectStyle} value={(config.method as string) ?? 'GET'}
-            onChange={(e) => onChange('method', e.target.value)}>
-            {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => (
-              <option key={m} value={m}>{m}</option>
-            ))}
-          </select>
-        </FieldGroup>
-        <FieldGroup label="Path" helper="GitHub API path. Expressions allowed.">
-          <ExpressionInput style={inputStyle} value={(config.path as string) ?? ''}
-            placeholder="/user" onChange={(v) => onChange('path', v)} />
-        </FieldGroup>
-        <FieldGroup label="Body (JSON)" helper="Request body for POST/PATCH/PUT.">
-          <ExpressionTextarea style={{ ...inputStyle, ...monoStyle }} spellCheck={false}
-            value={(config.body as string) ?? '{}'} onChange={(v) => onChange('body', v)} />
-        </FieldGroup>
-      </>}
-    </div>
-  );
-}
-
 /* ── Notion API ── */
 function NotionApiPanel({ config, onChange }: PanelProps) {
   const credentials = useStore((s) => s.credentials);
@@ -3213,8 +3088,96 @@ function GenericPanel({ config, onChange, nodeType, issues = [] }: PanelProps & 
   );
 }
 
+function ServiceNodePanel({ config, onChange, nodeType, issues = [] }: PanelProps & { nodeType: string }) {
+  const def = getNodeDef(nodeType);
+  const credentials = useStore((s) => s.credentials);
+  const matchingCredentials = credentialsForNode(credentials, nodeType, def.credentialTypes);
+  const operations = def.operations ?? {};
+  const opKeys = Object.keys(operations);
+  const currentOp = (config.operation as string) || opKeys[0];
+  const opFields = operations[currentOp]?.fields ?? [];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <FieldGroup label="Credential">
+        <select
+          style={fieldInputStyle(false, selectStyle)}
+          value={(config.credentialId as string) ?? ''}
+          onChange={(e) => onChange('credentialId', e.target.value)}
+        >
+          <option value="">No saved credential</option>
+          {matchingCredentials.map((credential) => (
+            <option key={credential.id} value={credential.id}>{credential.name} ({credential.type})</option>
+          ))}
+        </select>
+      </FieldGroup>
+
+      <FieldGroup label="Operation">
+        <select
+          style={fieldInputStyle(false, selectStyle)}
+          value={currentOp}
+          onChange={(e) => onChange('operation', e.target.value)}
+        >
+          {opKeys.map((key) => (
+            <option key={key} value={key}>{operations[key].label}</option>
+          ))}
+        </select>
+      </FieldGroup>
+
+      {opFields.map((field) => {
+        const v = config[field.key];
+        const relatedIssues = fieldIssues(issues, field.key);
+        const error = relatedIssues.find((issue) => issue.severity === 'error')?.message ?? null;
+        const groupProps = { key: field.key, label: field.label, required: field.required, error };
+
+        if (field.type === 'number') return (
+          <FieldGroup {...groupProps}>
+            <input type="number" style={fieldInputStyle(Boolean(error))} value={(v as number) ?? ''} step="0.1"
+              onChange={(e) => onChange(field.key, parseFloat(e.target.value))} />
+          </FieldGroup>
+        );
+
+        if (field.type === 'textarea' || field.type === 'code') return (
+          <FieldGroup {...groupProps}>
+            <ExpressionTextarea
+              style={fieldInputStyle(Boolean(error), monoStyle)}
+              value={(v as string) ?? ''}
+              placeholder={field.placeholder ?? field.key}
+              spellCheck={false}
+              onChange={(next) => onChange(field.key, next)}
+            />
+          </FieldGroup>
+        );
+
+        if (field.type === 'select') return (
+          <FieldGroup {...groupProps}>
+            <select style={fieldInputStyle(Boolean(error), selectStyle)} value={(v as string) ?? ''}
+              onChange={(e) => onChange(field.key, e.target.value)}>
+              {field.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </FieldGroup>
+        );
+
+        return (
+          <FieldGroup {...groupProps}>
+            <ExpressionInput
+              style={fieldInputStyle(Boolean(error))}
+              value={(v as string) ?? ''}
+              placeholder={field.placeholder ?? field.key}
+              onChange={(next) => onChange(field.key, next)}
+            />
+          </FieldGroup>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ── Node panel router ── */
 export function NodePanel({ nodeType, config, onChange, nodeId, issues = [] }: PanelProps & { nodeType: string }) {
+  if (getNodeDef(nodeType).operations) {
+    return <ServiceNodePanel nodeType={nodeType} config={config} onChange={onChange} issues={issues} />;
+  }
   switch (nodeType) {
     case 'webhook_trigger':
       return <WebhookPanel config={config} onChange={onChange} nodeId={nodeId} issues={issues} />;
@@ -3266,8 +3229,6 @@ export function NodePanel({ nodeType, config, onChange, nodeId, issues = [] }: P
       return <MemoryWritePanel config={config} onChange={onChange} issues={issues} />;
     case 'vector_search':
       return <VectorSearchPanel config={config} onChange={onChange} issues={issues} />;
-    case 'github_api':
-      return <GithubApiPanel config={config} onChange={onChange} issues={issues} />;
     case 'notion_api':
       return <NotionApiPanel config={config} onChange={onChange} issues={issues} />;
     default:
