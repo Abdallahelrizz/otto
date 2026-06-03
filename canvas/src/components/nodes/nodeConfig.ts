@@ -30,6 +30,9 @@ export interface NodeTypeDef {
   };
   defaultConfig: Record<string, unknown>;
   fields: FieldDef[];
+  operations?: Record<string, { label: string; fields: FieldDef[] }>;
+  credentialTypes?: string[];
+  serviceCatalog?: string;
 }
 
 type FieldBase = {
