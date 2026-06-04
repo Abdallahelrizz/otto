@@ -4,7 +4,7 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { serviceDescriptors } from '../../src/nodes/services/_load.js';
+import { serviceDescriptors } from '../../src/nodes/services/_descriptors.js';
 import { descriptorToNodeDef } from './descriptor-to-nodedef.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));

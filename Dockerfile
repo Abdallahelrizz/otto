@@ -3,6 +3,10 @@ WORKDIR /app/canvas
 COPY canvas/package*.json ./
 RUN npm ci
 COPY canvas ./
+# Codegen (npm run gen:nodes, part of build) imports the backend service descriptors at
+# ../../src/nodes/services. They are pure data + a builtins-only validator, so this folder
+# is self-contained — no engine, no backend deps needed in this stage.
+COPY src/nodes/services /app/src/nodes/services
 RUN npm run build
 
 FROM node:20-alpine AS server
