@@ -1,5 +1,5 @@
 // src/nodes/services/_engine.js
-import { credentialValue, safeRequestJson, urlJoin } from '../service-utils.js';
+import { credentialValue, parseJson, safeRequestJson, urlJoin } from '../service-utils.js';
 import { fillPath, buildQuery, fillBody } from './_interpolate.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -60,7 +60,11 @@ export function makeServiceHandler(descriptor, { request = safeRequestJson } = {
     let body;
     if (op.body && op.method !== 'GET') {
       headers['Content-Type'] = headers['Content-Type'] || 'application/json';
-      body = JSON.stringify(fillBody(op.body, config));
+      const jsonKeys = (op.fields ?? []).filter((f) => f.json).map((f) => f.key);
+      const bodyConfig = jsonKeys.length
+        ? { ...config, ...Object.fromEntries(jsonKeys.map((k) => [k, parseJson(config[k], undefined)])) }
+        : config;
+      body = JSON.stringify(fillBody(op.body, bodyConfig));
     }
 
     return request(url, {

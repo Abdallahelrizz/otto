@@ -115,3 +115,15 @@ test('falls back to the stored credential when no override value is present', as
   await handler({ config: { operation: 'get_thing', id: '1' }, credential: { data: { token: 'stored' } } });
   assert.equal(request.calls[0].options.headers.Authorization, 'Bearer stored');
 });
+
+test('parses JSON-string fields marked json before building the body', async () => {
+  const request = fakeRequest();
+  const d = { ...descriptor, operations: { ...descriptor.operations, make: {
+    method: 'POST', path: '/things',
+    fields: [{ key: 'props', json: true }],
+    body: { props: '{props}' },
+  } } };
+  const handler = makeServiceHandler(d, { request });
+  await handler({ config: { operation: 'make', props: '{"a":1}' }, credential: { data: { token: 't' } } });
+  assert.deepEqual(JSON.parse(request.calls[0].options.body), { props: { a: 1 } });
+});
