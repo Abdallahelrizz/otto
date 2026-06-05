@@ -996,7 +996,6 @@ function ExpressionInput({ value, onChange, style, containerStyle, ...props }: E
   };
 
   const execId = useStore((s) => s.executionId);
-  const ndvNodeId = useStore((s) => s.ndvNodeId);
   const nodeForPreview = useStore((s) => s.selectedNodeId);
 
   return (
@@ -1013,7 +1012,7 @@ function ExpressionInput({ value, onChange, style, containerStyle, ...props }: E
         <PreviewChip
           value={value}
           executionId={execId}
-          nodeId={ndvNodeId ?? nodeForPreview}
+          nodeId={nodeForPreview}
         />
       )}
     </div>
@@ -1031,7 +1030,6 @@ function ExpressionTextarea({ value, onChange, style, containerStyle, ...props }
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const expressionActive = hasExpression(value);
   const execId        = useStore((s) => s.executionId);
-  const ndvNodeId     = useStore((s) => s.ndvNodeId);
   const nodeForPreview = useStore((s) => s.selectedNodeId);
   const insertAtCursor = (expression: string) => {
     const target = textareaRef.current;
@@ -1057,7 +1055,7 @@ function ExpressionTextarea({ value, onChange, style, containerStyle, ...props }
       />
       <ExpressionToolbar value={value} onInsert={insertAtCursor} />
       {expressionActive && (
-        <PreviewChip value={value} executionId={execId} nodeId={ndvNodeId ?? nodeForPreview} />
+        <PreviewChip value={value} executionId={execId} nodeId={nodeForPreview} />
       )}
     </div>
   );

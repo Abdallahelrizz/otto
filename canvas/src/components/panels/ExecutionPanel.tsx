@@ -27,6 +27,7 @@ export function ExecutionPanel() {
   const executionDetailLoading = useStore((s) => s.executionDetailLoading);
   const executionId = useStore((s) => s.executionId);
   const executionPhase = useStore((s) => s.executionPhase);
+  const selectedNodeId = useStore((s) => s.selectedNodeId);
   const [inspectedNodeId, setInspectedNodeId] = useState<string | null>(null);
   const [inspectTab, setInspectTab] = useState<InspectTab>('output');
 
@@ -47,6 +48,14 @@ export function ExecutionPanel() {
       setInspectedNodeId(null);
     }
   }, [inspectedNodeId, rows]);
+
+  // Canvas selection (click / double-click "focus") drives the inspected node
+  // whenever that node has run data, tying the right config panel to the bottom data view.
+  useEffect(() => {
+    if (selectedNodeId && rows.some((ne) => ne.node_id === selectedNodeId)) {
+      setInspectedNodeId(selectedNodeId);
+    }
+  }, [selectedNodeId, rows]);
 
   const inspectedNode = (inspectedNodeId ? rows.find((ne) => ne.node_id === inspectedNodeId) : null)
     ?? [...rows].reverse().find((ne) => ne.output != null || ne.error)

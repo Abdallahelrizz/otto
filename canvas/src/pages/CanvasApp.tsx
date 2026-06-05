@@ -7,7 +7,6 @@ import { ConfigPanel } from '../components/ConfigPanel';
 import { ContextMenu } from '../components/ContextMenu';
 import { BottomPanels } from '../components/panels/BottomPanels';
 import { ShortcutReference } from '../components/ShortcutReference';
-import { NodeDetailView } from '../components/ndv/NodeDetailView';
 import { AuthGate } from '../components/AuthGate';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useStore } from '../store';
@@ -16,15 +15,14 @@ import { useEditorShortcuts } from '../hooks/useEditorShortcuts';
 function EditorShell() {
   const theme = useStore((s) => s.theme);
   const selectedNodeId = useStore((s) => s.selectedNodeId);
-  const ndvNodeId = useStore((s) => s.ndvNodeId);
   const sidebarOpen = useStore((s) => s.sidebarOpen);
   const toggleSidebar = useStore((s) => s.toggleSidebar);
   const [shortcutRefOpen, setShortcutRefOpen] = useState(false);
 
   useEditorShortcuts(shortcutRefOpen, setShortcutRefOpen);
 
-  // Hide the side panel while the NDV modal is open — they'd overlap
-  const panelOpen = !!selectedNodeId && !ndvNodeId;
+  // The right panel is the single node editor; it shows whenever a node is selected.
+  const panelOpen = !!selectedNodeId;
 
   return (
     <div
@@ -81,7 +79,6 @@ function EditorShell() {
       </div>
 
       <ContextMenu />
-      <NodeDetailView />
       {shortcutRefOpen && <ShortcutReference onClose={() => setShortcutRefOpen(false)} />}
     </div>
   );

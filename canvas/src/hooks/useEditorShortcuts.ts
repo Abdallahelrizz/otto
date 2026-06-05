@@ -20,26 +20,21 @@ export function useEditorShortcuts(shortcutRefOpen: boolean, setShortcutRefOpen:
   const duplicateNodes  = useStore((s) => s.duplicateNodes);
   const saveWorkflow    = useStore((s) => s.saveWorkflow);
   const runExecution    = useStore((s) => s.runExecution);
-  const setNdvNodeId    = useStore((s) => s.setNdvNodeId);
-  const ndvNodeId       = useStore((s) => s.ndvNodeId);
+  const setBottomPanelsOpen = useStore((s) => s.setBottomPanelsOpen);
+  const selectNode      = useStore((s) => s.selectNode);
   const fitViewCallback = useStore((s) => s.fitViewCallback);
 
   const handler = useCallback((e: KeyboardEvent) => {
     if (isEditingField(e.target)) return;
 
     const ctrl = e.ctrlKey || e.metaKey;
-    const alt  = e.altKey;
 
     // ── Ctrl/Cmd combos ──────────────────────────────────────────
     if (ctrl) {
       switch (e.key.toLowerCase()) {
         case 'b':
           e.preventDefault();
-          if (alt) {
-            setNdvNodeId(null);
-          } else {
-            toggleSidebar();
-          }
+          toggleSidebar();
           return;
 
         case 's':
@@ -64,8 +59,8 @@ export function useEditorShortcuts(shortcutRefOpen: boolean, setShortcutRefOpen:
 
     // ── Escape ───────────────────────────────────────────────────
     if (e.key === 'Escape') {
-      if (ndvNodeId) { setNdvNodeId(null); return; }
       if (shortcutRefOpen) { setShortcutRefOpen(false); return; }
+      if (selectedNodeId) { selectNode(null); return; }
       return;
     }
 
@@ -93,7 +88,7 @@ export function useEditorShortcuts(shortcutRefOpen: boolean, setShortcutRefOpen:
       case ' ':
         if (selectedNodeId) {
           e.preventDefault();
-          setNdvNodeId(selectedNodeId);
+          setBottomPanelsOpen(true);
         }
         break;
 
@@ -114,7 +109,7 @@ export function useEditorShortcuts(shortcutRefOpen: boolean, setShortcutRefOpen:
     toggleSidebar, toggleOttobot, toggleLogs,
     selectedNodeId, nodes, deleteNodes, duplicateNodes,
     saveWorkflow, runExecution,
-    setNdvNodeId, ndvNodeId, fitViewCallback,
+    setBottomPanelsOpen, selectNode, fitViewCallback,
     shortcutRefOpen, setShortcutRefOpen,
   ]);
 
@@ -144,8 +139,8 @@ export const SHORTCUT_GROUPS: Array<{
   {
     label: 'Nodes',
     items: [
-      { key: 'Enter', description: 'Open node in editor (NDV)' },
-      { key: 'Esc', description: 'Close NDV / deselect' },
+      { key: 'Enter', description: 'Focus node — open the data panel' },
+      { key: 'Esc', description: 'Deselect node' },
       { key: '⌃D', description: 'Duplicate selected' },
       { key: 'Del', description: 'Delete selected' },
       { key: '⌃C', description: 'Copy' },

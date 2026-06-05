@@ -484,7 +484,7 @@ export function Canvas() {
   const selectAllNodes = useStore((s) => s.selectAllNodes);
   const nodeClipboard = useStore((s) => s.nodeClipboard);
   const setContextMenu = useStore((s) => s.setContextMenu);
-  const setNdvNodeId = useStore((s) => s.setNdvNodeId);
+  const setBottomPanelsOpen = useStore((s) => s.setBottomPanelsOpen);
   const setActiveSidebarTab = useStore((s) => s.setActiveSidebarTab);
   const setLibraryFocusCategory = useStore((s) => s.setLibraryFocusCategory);
   const setSidebarOpen = useStore((s) => s.setSidebarOpen);
@@ -595,10 +595,12 @@ export function Canvas() {
 
   const onNodeDoubleClick: NodeMouseHandler = useCallback(
     (_e, node) => {
+      // Focus the node: config shows in the right panel (driven by selection),
+      // and the bottom data/execution panel opens for inspection.
       selectNode(node.id);
-      setNdvNodeId(node.id);
+      setBottomPanelsOpen(true);
     },
-    [selectNode, setNdvNodeId]
+    [selectNode, setBottomPanelsOpen]
   );
 
   const onPaneClick = useCallback(() => {

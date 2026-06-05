@@ -280,10 +280,10 @@ export function ExpressionInput({
   const [autocompleteQuery, setAutocompleteQuery] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const storeExecId = useStore((s) => s.executionId);
-  const storeNdvNodeId = useStore((s) => s.ndvNodeId);
+  const storeSelectedNodeId = useStore((s) => s.selectedNodeId);
 
   const resolvedExecutionId = executionId ?? storeExecId;
-  const resolvedNodeId      = nodeId ?? storeNdvNodeId;
+  const resolvedNodeId      = nodeId ?? storeSelectedNodeId;
 
   const hasExpr = isExpression(value);
 
@@ -399,10 +399,10 @@ export function ExpressionTextarea({
   const [autocompleteQuery, setAutocompleteQuery] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const storeExecId = useStore((s) => s.executionId);
-  const storeNdvNodeId = useStore((s) => s.ndvNodeId);
+  const storeSelectedNodeId = useStore((s) => s.selectedNodeId);
 
   const resolvedExecutionId = executionId ?? storeExecId;
-  const resolvedNodeId      = nodeId ?? storeNdvNodeId;
+  const resolvedNodeId      = nodeId ?? storeSelectedNodeId;
   const hasExpr = isExpression(value);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {

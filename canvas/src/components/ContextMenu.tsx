@@ -17,7 +17,6 @@ export function ContextMenu() {
   const clearPinnedDataForNode = useStore((s) => s.clearPinnedDataForNode);
   const pinnedData = useStore((s) => s.pinnedData);
   const setBottomPanelsOpen = useStore((s) => s.setBottomPanelsOpen);
-  const setNdvNodeId = useStore((s) => s.setNdvNodeId);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -71,9 +70,9 @@ export function ContextMenu() {
     close();
   };
 
-  const openNDV = () => {
+  const focusNode = () => {
     selectNode(nodeId);
-    if (setNdvNodeId) setNdvNodeId(nodeId);
+    setBottomPanelsOpen(true);
     close();
   };
 
@@ -84,7 +83,7 @@ export function ContextMenu() {
       style={{ position: 'fixed', left: x, top: y, zIndex: 9999, minWidth: '180px' }}
     >
       <div style={{ padding: '4px' }}>
-        <MenuItem label="Open in editor" onClick={openNDV} />
+        <MenuItem label="Open in editor" onClick={focusNode} />
         <div className="otto-menu-divider" />
         <MenuItem
           label={actionCount > 1 ? `Duplicate ${actionCount} nodes` : 'Duplicate'}

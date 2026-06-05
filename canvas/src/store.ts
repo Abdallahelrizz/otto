@@ -175,10 +175,6 @@ interface OttoStore {
   setDockHeight: (h: number) => void;
   setDockSplit: (s: number) => void;
 
-  // NDV (Node Detail View) modal
-  ndvNodeId: string | null;
-  setNdvNodeId: (id: string | null) => void;
-
   // Fit view callback (registered by Canvas)
   fitViewCallback: (() => void) | null;
   setFitViewCallback: (fn: (() => void) | null) => void;
@@ -788,9 +784,6 @@ export const useStore = create<OttoStore>((set, get) => ({
   toggleLogs:    () => set((s) => ({ logsOpen: !s.logsOpen })),
   setDockHeight: (h) => { try { localStorage.setItem('otto-dock-h', String(h)); } catch { /**/ } set({ dockHeight: h }); },
   setDockSplit:  (s) => { try { localStorage.setItem('otto-dock-split', String(s)); } catch { /**/ } set({ dockSplit: s }); },
-
-  ndvNodeId: null,
-  setNdvNodeId: (id) => set({ ndvNodeId: id }),
 
   fitViewCallback: null,
   setFitViewCallback: (fn) => set({ fitViewCallback: fn }),
