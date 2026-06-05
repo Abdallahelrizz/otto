@@ -39,7 +39,6 @@ import { stripeApi } from './stripe-api.js';
 import { sendgridEmail } from './sendgrid-email.js';
 import { twilioSms } from './twilio-sms.js';
 import { salesforceApi } from './salesforce-api.js';
-import { hubspotApi } from './hubspot-api.js';
 import { linearApi } from './linear-api.js';
 import { scheduleTrigger } from './schedule-trigger.js';
 import { stopError } from './stop-error.js';
@@ -103,7 +102,6 @@ const registry = new Map([
   ['sendgrid_email',   sendgridEmail],
   ['twilio_sms',       twilioSms],
   ['salesforce_api',   salesforceApi],
-  ['hubspot_api',      hubspotApi],
   ['linear_api',       linearApi],
   ['csv_parse',        csvParse],
   ['csv_stringify',    csvStringify],

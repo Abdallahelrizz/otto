@@ -578,7 +578,6 @@ const NODE_CREDENTIAL_TYPE_HINTS: Record<string, string[]> = {
   sendgrid_email:      ['api_key'],
   twilio_sms:          ['api_key'],
   salesforce_api:      ['bearer_token'],
-  hubspot_api:         ['api_key', 'bearer_token'],
   linear_api:          ['api_key', 'bearer_token'],
   send_email:          ['smtp', 'resend'],
   postgres_query:      ['postgres'],

@@ -349,5 +349,108 @@ export const GENERATED_SERVICE_DEFS: NodeTypeDef[] = [
         }
       ]
     }
+  },
+  {
+    "type": "hubspot_api",
+    "category": "integrations",
+    "label": "HubSpot",
+    "description": "Work with HubSpot",
+    "color": "#FF7A59",
+    "tint": "service",
+    "serviceColor": "#FF7A59",
+    "serviceCatalog": "hubspotApi",
+    "credentialTypes": [
+      "api_key",
+      "bearer_token"
+    ],
+    "operations": {
+      "list_contacts": {
+        "label": "List Contacts",
+        "fields": [
+          {
+            "key": "limit",
+            "label": "Limit",
+            "type": "number"
+          }
+        ]
+      },
+      "get_contact": {
+        "label": "Get Contact",
+        "fields": [
+          {
+            "key": "contactId",
+            "label": "Contact Id",
+            "type": "text",
+            "required": true
+          }
+        ]
+      },
+      "create_contact": {
+        "label": "Create Contact",
+        "fields": [
+          {
+            "key": "properties",
+            "label": "Properties (JSON)",
+            "type": "code",
+            "required": true
+          }
+        ]
+      },
+      "update_contact": {
+        "label": "Update Contact",
+        "fields": [
+          {
+            "key": "contactId",
+            "label": "Contact Id",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "properties",
+            "label": "Properties (JSON)",
+            "type": "code",
+            "required": true
+          }
+        ]
+      },
+      "create_deal": {
+        "label": "Create Deal",
+        "fields": [
+          {
+            "key": "dealProperties",
+            "label": "Deal properties (JSON)",
+            "type": "code",
+            "required": true
+          }
+        ]
+      },
+      "list_deals": {
+        "label": "List Deals",
+        "fields": [
+          {
+            "key": "limit",
+            "label": "Limit",
+            "type": "number"
+          }
+        ]
+      }
+    },
+    "defaultConfig": {
+      "credentialId": "",
+      "operation": "list_contacts"
+    },
+    "fields": [],
+    "handles": {
+      "in": [
+        {
+          "id": "input"
+        }
+      ],
+      "out": [
+        {
+          "id": "output"
+        }
+      ]
+    }
   }
 ];
