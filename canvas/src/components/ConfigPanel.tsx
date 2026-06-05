@@ -16,6 +16,7 @@ import { ModelSelect } from './ModelSelect';
 import type { Credential, NodeExecution, OttoNodeData, TriggerSample, WorkflowValidationIssue } from '../types';
 import type { AgentTool, FieldDef } from './nodes/nodeConfig';
 import { PreviewChip } from './ndv/ExpressionEditor';
+import MonacoEditor from '@monaco-editor/react';
 
 /* ── Shared style tokens ── */
 const labelStyle: CSSProperties = {
@@ -255,14 +256,27 @@ function ExecutionSection({ execution }: { execution: NodeExecution }) {
     <div style={{ marginBottom: '20px' }}>
       <ExecBadge execution={execution} />
       {execution.error && (
-        <div style={{ marginTop: '12px' }}>
-          <label style={{ ...labelStyle, color: 'var(--node-error)' }}>Error</label>
+        <div style={{
+          marginTop: '10px',
+          borderRadius: '7px',
+          border: '1px solid color-mix(in srgb, var(--node-error) 30%, transparent)',
+          background: 'color-mix(in srgb, var(--node-error) 7%, transparent)',
+          padding: '8px 10px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px' }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--node-error)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span style={{ fontFamily: 'Geist, system-ui, sans-serif', fontSize: '10.5px', fontWeight: 600, color: 'var(--node-error)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Error</span>
+          </div>
           <pre style={{
-            ...monoStyle,
+            fontFamily: 'Geist Mono, monospace',
+            fontSize: '11px',
             color: 'var(--node-error)',
-            minHeight: 0,
-            padding: '8px 10px',
             margin: 0,
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            lineHeight: 1.45,
           }}>
             {execution.error}
           </pre>
@@ -2758,73 +2772,253 @@ function VectorSearchPanel({ config, onChange, issues = [] }: PanelProps) {
   );
 }
 
+/* ── Language metadata for the Code node ── */
+const LANGUAGES = [
+  { value: 'javascript', label: 'JavaScript',  monacoLang: 'javascript', defaultVersion: '18.x'    },
+  { value: 'typescript', label: 'TypeScript',  monacoLang: 'typescript', defaultVersion: '5.x'     },
+  { value: 'python',     label: 'Python',      monacoLang: 'python',     defaultVersion: '3.11.x'  },
+  { value: 'bash',       label: 'Bash',        monacoLang: 'shell',      defaultVersion: '5.x'     },
+  { value: 'go',         label: 'Go',          monacoLang: 'go',         defaultVersion: '1.16.2'  },
+  { value: 'ruby',       label: 'Ruby',        monacoLang: 'ruby',       defaultVersion: '3.3.0'   },
+  { value: 'rust',       label: 'Rust',        monacoLang: 'rust',       defaultVersion: '1.73.0'  },
+  { value: 'php',        label: 'PHP',         monacoLang: 'php',        defaultVersion: '8.2.3'   },
+  { value: 'c',          label: 'C',           monacoLang: 'c',          defaultVersion: '10.2.0'  },
+  { value: 'cpp',        label: 'C++',         monacoLang: 'cpp',        defaultVersion: '10.2.0'  },
+];
+
+const STDIN_HINT: Record<string, string> = {
+  javascript: 'input object is available directly. Return any value to pass it downstream.',
+  typescript: 'input object is available directly. Return any value to pass it downstream.',
+  python:     'Read JSON from stdin: import sys, json; data = json.load(sys.stdin)',
+  bash:       'Read JSON from stdin: DATA=$(cat); echo "$DATA" | jq .',
+  go:         'Read stdin: json.NewDecoder(os.Stdin).Decode(&input)',
+  ruby:       'Read stdin: require "json"; input = JSON.parse($stdin.read)',
+  rust:       'Read stdin: serde_json::from_reader(std::io::stdin())',
+  php:        'Read stdin: $input = json_decode(file_get_contents("php://stdin"), true);',
+  c:          'Read stdin with fgets/scanf; data arrives as JSON text.',
+  cpp:        'Read stdin with std::cin; data arrives as JSON text.',
+};
+
 /* Code */
 function CodePanel({ config, onChange, issues = [] }: PanelProps) {
   const language = (config.language as string) ?? 'javascript';
-  const codeProps = customFieldProps(issues, 'code', 'Runtime input is available to the code runner. Expressions are resolved before execution.', true);
+  const langMeta = LANGUAGES.find((l) => l.value === language) ?? LANGUAGES[0];
+  const [expanded, setExpanded] = useState(false);
+  const codeError = issues.find((i) => i.field === 'code' && i.severity === 'error')?.message ?? null;
+
+  // Reactively track the app theme so Monaco switches when the user toggles dark/light
+  const [isDark, setIsDark] = useState(
+    () => document.documentElement.getAttribute('data-theme') !== 'light'
+  );
+  useEffect(() => {
+    const obs = new MutationObserver(() => {
+      setIsDark(document.documentElement.getAttribute('data-theme') !== 'light');
+    });
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+
+  const monacoTheme = isDark ? 'vs-dark' : 'vs';
+  const editorBg = isDark ? '#1e1e1e' : '#ffffff';
+
+  const sharedOptions = {
+    fontSize: 13,
+    fontFamily: 'Geist Mono, JetBrains Mono, Menlo, monospace',
+    lineNumbers: 'on' as const,
+    minimap: { enabled: false },
+    scrollBeyondLastLine: false,
+    wordWrap: 'on' as const,
+    tabSize: 2,
+    automaticLayout: true,
+    overviewRulerLanes: 0,
+    renderLineHighlight: 'line' as const,
+    bracketPairColorization: { enabled: true },
+    scrollbar: { verticalScrollbarSize: 4, horizontalScrollbarSize: 4 },
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <div style={{ flex: 1 }}>
-          <label style={labelStyle}>Language</label>
-          <select style={selectStyle} value={language} onChange={(e) => onChange('language', e.target.value)}>
-            <option value="javascript">JavaScript</option>
-            <option value="python">Python</option>
-            <option value="bash">Bash</option>
-          </select>
+    <>
+      {/* ── Expanded overlay ─────────────────────────────────────── */}
+      {expanded && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 2000,
+            background: 'rgba(0,0,0,0.65)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setExpanded(false); }}
+        >
+          <div style={{
+            width: 'min(900px, 90vw)',
+            background: 'var(--bg-panel)',
+            borderRadius: '10px',
+            overflow: 'hidden',
+            border: '1px solid var(--border)',
+            display: 'flex', flexDirection: 'column',
+            boxShadow: '0 24px 80px rgba(0,0,0,0.5)',
+          }}>
+            {/* Modal header */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '10px 14px', borderBottom: '1px solid var(--border)',
+              background: 'var(--bg-input)',
+            }}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <select
+                  style={{ ...selectStyle, width: 'auto', fontSize: '12px' }}
+                  value={language}
+                  onChange={(e) => {
+                    const next = LANGUAGES.find((l) => l.value === e.target.value) ?? LANGUAGES[0];
+                    onChange('language', next.value);
+                    onChange('version', next.defaultVersion);
+                  }}
+                >
+                  {LANGUAGES.map((l) => (
+                    <option key={l.value} value={l.value}>{l.label}</option>
+                  ))}
+                </select>
+                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontFamily: 'Geist Mono' }}>
+                  {(config.version as string) ?? langMeta.defaultVersion}
+                </span>
+              </div>
+              <button
+                onClick={() => setExpanded(false)}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--text-secondary)', fontSize: '13px',
+                  padding: '4px 8px', borderRadius: '4px',
+                  display: 'flex', alignItems: 'center', gap: '4px',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+              >
+                ✕ Close
+              </button>
+            </div>
+            {/* Full Monaco */}
+            <div style={{ background: editorBg }}>
+              <MonacoEditor
+                height="65vh"
+                language={langMeta.monacoLang}
+                theme={monacoTheme}
+                value={(config.code as string) ?? ''}
+                onChange={(value) => onChange('code', value ?? '')}
+                options={{ ...sharedOptions, padding: { top: 12, bottom: 12 } }}
+              />
+            </div>
+            {/* Modal footer hint */}
+            <div style={{
+              padding: '8px 14px', borderTop: '1px solid var(--border)',
+              fontSize: '11px', color: 'var(--text-secondary)',
+              background: 'var(--bg-input)',
+            }}>
+              {STDIN_HINT[language] ?? 'JSON data is passed via stdin.'}
+            </div>
+          </div>
         </div>
-        <div style={{ width: 96 }}>
-          <label style={labelStyle}>Version</label>
-          <input style={inputStyle} value={(config.version as string) ?? (language === 'python' ? '3.11.x' : language === 'bash' ? '5.x' : '18.x')}
-            onChange={(e) => onChange('version', e.target.value)} />
+      )}
+
+      {/* ── Compact inline panel ─────────────────────────────────── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+        {/* Language + Version */}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ flex: 1 }}>
+            <label style={labelStyle}>Language</label>
+            <select
+              style={selectStyle}
+              value={language}
+              onChange={(e) => {
+                const next = LANGUAGES.find((l) => l.value === e.target.value) ?? LANGUAGES[0];
+                onChange('language', next.value);
+                onChange('version', next.defaultVersion);
+              }}
+            >
+              {LANGUAGES.map((l) => (
+                <option key={l.value} value={l.value}>{l.label}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ width: 96 }}>
+            <label style={labelStyle}>Version</label>
+            <input
+              style={inputStyle}
+              value={(config.version as string) ?? langMeta.defaultVersion}
+              onChange={(e) => onChange('version', e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* Code editor */}
+        <div>
+          <label style={{ ...labelStyle, marginBottom: '6px' }}>
+            Code
+            {codeError && (
+              <span style={{ marginLeft: 6, color: 'var(--color-error, #f87171)', fontWeight: 400 }}>{codeError}</span>
+            )}
+          </label>
+          <div style={{ position: 'relative' }}>
+            <div style={{
+              border: codeError ? '1px solid var(--color-error, #f87171)' : '1px solid var(--border)',
+              borderRadius: '6px',
+              overflow: 'hidden',
+              background: editorBg,
+            }}>
+              <MonacoEditor
+                height="160px"
+                language={langMeta.monacoLang}
+                theme={monacoTheme}
+                value={(config.code as string) ?? ''}
+                onChange={(value) => onChange('code', value ?? '')}
+                options={{ ...sharedOptions, padding: { top: 8, bottom: 8 } }}
+              />
+            </div>
+            {/* Expand button — bottom-right corner */}
+            <button
+              title="Expand editor"
+              onClick={() => setExpanded(true)}
+              style={{
+                position: 'absolute', bottom: '6px', right: '6px',
+                background: 'var(--bg-panel)',
+                border: '1px solid var(--border)',
+                borderRadius: '4px',
+                padding: '2px 6px',
+                cursor: 'pointer',
+                color: 'var(--text-secondary)',
+                fontSize: '11px',
+                lineHeight: 1,
+                opacity: 0.8,
+                zIndex: 10,
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.8'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+            >
+              ↗
+            </button>
+          </div>
+          {/* Compact stdin hint below editor */}
+          <p style={{ margin: '4px 0 0', fontSize: '10.5px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+            {STDIN_HINT[language] ?? 'JSON data is passed via stdin.'}
+          </p>
+        </div>
+
+        {/* Timeout + Memory */}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ flex: 1 }}>
+            <label style={labelStyle}>Timeout ms</label>
+            <input type="number" min={100} max={30000} style={inputStyle}
+              value={(config.timeoutMs as number) ?? 5000}
+              onChange={(e) => onChange('timeoutMs', parseInt(e.target.value))} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={labelStyle}>Memory MB</label>
+            <input type="number" min={16} max={512} style={inputStyle}
+              value={(config.memoryLimitMb as number) ?? 128}
+              onChange={(e) => onChange('memoryLimitMb', parseInt(e.target.value))} />
+          </div>
         </div>
       </div>
-      <div style={{
-        border: '1px solid var(--border)',
-        borderRadius: '5px',
-        background: 'var(--bg-input)',
-        color: 'var(--text-secondary)',
-        fontSize: '11px',
-        lineHeight: 1.45,
-        padding: '9px 10px',
-      }}>
-        <div style={{
-          color: 'var(--text-primary)',
-          fontFamily: 'Geist Mono',
-          fontSize: '10px',
-          fontWeight: 800,
-          marginBottom: '4px',
-          textTransform: 'uppercase',
-        }}>
-          Runtime input
-        </div>
-        JavaScript receives <code style={{ color: 'var(--accent)', fontFamily: 'Geist Mono' }}>input</code>.
-        Python and Bash receive the same JSON on stdin. Use{' '}
-        <code style={{ color: 'var(--accent)', fontFamily: 'Geist Mono' }}>{'{{ }}'}</code>
-        {' '}only when Otto should resolve a value before sending code to the runner.
-      </div>
-      <FieldGroup label="Code" {...codeProps}>
-        <ExpressionTextarea
-          style={fieldInputStyle(Boolean(codeProps.error), { ...monoStyle, minHeight: '160px' })}
-          value={(config.code as string) ?? ''}
-          onChange={(value) => onChange('code', value)}
-        />
-      </FieldGroup>
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <div style={{ flex: 1 }}>
-          <label style={labelStyle}>Timeout ms</label>
-          <input type="number" min={100} max={30000} style={inputStyle}
-            value={(config.timeoutMs as number) ?? 5000}
-            onChange={(e) => onChange('timeoutMs', parseInt(e.target.value))} />
-        </div>
-        <div style={{ flex: 1 }}>
-          <label style={labelStyle}>Memory MB</label>
-          <input type="number" min={16} max={512} style={inputStyle}
-            value={(config.memoryLimitMb as number) ?? 128}
-            onChange={(e) => onChange('memoryLimitMb', parseInt(e.target.value))} />
-        </div>
-      </div>
-    </div>
+    </>
   );
 }
 

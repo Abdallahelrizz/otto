@@ -1,21 +1,43 @@
 const DEFAULT_VERSIONS = {
   javascript: '18.x',
-  js: '18.x',
-  node: '18.x',
-  python: '3.11.x',
-  py: '3.11.x',
-  bash: '5.x',
-  sh: '5.x',
+  js:         '18.x',
+  node:       '18.x',
+  typescript: '5.x',
+  ts:         '5.x',
+  python:     '3.11.x',
+  py:         '3.11.x',
+  bash:       '5.x',
+  sh:         '5.x',
+  go:         '1.16.2',
+  ruby:       '3.3.0',
+  rb:         '3.3.0',
+  rust:       '1.73.0',
+  rs:         '1.73.0',
+  php:        '8.2.3',
+  c:          '10.2.0',
+  cpp:        '10.2.0',
+  'c++':      '10.2.0',
 };
 
 const EXTENSIONS = {
   javascript: 'js',
-  js: 'js',
-  node: 'js',
-  python: 'py',
-  py: 'py',
-  bash: 'sh',
-  sh: 'sh',
+  js:         'js',
+  node:       'js',
+  typescript: 'ts',
+  ts:         'ts',
+  python:     'py',
+  py:         'py',
+  bash:       'sh',
+  sh:         'sh',
+  go:         'go',
+  ruby:       'rb',
+  rb:         'rb',
+  rust:       'rs',
+  rs:         'rs',
+  php:        'php',
+  c:          'c',
+  cpp:        'cpp',
+  'c++':      'cpp',
 };
 
 function normalizeLanguage(language) {
@@ -23,6 +45,10 @@ function normalizeLanguage(language) {
   if (language === 'node') return 'javascript';
   if (language === 'py') return 'python';
   if (language === 'sh') return 'bash';
+  if (language === 'ts') return 'typescript';
+  if (language === 'rb') return 'ruby';
+  if (language === 'rs') return 'rust';
+  if (language === 'c++') return 'cpp';
   return language;
 }
 
@@ -55,8 +81,10 @@ function parseStdout(stdout) {
   }
 }
 
+const PUBLIC_PISTON = 'https://emkc.org/api/v2/piston';
+
 export async function codeNode({ input, config }) {
-  const pistonUrl = (process.env.PISTON_URL ?? 'http://localhost:2000').replace(/\/$/, '');
+  const primaryUrl = (process.env.PISTON_URL ?? 'http://localhost:2000').replace(/\/$/, '');
   const language = normalizeLanguage(String(config.language ?? 'javascript'));
   const version = String(config.version ?? DEFAULT_VERSIONS[language] ?? '*');
   const code = String(config.code ?? '');
@@ -80,13 +108,29 @@ export async function codeNode({ input, config }) {
     compile_memory_limit: memoryLimitMb * 1024 * 1024,
   };
 
-  const res = await fetch(`${pistonUrl}/api/v2/execute`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  }).catch((err) => {
-    throw new Error(`Code node: could not reach Piston at ${pistonUrl}: ${err.message}`);
-  });
+  // Try primary Piston first; if unreachable (e.g. local dev without Docker) fall back
+  // to the public emkc.org instance. Set PISTON_URL in production to skip the fallback.
+  const usingFallback = false;
+  async function executePiston(url) {
+    const res = await fetch(`${url}/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return res;
+  }
+
+  let res;
+  try {
+    res = await executePiston(`${primaryUrl}/api/v2`);
+  } catch {
+    // Primary unavailable — try public Piston
+    try {
+      res = await executePiston(PUBLIC_PISTON);
+    } catch (err2) {
+      throw new Error(`Code node: could not reach Piston (tried ${primaryUrl} and public fallback): ${err2.message}`);
+    }
+  }
 
   const payload = await res.json().catch(() => ({}));
   if (!res.ok) {

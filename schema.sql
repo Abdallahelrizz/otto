@@ -51,6 +51,7 @@ CREATE TABLE workflow_versions (
   workflow_id     UUID NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
   version_number  INTEGER NOT NULL,
   definition      JSONB NOT NULL,
+  is_autosave     BOOLEAN NOT NULL DEFAULT false,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_by      UUID REFERENCES users(id),
   UNIQUE (workflow_id, version_number)
@@ -198,6 +199,7 @@ CREATE TABLE sessions (
 -- ─────────────────────────────────────────────
 
 CREATE INDEX idx_workflows_workspace ON workflows(workspace_id);
+CREATE INDEX idx_workflow_versions_latest ON workflow_versions(workflow_id, version_number DESC);
 CREATE INDEX idx_workflows_active ON workflows(active) WHERE active = true;
 CREATE INDEX idx_executions_workflow ON executions(workflow_id);
 CREATE INDEX idx_executions_status ON executions(status);

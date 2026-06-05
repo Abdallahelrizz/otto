@@ -83,26 +83,17 @@ function analyzeWorkflow(nodes: Node[], edges: Edge[]): Insight[] {
   return insights;
 }
 
-// ─── Bot logo with fallback ───────────────────────────────────────────────────
+// ─── Bot logo ─────────────────────────────────────────────────────────────────
 
-function BotAvatar({ size = 22 }: { size?: number }) {
-  const [hasSvg, setHasSvg] = useState<boolean | null>(null);
-  useEffect(() => {
-    fetch('/ottobot-logo.svg', { method: 'HEAD' })
-      .then(r => setHasSvg(r.ok))
-      .catch(() => setHasSvg(false));
-  }, []);
-
-  if (hasSvg === true) {
-    return <img src="/ottobot-logo.svg" alt="OttoBot" width={size} height={size} style={{ display: 'block', objectFit: 'contain' }} />;
-  }
-  // Fallback — amber lightning square
+function BotAvatar({ size = 24 }: { size?: number }) {
   return (
-    <span style={{ width: size, height: size, borderRadius: '4px', background: '#A13C3F', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-      <svg width={Math.round(size * 0.55)} height={Math.round(size * 0.55)} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-      </svg>
-    </span>
+    <img
+      src="/big_new_logo.svg"
+      alt="Otto"
+      width={size}
+      height={size}
+      style={{ display: 'block', objectFit: 'contain', flexShrink: 0 }}
+    />
   );
 }
 
@@ -212,21 +203,17 @@ export function OttoBotPanel() {
   const [messages,   setMessages]   = useState<Message[]>([]);
   const [input,      setInput]      = useState('');
   const [streaming,  setStreaming]   = useState(false);
-  const [creds,      setCreds]      = useState<Array<{ id: string; name: string; type: string }> | null>(null);
-  const [credId,     setCredId]     = useState<string | null>(null);
+  const [enabled,    setEnabled]    = useState(true);
   const [credError,  setCredError]  = useState<string | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef  = useRef<AbortController | null>(null);
 
-  // Fetch available AI credentials on mount
+  // Fetch workspace settings on mount
   useEffect(() => {
-    api.ottobotCredentials()
-      .then(r => {
-        setCreds(r.credentials);
-        if (r.credentials.length > 0) setCredId(r.credentials[0].id);
-      })
-      .catch(() => setCreds([]));
+    api.authStatus()
+      .then(r => setEnabled(r.workspace?.ottobot_settings?.enabled ?? true))
+      .catch(() => setEnabled(true));
   }, []);
 
   // Auto-scroll on new messages
@@ -235,7 +222,7 @@ export function OttoBotPanel() {
   }, [messages, streaming]);
 
   const insights = analyzeWorkflow(nodes, edges);
-  const ready = creds !== null && creds.length > 0;
+  const ready = enabled;
 
   const sendMessage = useCallback(async () => {
     if (!input.trim() || streaming || !ready) return;
@@ -260,7 +247,7 @@ export function OttoBotPanel() {
 
     abortRef.current = new AbortController();
     try {
-      const res = await api.ottobotChat(historyWithContext, credId);
+      const res = await api.ottobotChat(historyWithContext);
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: 'OttoBot request failed' }));
         setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: err.error ?? 'Request failed.' } : m));
@@ -294,7 +281,7 @@ export function OttoBotPanel() {
     } finally {
       setStreaming(false);
     }
-  }, [input, streaming, ready, messages, nodes, edges, insights, credId]);
+  }, [input, streaming, ready, messages, nodes, edges, insights]);
 
   const handleKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void sendMessage(); }
@@ -308,7 +295,7 @@ export function OttoBotPanel() {
 
       {/* Header */}
       <div style={{ height: 36, padding: '0 14px', display: 'flex', alignItems: 'center', gap: '9px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-        <BotAvatar size={20} />
+        <BotAvatar size={24} />
         <span style={{ fontFamily: UI_FONT, fontSize: '12.5px', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.008em' }}>OttoBot</span>
 
         {/* Ready dot */}
@@ -316,23 +303,12 @@ export function OttoBotPanel() {
           <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--node-success)', flexShrink: 0 }} />
             <span style={{ fontFamily: UI_FONT, fontSize: '11px', color: 'var(--text-muted)' }}>
-              {creds!.find(c => c.id === credId)?.name ?? 'Ready'}
+              Online
             </span>
           </span>
         )}
 
         <div style={{ flex: 1 }} />
-
-        {/* Credential picker */}
-        {creds && creds.length > 1 && (
-          <select
-            value={credId ?? ''}
-            onChange={e => setCredId(e.target.value)}
-            style={{ fontFamily: UI_FONT, fontSize: '11px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: '5px', color: 'var(--text-secondary)', padding: '2px 6px', cursor: 'pointer', outline: 'none' }}
-          >
-            {creds.map(c => <option key={c.id} value={c.id}>{c.name} ({PROVIDER_LABELS[c.type] ?? c.type})</option>)}
-          </select>
-        )}
 
         {/* Chat / Memory tabs */}
         {['chat', 'memory'].map(t => (
@@ -356,25 +332,25 @@ export function OttoBotPanel() {
         <>
           <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '8px', minHeight: 0 }}>
 
-            {/* No credentials CTA */}
-            {creds !== null && creds.length === 0 && (
+            {/* Disabled CTA */}
+            {!enabled && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', padding: '24px 16px', textAlign: 'center' }}>
                 <BotAvatar size={40} />
-                <span style={{ fontFamily: UI_FONT, fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>No AI provider connected</span>
+                <span style={{ fontFamily: UI_FONT, fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>OttoBot is disabled</span>
                 <span style={{ fontFamily: UI_FONT, fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                  Add an OpenAI, Anthropic, or OpenRouter credential to enable OttoBot chat.
+                  This workspace has disabled the AI assistant. You can re-enable it in Settings.
                 </span>
                 <button
-                  onClick={() => window.location.assign('/app/credentials')}
-                  style={{ background: 'var(--accent-dim)', border: '1px solid var(--brand-ring)', borderRadius: '7px', padding: '7px 14px', cursor: 'pointer', fontFamily: UI_FONT, fontSize: '12px', fontWeight: 500, color: 'var(--accent)' }}
+                  onClick={() => window.location.assign('/app/settings/ottobot')}
+                  style={{ background: 'var(--bg-hover)', border: '1px solid var(--border)', borderRadius: '7px', padding: '7px 14px', cursor: 'pointer', fontFamily: UI_FONT, fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)' }}
                 >
-                  Add a credential →
+                  Manage Settings →
                 </button>
               </div>
             )}
 
             {/* Insights */}
-            {messages.length === 0 && creds !== null && creds.length > 0 && insights.length > 0 && (
+            {messages.length === 0 && enabled && insights.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '4px' }}>
                 {insights.map((ins, i) => (
                   <div key={i} style={{
@@ -393,7 +369,7 @@ export function OttoBotPanel() {
             {messages.map(msg => (
               <div key={msg.id} style={{ display: 'flex', gap: '8px', flexDirection: msg.role === 'user' ? 'row-reverse' : 'row', alignItems: 'flex-start' }}>
                 {msg.role === 'assistant' && (
-                  <span style={{ flexShrink: 0, marginTop: 2 }}><BotAvatar size={18} /></span>
+                  <span style={{ flexShrink: 0, marginTop: 2 }}><BotAvatar size={22} /></span>
                 )}
                 <div style={{
                   maxWidth: '82%',
@@ -464,6 +440,9 @@ export function OttoBotPanel() {
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             </button>
+          </div>
+          <div style={{ padding: '0 10px 8px', textAlign: 'center', fontFamily: UI_FONT, fontSize: '10px', color: 'var(--text-muted)' }}>
+            OttoBot uses your workspace credentials if not configured personally.
           </div>
         </>
       )}

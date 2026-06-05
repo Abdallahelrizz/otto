@@ -6,6 +6,7 @@ import { getCredential } from '../engine/credentials.js';
 import { encryptCredential } from '../utils/encrypt.js';
 import { auditLog } from '../utils/audit.js';
 import { redactString, credentialSecrets } from '../utils/redact.js';
+import { safeFetch } from '../utils/safe-fetch.js';
 
 const { Pool } = pg;
 
@@ -177,7 +178,8 @@ async function testHttpCredential(credential, testUrl) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5000);
   try {
-    const response = await fetch(testUrl, { method: 'GET', headers, signal: controller.signal });
+    // Use safeFetch to prevent SSRF — blocks private/reserved IP ranges before the request is made.
+    const response = await safeFetch(testUrl, { method: 'GET', headers, signal: controller.signal });
     return { ok: response.ok, checked: 'http', status: response.status };
   } finally {
     clearTimeout(timer);

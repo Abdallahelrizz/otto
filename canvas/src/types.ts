@@ -300,10 +300,16 @@ export interface AuthUser {
   name: string | null;
 }
 
+export interface OttobotSettings {
+  enabled: boolean;
+  credentialId: string | null;
+}
+
 export interface AuthWorkspace {
   id: string;
   name: string;
   plan: string;
+  ottobot_settings?: OttobotSettings;
 }
 
 export interface AuthStatus {

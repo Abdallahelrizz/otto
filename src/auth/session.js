@@ -102,7 +102,7 @@ export async function getAuthContext(req) {
 
   const { rows } = await db.query(
     `SELECT s.id AS session_id, s.user_id, s.workspace_id, u.email, u.name,
-            w.name AS workspace_name, w.plan,
+            w.name AS workspace_name, w.plan, w.ottobot_settings,
             wm.role AS member_role
      FROM sessions s
      JOIN users u ON u.id = s.user_id
@@ -123,7 +123,7 @@ export async function getAuthContext(req) {
     workspaceId: rows[0].workspace_id,
     role: rows[0].member_role ?? 'owner',
     user: { id: rows[0].user_id, email: rows[0].email, name: rows[0].name },
-    workspace: { id: rows[0].workspace_id, name: rows[0].workspace_name, plan: rows[0].plan },
+    workspace: { id: rows[0].workspace_id, name: rows[0].workspace_name, plan: rows[0].plan, ottobot_settings: rows[0].ottobot_settings },
   };
 }
 

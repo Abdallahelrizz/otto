@@ -10,4 +10,8 @@ export default defineConfig({
       '/webhooks': { target: 'http://127.0.0.1:3000', changeOrigin: true },
     },
   },
+  optimizeDeps: {
+    // Monaco Editor loads its own workers — tell Vite not to pre-bundle them
+    exclude: ['monaco-editor'],
+  },
 });

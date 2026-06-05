@@ -83,7 +83,8 @@ export async function workflowRoutes(fastify) {
 
   fastify.put('/api/v1/workflows/:id', async (req, reply) => {
     const { id } = req.params;
-    const { name, definition, active, tags } = req.body ?? {};
+    const { name, definition, active, tags, autosave = false } = req.body ?? {};
+    const isAutosave = autosave === true;
 
     const { rows: existing } = await db.query(
       `SELECT id, workspace_id, name, definition, active
@@ -126,16 +127,31 @@ export async function workflowRoutes(fastify) {
     );
 
     if (definition !== undefined) {
-      const { rows: versionRows } = await db.query(
-        'SELECT COALESCE(MAX(version_number), 0) AS max_v FROM workflow_versions WHERE workflow_id = $1',
+      const { rows: latestRows } = await db.query(
+        `SELECT id, version_number, is_autosave
+         FROM workflow_versions
+         WHERE workflow_id = $1
+         ORDER BY version_number DESC
+         LIMIT 1`,
         [id]
       );
-      const nextVersion = (versionRows[0]?.max_v ?? 0) + 1;
-      await db.query(
-        `INSERT INTO workflow_versions (workflow_id, version_number, definition, created_by)
-         VALUES ($1, $2, $3, $4)`,
-        [id, nextVersion, JSON.stringify(definition), req.auth.userId]
-      );
+      const latest = latestRows[0];
+
+      if (isAutosave && latest?.is_autosave) {
+        await db.query(
+          `UPDATE workflow_versions
+           SET definition = $1, created_at = NOW(), created_by = $2
+           WHERE id = $3`,
+          [JSON.stringify(definition), req.auth.userId, latest.id]
+        );
+      } else {
+        const nextVersion = (latest?.version_number ?? 0) + 1;
+        await db.query(
+          `INSERT INTO workflow_versions (workflow_id, version_number, definition, created_by, is_autosave)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [id, nextVersion, JSON.stringify(definition), req.auth.userId, isAutosave]
+        );
+      }
     }
 
     await reconcileWorkflowSchedule(updatedRows[0]);

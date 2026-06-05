@@ -6,6 +6,7 @@ import { ExecutionHistory } from './pages/ExecutionHistory';
 import { CredentialsPage } from './pages/CredentialsPage';
 import { UsagePage } from './pages/UsagePage';
 import { SettingsGeneral } from './pages/settings/SettingsGeneral';
+import { SettingsOttoBot } from './pages/settings/SettingsOttoBot';
 import { SettingsApiKeys } from './pages/settings/SettingsApiKeys';
 import { SettingsVariables } from './pages/settings/SettingsVariables';
 import { SettingsAuditLog } from './pages/settings/SettingsAuditLog';
@@ -38,6 +39,7 @@ export function App() {
       <Route path="/app/observability" element={<AppRoute><UsagePage /></AppRoute>} />
       <Route path="/app/settings" element={<Navigate to="/app/settings/general" replace />} />
       <Route path="/app/settings/general" element={<AppRoute><SettingsGeneral /></AppRoute>} />
+      <Route path="/app/settings/ottobot" element={<AppRoute><SettingsOttoBot /></AppRoute>} />
       <Route path="/app/settings/api-keys" element={<AppRoute><SettingsApiKeys /></AppRoute>} />
       <Route path="/app/settings/variables" element={<AppRoute><SettingsVariables /></AppRoute>} />
       <Route path="/app/settings/audit" element={<AppRoute><SettingsAuditLog /></AppRoute>} />

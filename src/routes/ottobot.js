@@ -24,13 +24,19 @@ Be concise, practical, and specific. If given workflow context, analyze it and g
 
 export async function ottobotRoutes(fastify) {
   fastify.post('/api/v1/ottobot/chat', async (req, reply) => {
-    const { workspaceId, userId } = req.auth;
+    const { workspaceId, userId, workspace } = req.auth;
+
+    // Enforce workspace settings
+    const settings = workspace.ottobot_settings || { enabled: true, credentialId: null };
+    if (!settings.enabled) {
+      return reply.code(403).send({ error: 'OttoBot is disabled for this workspace. An admin can enable it in Settings.' });
+    }
 
     // Dedicated rate limit
     const rl = checkRateLimit(`ottobot:${userId}`, OTTOBOT_RATE);
     if (!rl.allowed) return rateLimitReply(reply, rl);
 
-    const { messages, credentialId } = req.body ?? {};
+    const { messages } = req.body ?? {};
 
     // Input validation
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -44,34 +50,23 @@ export async function ottobotRoutes(fastify) {
       return reply.code(400).send({ error: 'Payload too large' });
     }
 
-    // Credential resolution — must belong to this workspace and be an AI type
-    let credential;
-    if (credentialId) {
-      // Verify workspace ownership
-      const { rows } = await db.query(
-        'SELECT id, type FROM credentials WHERE id = $1 AND workspace_id = $2',
-        [credentialId, workspaceId]
-      );
-      if (!rows.length) {
-        return reply.code(404).send({ error: 'Credential not found' });
-      }
-      if (!AI_TYPES.has(rows[0].type)) {
-        return reply.code(400).send({ error: 'Credential must be an AI provider' });
-      }
-      credential = await getCredential(credentialId, { workspaceId });
-    } else {
-      // Auto-select first available AI credential in this workspace
-      const { rows } = await db.query(
-        `SELECT id, type FROM credentials
-         WHERE workspace_id = $1 AND type = ANY($2::text[])
-         ORDER BY created_at ASC LIMIT 1`,
-        [workspaceId, [...AI_TYPES]]
-      );
-      if (!rows.length) {
-        return reply.code(422).send({ error: 'No AI credential configured. Add an OpenAI, Anthropic, or OpenRouter credential first.' });
-      }
-      credential = await getCredential(rows[0].id, { workspaceId });
+    // Use credential from settings
+    const credentialId = settings.credentialId;
+    if (!credentialId) {
+      return reply.code(422).send({ error: 'OttoBot has no credential assigned. An admin must configure it in Settings.' });
     }
+
+    const { rows } = await db.query(
+      'SELECT id, type FROM credentials WHERE id = $1 AND workspace_id = $2',
+      [credentialId, workspaceId]
+    );
+    if (!rows.length) {
+      return reply.code(404).send({ error: 'Credential not found' });
+    }
+    if (!AI_TYPES.has(rows[0].type)) {
+      return reply.code(400).send({ error: 'Credential must be an AI provider' });
+    }
+    const credential = await getCredential(credentialId, { workspaceId });
 
     const apiKey    = credential.data?.value;
     const provider  = credential.type; // 'openai' | 'anthropic' | 'openrouter'
@@ -100,17 +95,27 @@ export async function ottobotRoutes(fastify) {
     const send = (text) => res.write(`data: ${JSON.stringify({ text })}\n\n`);
     const done = () => { res.write('data: [DONE]\n\n'); res.end(); };
 
+    let promptTokens = 0;
+    let completionTokens = 0;
+    const modelUsed = provider === 'anthropic' ? 'claude-3-5-haiku-latest' : 'gpt-4o-mini';
+
     try {
       if (provider === 'anthropic') {
         const client = new Anthropic({ apiKey });
         const stream = await client.messages.create({
-          model: 'claude-3-5-haiku-latest',
+          model: modelUsed,
           max_tokens: 1024,
           system: SYSTEM_PROMPT,
           messages: safeMessages,
           stream: true,
         });
         for await (const chunk of stream) {
+          if (chunk.type === 'message_start' && chunk.message?.usage) {
+            promptTokens = chunk.message.usage.input_tokens || 0;
+          }
+          if (chunk.type === 'message_delta' && chunk.usage) {
+            completionTokens = chunk.usage.output_tokens || 0;
+          }
           if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
             send(chunk.delta.text);
           }
@@ -122,15 +127,29 @@ export async function ottobotRoutes(fastify) {
           ...(provider === 'openrouter' ? { baseURL: 'https://openrouter.ai/api/v1' } : {}),
         });
         const stream = await client.chat.completions.create({
-          model:       provider === 'anthropic' ? 'claude-3-5-haiku-latest' : 'gpt-4o-mini',
+          model: modelUsed,
           messages:    [{ role: 'system', content: SYSTEM_PROMPT }, ...safeMessages],
           max_tokens:  1024,
           stream:      true,
+          stream_options: { include_usage: true },
         });
         for await (const chunk of stream) {
           const text = chunk.choices[0]?.delta?.content;
           if (text) send(text);
+          if (chunk.usage) {
+            promptTokens = chunk.usage.prompt_tokens || 0;
+            completionTokens = chunk.usage.completion_tokens || 0;
+          }
         }
+      }
+
+      // Log usage if tokens were recorded
+      if (promptTokens > 0 || completionTokens > 0) {
+        await db.query(
+          `INSERT INTO ottobot_usage (workspace_id, user_id, model, prompt_tokens, completion_tokens)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [workspaceId, userId, modelUsed, promptTokens, completionTokens]
+        ).catch(() => {}); // Fire and forget
       }
     } catch {
       // Never expose upstream error details

@@ -276,14 +276,13 @@ export function Toolbar() {
   const cancelExecution = useStore((s) => s.cancelExecution);
   const workflowName = useStore((s) => s.workflowName);
   const setWorkflowName = useStore((s) => s.setWorkflowName);
-  const workflowVersion = useStore((s) => s.workflowVersion);
   const workflowActive = useStore((s) => s.workflowActive);
   const setWorkflowActive = useStore((s) => s.setWorkflowActive);
   const savedWorkflowId = useStore((s) => s.savedWorkflowId);
   const saveWorkflow = useStore((s) => s.saveWorkflow);
-  const loadWorkflow = useStore((s) => s.loadWorkflow);
   const fetchWorkflows = useStore((s) => s.fetchWorkflows);
-  const isSaving = useStore((s) => s.isSaving);
+  const saveStatus = useStore((s) => s.saveStatus);
+  const saveError = useStore((s) => s.saveError);
   const theme = useStore((s) => s.theme);
   const toggleTheme = useStore((s) => s.toggleTheme);
   const workflowSettings = useStore((s) => s.workflowSettings);
@@ -322,9 +321,12 @@ export function Toolbar() {
     await runExecution('full');
   }, [btnState, cancelExecution, runExecution]);
 
-  const handleSave = useCallback(async () => {
-    await saveWorkflow();
-  }, [saveWorkflow]);
+  const handleBack = useCallback(async () => {
+    if (useStore.getState().saveStatus === 'pending') {
+      await saveWorkflow().catch(() => {});
+    }
+    navigate('/app/workflows');
+  }, [navigate, saveWorkflow]);
 
   const handleActiveToggle = useCallback(async () => {
     try {
@@ -338,6 +340,7 @@ export function Toolbar() {
     try {
       let newId: string;
       if (savedWorkflowId) {
+        if (useStore.getState().saveStatus === 'pending') await saveWorkflow();
         // Prefer the server-side duplicate endpoint — preserves server state + version history
         const result = await api.duplicateWorkflow(savedWorkflowId);
         newId = result.id;
@@ -347,13 +350,13 @@ export function Toolbar() {
         const result = await api.createWorkflow(`${workflowName} Copy`, definition);
         newId = result.id;
       }
-      await loadWorkflow(newId);
-      fetchWorkflows();
+      void fetchWorkflows();
+      navigate(`/app/editor/${newId}`);
     } catch (err: unknown) {
       // No alert() — log and let the user notice no navigation occurred
       console.error('[otto] Duplicate workflow failed:', err instanceof Error ? err.message : err);
     }
-  }, [savedWorkflowId, nodes, edges, pinnedData, workflowName, loadWorkflow, fetchWorkflows]);
+  }, [savedWorkflowId, nodes, edges, pinnedData, workflowName, fetchWorkflows, navigate, saveWorkflow]);
 
   const modeItems = [
     { id: 'editor' as const, label: 'Editor' },
@@ -398,7 +401,7 @@ export function Toolbar() {
       {/* Breadcrumb */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0 }}>
         <button
-          onClick={() => navigate('/app/workflows')}
+          onClick={() => void handleBack()}
           title="Back to dashboard"
           style={{
             display: 'flex',
@@ -477,11 +480,11 @@ export function Toolbar() {
           </button>
         )}
 
-        {/* Version pill */}
+        {/* Autosave state */}
         <span style={{
           fontFamily: "'Inter'",
           fontSize: '10px',
-          color: 'var(--text-muted)',
+          color: saveStatus === 'error' ? 'var(--node-error)' : saveStatus === 'saved' ? 'var(--node-success)' : 'var(--text-muted)',
           letterSpacing: '0.06em',
           fontWeight: 600,
           marginLeft: '4px',
@@ -491,13 +494,14 @@ export function Toolbar() {
           whiteSpace: 'nowrap',
           flexShrink: 0,
         }}>
-          {workflowVersion}
+          {saveStatus === 'saving'
+            ? 'SAVING...'
+            : saveStatus === 'pending'
+              ? 'AUTOSAVE PENDING'
+              : saveStatus === 'error'
+                ? 'SAVE FAILED'
+                : 'SAVED'}
         </span>
-
-        {/* Unsaved indicator */}
-        {!savedWorkflowId && (
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: 4 }}>unsaved</span>
-        )}
       </div>
 
       {/* Editor modes */}
@@ -597,35 +601,29 @@ export function Toolbar() {
           </span>
         </div>
 
-        {/* Save */}
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '6px 11px',
-            background: 'transparent',
-            border: '1px solid var(--border)',
-            color: isSaving ? 'var(--text-muted)' : 'var(--text-primary)',
-            fontFamily: 'Inter',
-            fontSize: '12px',
-            fontWeight: 500,
-            borderRadius: '5px',
-            cursor: isSaving ? 'not-allowed' : 'pointer',
-            letterSpacing: '-0.005em',
-            height: '30px',
-            transition: 'background 0.1s ease',
-          }}
-          onMouseEnter={(e) => { if (!isSaving) (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
-          </svg>
-          {isSaving ? 'Saving…' : 'Save'}
-        </button>
+        {/* Autosave error retry */}
+        {saveStatus === 'error' && (
+          <button
+            onClick={() => void saveWorkflow().catch(() => {})}
+            title={saveError ?? 'Workflow could not be saved'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              padding: '6px 11px',
+              background: 'transparent',
+              border: '1px solid var(--node-error)',
+              color: 'var(--node-error)',
+              fontFamily: 'Inter',
+              fontSize: '12px',
+              fontWeight: 500,
+              borderRadius: '5px',
+              cursor: 'pointer',
+              height: '30px',
+            }}
+          >
+            Retry save
+          </button>
+        )}
 
         {/* Run */}
         <button

@@ -117,4 +117,40 @@ export async function workspaceRoutes(fastify) {
     });
     return reply.send({ ok: true });
   });
+
+  // PATCH /api/v1/workspace/ottobot-settings
+  fastify.patch('/api/v1/workspace/ottobot-settings', async (req, reply) => {
+    const callerRole = req.auth.role ?? 'editor';
+    if (!['owner', 'admin'].includes(callerRole)) {
+      return reply.code(403).send({ error: 'Only admins can change OttoBot settings' });
+    }
+
+    const { enabled, credentialId } = req.body ?? {};
+    
+    // Merge existing settings
+    const currentSettings = req.auth.workspace.ottobot_settings || { enabled: true, credentialId: null };
+    const newSettings = {
+      ...currentSettings,
+      ...(enabled !== undefined && { enabled: Boolean(enabled) }),
+      ...(credentialId !== undefined && { credentialId: credentialId || null }),
+    };
+
+    await db.query(
+      `UPDATE workspaces SET ottobot_settings = $1::jsonb WHERE id = $2`,
+      [JSON.stringify(newSettings), req.auth.workspaceId]
+    );
+
+    await auditLog({
+      workspaceId: req.auth.workspaceId,
+      userId: req.auth.userId,
+      action: 'workspace.ottobot_settings_update',
+      resourceType: 'workspace',
+      resourceId: req.auth.workspaceId,
+      metadata: newSettings,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+
+    return reply.send({ ok: true, ottobot_settings: newSettings });
+  });
 }

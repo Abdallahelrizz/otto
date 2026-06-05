@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Lightning, Toolbox, Robot, Globe, GearSix, type Icon as PhosphorIcon } from '@phosphor-icons/react';
 import { NODE_TYPE_DEFS, NODE_CATEGORIES, nodeColor, nodeRadius, NODE_SERVICE_LOGO, OTTO_AMBER, OTTO_AMBER_HOVER, type NodeTypeDef } from './nodes/nodeConfig';
 import { NodeIcon } from './NodeIcon';
@@ -104,6 +105,7 @@ function writeStorage(val: string | null) {
 
 // ── Workflows Tab ─────────────────────────────────────────────────────────────
 function WorkflowsTab() {
+  const navigate = useNavigate();
   const workflowList = useStore((s) => s.workflowList);
   const workflowListLoading = useStore((s) => s.workflowListLoading);
   const workflowListHasMore = useStore((s) => s.workflowListHasMore);
@@ -119,6 +121,20 @@ function WorkflowsTab() {
   const [importError, setImportError] = useState<string | null>(null);
   const [importPreview, setImportPreview] = useState<ImportCompatibilityReport | null>(null);
   const [tagFilter, setTagFilter] = useState('');
+
+  const openWorkflow = (id: string) => {
+    if (id === savedWorkflowId) {
+      void loadWorkflow(id);
+      return;
+    }
+    navigate(`/app/editor/${id}`);
+  };
+
+  const removeWorkflow = async (id: string) => {
+    const deletingCurrent = id === savedWorkflowId;
+    await deleteWorkflow(id);
+    if (deletingCurrent) navigate('/app/workflows');
+  };
 
   useEffect(() => { fetchWorkflows(); }, []);
 
@@ -145,7 +161,7 @@ function WorkflowsTab() {
       const parsed = parseImportJson();
       const { id } = await api.importN8n(parsed, true);
       if (!id) throw new Error('Import did not return a workflow id');
-      await loadWorkflow(id);
+      navigate(`/app/editor/${id}`);
       setImportOpen(false);
       setImportJson('');
       setImportPreview(null);
@@ -277,8 +293,8 @@ function WorkflowsTab() {
             key={wf.id}
             wf={wf}
             isActive={wf.id === savedWorkflowId}
-            onLoad={() => loadWorkflow(wf.id)}
-            onDelete={() => deleteWorkflow(wf.id)}
+            onLoad={() => openWorkflow(wf.id)}
+            onDelete={() => void removeWorkflow(wf.id)}
           />
         ))}
         {workflowListHasMore && (

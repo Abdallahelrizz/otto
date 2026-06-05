@@ -66,6 +66,11 @@ type NodeClipboard = {
   pasteCount: number;
 };
 
+export type WorkflowSaveStatus = 'saved' | 'pending' | 'saving' | 'error';
+
+let activeWorkflowSave: Promise<void> | null = null;
+let workflowSaveQueued = false;
+
 interface OttoStore {
   // React Flow state
   nodes: Node[];
@@ -120,6 +125,9 @@ interface OttoStore {
   workflowListLoading: boolean;
   workflowListHasMore: boolean;
   isSaving: boolean;
+  saveStatus: WorkflowSaveStatus;
+  saveError: string | null;
+  markWorkflowDirty: () => void;
   saveWorkflow: () => Promise<void>;
   loadWorkflow: (id: string) => Promise<void>;
   restoreLastWorkflow: () => Promise<void>;
@@ -535,39 +543,68 @@ export const useStore = create<OttoStore>((set, get) => ({
   workflowListLoading: false,
   workflowListHasMore: false,
   isSaving: false,
+  saveStatus: 'saved',
+  saveError: null,
+  markWorkflowDirty: () => {
+    if (activeWorkflowSave) workflowSaveQueued = true;
+    set({ saveStatus: 'pending', saveError: null });
+  },
 
   saveWorkflow: async () => {
-    // Re-entrancy guard. A second save firing before the first resolves (Ctrl+S
-    // double-press, or an Active toggle mid-save) would re-read a stale
-    // savedWorkflowId === null and POST a *second* duplicate workflow. Mirror the
-    // runExecution guard and bail if a save is already in flight. Set the flag
-    // synchronously (no await before it) so concurrent calls can't slip through.
-    if (get().isSaving) return;
-    set({ isSaving: true });
-    const { nodes, edges, workflowName, savedWorkflowId, pinnedData, workflowImportReport, workflowSettings } = get();
-    const definition = buildDefinition(nodes, edges, pinnedData, workflowImportReport, workflowSettings);
-    const validationIssues = get().validateCurrentWorkflow('full', null);
+    if (activeWorkflowSave) {
+      workflowSaveQueued = true;
+      set({ saveStatus: 'pending', saveError: null });
+      return activeWorkflowSave;
+    }
+
+    activeWorkflowSave = (async () => {
+      do {
+        workflowSaveQueued = false;
+        set({ isSaving: true, saveStatus: 'saving', saveError: null });
+
+        const { nodes, edges, workflowName, savedWorkflowId, pinnedData, workflowImportReport, workflowSettings } = get();
+        const definition = buildDefinition(nodes, edges, pinnedData, workflowImportReport, workflowSettings);
+        const validationIssues = get().validateCurrentWorkflow('full', null);
+
+        if (savedWorkflowId) {
+          const res = await api.updateWorkflow(savedWorkflowId, { name: workflowName, definition, autosave: true });
+          if (res.validation?.issues) set({ validationIssues: res.validation.issues });
+          writeLastWorkflowId(savedWorkflowId);
+        } else {
+          const { id, validation } = await api.createWorkflow(workflowName, definition);
+          set({ savedWorkflowId: id });
+          if (validation?.issues) set({ validationIssues: validation.issues });
+          writeLastWorkflowId(id);
+        }
+
+        void get().fetchWorkflows();
+        if (validationIssues.some((issue) => issue.severity === 'warning')) {
+          console.warn('Workflow saved with validation warnings', validationIssues);
+        }
+        set({ saveStatus: 'saved', saveError: null });
+      } while (workflowSaveQueued);
+    })();
+
     try {
-      if (savedWorkflowId) {
-        const res = await api.updateWorkflow(savedWorkflowId, { name: workflowName, definition });
-        if (res.validation?.issues) set({ validationIssues: res.validation.issues });
-      } else {
-        const { id, validation } = await api.createWorkflow(workflowName, definition);
-        set({ savedWorkflowId: id });
-        if (validation?.issues) set({ validationIssues: validation.issues });
-        writeLastWorkflowId(id);
-      }
-      if (savedWorkflowId) writeLastWorkflowId(savedWorkflowId);
-      get().fetchWorkflows();
-      if (validationIssues.some((issue) => issue.severity === 'warning')) {
-        console.warn('Workflow saved with validation warnings', validationIssues);
-      }
+      await activeWorkflowSave;
+    } catch (err) {
+      set({
+        saveStatus: 'error',
+        saveError: err instanceof Error ? err.message : 'Workflow could not be saved',
+      });
+      throw err;
     } finally {
+      activeWorkflowSave = null;
       set({ isSaving: false });
     }
   },
 
   loadWorkflow: async (id) => {
+    if (get().saveStatus === 'pending') {
+      await get().saveWorkflow();
+    } else if (activeWorkflowSave) {
+      await activeWorkflowSave;
+    }
     const wf = await api.getWorkflow(id);
     const def = wf.definition ?? { nodes: [], edges: [], pinnedData: {} };
 
@@ -631,6 +668,8 @@ export const useStore = create<OttoStore>((set, get) => ({
       pinnedData: (def as { pinnedData?: Record<string, unknown> }).pinnedData ?? {},
       workflowImportReport: def.importReport ?? null,
       workflowSettings: savedSettings ? { ...DEFAULT_WORKFLOW_SETTINGS, ...savedSettings } : { ...DEFAULT_WORKFLOW_SETTINGS },
+      saveStatus: 'saved',
+      saveError: null,
       validationIssues: [],
       selectedNodeId: null,
       configPanelOpen: false,
@@ -663,6 +702,7 @@ export const useStore = create<OttoStore>((set, get) => ({
   deleteWorkflow: async (id) => {
     await api.deleteWorkflow(id);
     const { savedWorkflowId } = get();
+    if (readLastWorkflowId() === id) writeLastWorkflowId(null);
     if (savedWorkflowId === id) {
       set({
         savedWorkflowId: null,
@@ -672,10 +712,12 @@ export const useStore = create<OttoStore>((set, get) => ({
         workflowActive: false,
         pinnedData: {},
         workflowImportReport: null,
+        workflowSettings: { ...DEFAULT_WORKFLOW_SETTINGS },
+        saveStatus: 'saved',
+        saveError: null,
         selectedNodeId: null,
         configPanelOpen: false,
       });
-      writeLastWorkflowId(null);
     }
     get().fetchWorkflows();
   },
@@ -690,6 +732,8 @@ export const useStore = create<OttoStore>((set, get) => ({
       pinnedData: {},
       workflowImportReport: null,
       workflowSettings: { ...DEFAULT_WORKFLOW_SETTINGS },
+      saveStatus: 'saved',
+      saveError: null,
       validationIssues: [],
       selectedNodeId: null,
       configPanelOpen: false,

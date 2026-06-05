@@ -43,7 +43,16 @@ export async function usageRoutes(fastify) {
            AND COALESCE(e.started_at, e.completed_at) >= $2
            AND COALESCE(e.started_at, e.completed_at) <  $3
            AND ne.model IS NOT NULL
-         GROUP BY e.workflow_id, w.name, ne.model`,
+         GROUP BY e.workflow_id, w.name, ne.model
+         UNION ALL
+         SELECT '00000000-0000-0000-0000-000000000000'::UUID AS workflow_id, 'OttoBot Chat' AS workflow_name, model,
+                SUM(prompt_tokens)::BIGINT AS prompt_tokens,
+                SUM(completion_tokens)::BIGINT AS completion_tokens
+         FROM ottobot_usage
+         WHERE workspace_id = $1
+           AND created_at >= $2
+           AND created_at <  $3
+         GROUP BY model`,
         params
       ),
       db.query(
@@ -65,6 +74,15 @@ export async function usageRoutes(fastify) {
            AND COALESCE(e.started_at, e.completed_at) >= $2
            AND COALESCE(e.started_at, e.completed_at) <  $3
            AND ne.model IS NOT NULL
+         GROUP BY day
+         UNION ALL
+         SELECT DATE_TRUNC('day', created_at)::DATE AS day,
+                SUM(prompt_tokens)::BIGINT AS prompt_tokens,
+                SUM(completion_tokens)::BIGINT AS completion_tokens
+         FROM ottobot_usage
+         WHERE workspace_id = $1
+           AND created_at >= $2
+           AND created_at <  $3
          GROUP BY day
          ORDER BY day ASC`,
         params

@@ -7,6 +7,9 @@ function isEditingField(target: EventTarget | null): boolean {
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
   if ((target as HTMLElement).isContentEditable) return true;
   if (target.closest('[contenteditable]')) return true;
+  // Monaco editor renders its cursor layer as divs — none of the above match.
+  // Block all shortcuts when the event originates from within any Monaco instance.
+  if (target.closest('.monaco-editor')) return true;
   return false;
 }
 
@@ -19,7 +22,7 @@ export function useEditorShortcuts(shortcutRefOpen: boolean, setShortcutRefOpen:
   const deleteNodes     = useStore((s) => s.deleteNodes);
   const duplicateNodes  = useStore((s) => s.duplicateNodes);
   const saveWorkflow    = useStore((s) => s.saveWorkflow);
-  const runExecution    = useStore((s) => s.runExecution);
+  const saveStatus      = useStore((s) => s.saveStatus);
   const setBottomPanelsOpen = useStore((s) => s.setBottomPanelsOpen);
   const selectNode      = useStore((s) => s.selectNode);
   const fitViewCallback = useStore((s) => s.fitViewCallback);
@@ -39,7 +42,7 @@ export function useEditorShortcuts(shortcutRefOpen: boolean, setShortcutRefOpen:
 
         case 's':
           e.preventDefault();
-          void saveWorkflow();
+          if (saveStatus === 'pending' || saveStatus === 'error') void saveWorkflow().catch(() => {});
           return;
 
         case 'd':
@@ -78,12 +81,6 @@ export function useEditorShortcuts(shortcutRefOpen: boolean, setShortcutRefOpen:
         toggleLogs();
         break;
 
-      case 'r':
-      case 'R':
-        e.preventDefault();
-        void runExecution('full', null);
-        break;
-
       case 'Enter':
       case ' ':
         if (selectedNodeId) {
@@ -108,7 +105,7 @@ export function useEditorShortcuts(shortcutRefOpen: boolean, setShortcutRefOpen:
   }, [
     toggleSidebar, toggleOttobot, toggleLogs,
     selectedNodeId, nodes, deleteNodes, duplicateNodes,
-    saveWorkflow, runExecution,
+    saveWorkflow, saveStatus,
     setBottomPanelsOpen, selectNode, fitViewCallback,
     shortcutRefOpen, setShortcutRefOpen,
   ]);
@@ -127,7 +124,6 @@ export const SHORTCUT_GROUPS: Array<{
   {
     label: 'Canvas',
     items: [
-      { key: 'R', description: 'Run workflow' },
       { key: '⌃S', description: 'Save' },
       { key: '⌃B', description: 'Toggle sidebar' },
       { key: '⌃⇧F', description: 'Fit view' },

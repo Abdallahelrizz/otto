@@ -42,10 +42,17 @@ services:
     restart: 'no'
     command: >
       sh -c "
-      until curl -fsS http://piston:2000/api/v2/packages >/dev/null 2>&1; do sleep 2; done;
+      until curl -fsS http://piston:2000/api/v2/packages > /dev/null 2>&1; do sleep 2; done;
       curl -fsS -X POST http://piston:2000/api/v2/packages -H 'Content-Type: application/json' -d '{\"language\":\"node\",\"version\":\"18.x\"}' || true;
       curl -fsS -X POST http://piston:2000/api/v2/packages -H 'Content-Type: application/json' -d '{\"language\":\"python\",\"version\":\"3.11.x\"}' || true;
       curl -fsS -X POST http://piston:2000/api/v2/packages -H 'Content-Type: application/json' -d '{\"language\":\"bash\",\"version\":\"5.x\"}' || true;
+      curl -fsS -X POST http://piston:2000/api/v2/packages -H 'Content-Type: application/json' -d '{\"language\":\"typescript\",\"version\":\"5.x\"}' || true;
+      curl -fsS -X POST http://piston:2000/api/v2/packages -H 'Content-Type: application/json' -d '{\"language\":\"go\",\"version\":\"1.16.2\"}' || true;
+      curl -fsS -X POST http://piston:2000/api/v2/packages -H 'Content-Type: application/json' -d '{\"language\":\"ruby\",\"version\":\"3.3.0\"}' || true;
+      curl -fsS -X POST http://piston:2000/api/v2/packages -H 'Content-Type: application/json' -d '{\"language\":\"rust\",\"version\":\"1.73.0\"}' || true;
+      curl -fsS -X POST http://piston:2000/api/v2/packages -H 'Content-Type: application/json' -d '{\"language\":\"php\",\"version\":\"8.2.3\"}' || true;
+      curl -fsS -X POST http://piston:2000/api/v2/packages -H 'Content-Type: application/json' -d '{\"language\":\"c\",\"version\":\"10.2.0\"}' || true;
+      curl -fsS -X POST http://piston:2000/api/v2/packages -H 'Content-Type: application/json' -d '{\"language\":\"cpp\",\"version\":\"10.2.0\"}' || true;
       echo done
       "
 

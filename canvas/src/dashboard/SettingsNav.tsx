@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
-import { BracketsCurly, ClipboardText, GearSix, Info, Key } from '@phosphor-icons/react';
+import { BracketsCurly, ClipboardText, GearSix, Info, Key, Robot } from '@phosphor-icons/react';
 
 export interface SettingsNavItem {
   label: string;
@@ -12,6 +12,7 @@ export interface SettingsNavItem {
 // DashboardShell sidebar sub-nav and the responsive <SettingsNav /> tab grid.
 export const SETTINGS_ITEMS: SettingsNavItem[] = [
   { label: 'General', path: '/app/settings/general', icon: <GearSix size={17} weight="duotone" /> },
+  { label: 'OttoBot', path: '/app/settings/ottobot', icon: <Robot size={17} weight="duotone" /> },
   { label: 'API Keys', path: '/app/settings/api-keys', icon: <Key size={17} weight="duotone" /> },
   { label: 'Variables', path: '/app/settings/variables', icon: <BracketsCurly size={17} weight="duotone" /> },
   { label: 'Audit Log', path: '/app/settings/audit', icon: <ClipboardText size={17} weight="duotone" /> },

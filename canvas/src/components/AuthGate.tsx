@@ -115,7 +115,6 @@ function Field({
 
 /* ── Main ── */
 export function AuthGate({ children }: { children: ReactNode }) {
-  const restoreLastWorkflow = useStore(s => s.restoreLastWorkflow);
   const theme = useStore(s => s.theme);
 
   const [mode,        setMode]        = useState<Mode>('loading');
@@ -128,7 +127,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   const enterReady = async (_?: AuthStatus) => {
     setMode('ready');
-    await restoreLastWorkflow();
   };
 
   const checkStatus = async () => {

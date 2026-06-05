@@ -104,6 +104,13 @@ export const api = {
     return req<AuthStatus>('/auth/me');
   },
 
+  async updateOttobotSettings(settings: Partial<import('./types').OttobotSettings>) {
+    return req<{ ok: true; ottobot_settings: import('./types').OttobotSettings }>('/workspace/ottobot-settings', {
+      method: 'PATCH',
+      body: JSON.stringify(settings),
+    });
+  },
+
   // Executions
   async execute(definition: unknown, input: Record<string, unknown> = {}, name?: string, options: ExecuteOptions = {}) {
     return req<{ executionId: string; workflowId: string; status: string; validation?: WorkflowValidationResult }>('/execute', {
@@ -216,7 +223,7 @@ export const api = {
     });
   },
 
-  async updateWorkflow(id: string, patch: { name?: string; definition?: unknown; active?: boolean }) {
+  async updateWorkflow(id: string, patch: { name?: string; definition?: unknown; active?: boolean; autosave?: boolean }) {
     return req<{ id: string; validation?: WorkflowValidationResult }>(`/workflows/${id}`, {
       method: 'PUT',
       body: JSON.stringify(patch),

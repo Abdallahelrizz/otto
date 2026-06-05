@@ -17,6 +17,7 @@ import {
 } from '@phosphor-icons/react';
 import { api } from '../api';
 import { DashboardShell } from '../dashboard/DashboardShell';
+import { useStore } from '../store';
 import type { WorkflowListItem } from '../types';
 
 function timeAgo(dateStr: string | null | undefined): string {
@@ -190,8 +191,10 @@ function nodeColor(type: string): string {
 }
 
 function WorkflowMiniMap({ workflow }: { workflow: WorkflowListItem }) {
+  const theme = useStore((s) => s.theme);
   const nodes = workflow.definition?.nodes ?? [];
   const edges = workflow.definition?.edges ?? [];
+  const edgeColor = theme === 'dark' ? 'rgba(168,156,164,0.6)' : 'rgba(86,66,65,0.6)';
 
   let svgContent: ReactNode;
 
@@ -214,7 +217,7 @@ function WorkflowMiniMap({ workflow }: { workflow: WorkflowListItem }) {
     const scale = Math.min(
       (SVG_W - PAD * 2) / Math.max(bw, 1),
       (SVG_H - PAD * 2) / Math.max(bh, 1),
-      0.9,
+      0.45,
     );
 
     const scaledW = bw * scale;
@@ -243,7 +246,7 @@ function WorkflowMiniMap({ workflow }: { workflow: WorkflowListItem }) {
           return (
             <path key={e.id}
               d={`M${x1},${y1} C${cx},${y1} ${cx},${y2} ${x2},${y2}`}
-              fill="none" stroke="rgba(234,162,166,0.28)" strokeWidth="1.5" strokeLinecap="round"
+              fill="none" stroke={edgeColor} strokeWidth="1.5" strokeLinecap="round"
             />
           );
         })}
@@ -307,10 +310,6 @@ function WorkflowActionsMenu({
       <button type="button" role="menuitem" onClick={() => onOpen(workflow)}>
         <PencilSimple size={15} />
         Open editor
-      </button>
-      <button type="button" role="menuitem" onClick={(event) => onRun(event, workflow)}>
-        <Play size={15} weight="fill" />
-        Run now
       </button>
       <button type="button" role="menuitem" onClick={() => onDuplicate(workflow)}>
         <Copy size={15} />
@@ -376,10 +375,6 @@ function WorkflowCard({
             <span key={tag}>{tag}</span>
           ))}
         </div>
-        <button className="otto-run-button" type="button" onClick={(event) => onRun(event, workflow)}>
-          <Play size={14} weight="fill" />
-          Run
-        </button>
       </div>
     </article>
   );
@@ -498,6 +493,7 @@ function SortDropdown({ value, onChange }: { value: 'recent' | 'name'; onChange:
 
 export function WorkflowsDashboard() {
   const navigate = useNavigate();
+  const deleteSavedWorkflow = useStore((s) => s.deleteWorkflow);
   const [workflows, setWorkflows] = useState<WorkflowListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -674,8 +670,7 @@ export function WorkflowsDashboard() {
   const tagCount = new Set(workflows.flatMap((workflow) => workflow.tags ?? [])).size;
 
   const openWorkflow = (workflow: WorkflowListItem) => {
-    localStorage.setItem('otto-last-workflow', workflow.id);
-    navigate('/app/editor');
+    navigate(`/app/editor/${workflow.id}`);
   };
 
   const runWorkflow = async (event: MouseEvent<HTMLButtonElement>, workflow: WorkflowListItem) => {
@@ -719,7 +714,7 @@ export function WorkflowsDashboard() {
     setDeleteTarget(null);
     toast(`Deleting ${workflow.name}...`);
     try {
-      await api.deleteWorkflow(workflow.id);
+      await deleteSavedWorkflow(workflow.id);
       setWorkflows((items) => items.filter((item) => item.id !== workflow.id));
       toast(`${workflow.name} deleted`);
     } catch (e) {
@@ -744,8 +739,7 @@ export function WorkflowsDashboard() {
 
   const handleCreated = (id: string) => {
     setShowNewModal(false);
-    localStorage.setItem('otto-last-workflow', id);
-    navigate('/app/editor');
+    navigate(`/app/editor/${id}`);
   };
 
   return (

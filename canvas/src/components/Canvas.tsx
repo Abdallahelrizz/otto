@@ -527,14 +527,20 @@ export function Canvas() {
   const selectedAllDisabled = selectedCount > 0 && selectedNodes.every((node) => Boolean(node.data.disabled));
   const canPaste = Boolean(nodeClipboard?.nodes.length);
 
+  const edgeColor = theme === 'dark' ? 'rgba(168,156,164,0.6)' : 'rgba(86,66,65,0.6)';
+
   const displayEdges = useMemo(
-    () => executionPhase === 'running' ? edges.map((e) => ({ ...e, animated: true })) : edges,
-    [edges, executionPhase]
+    () => edges.map((e) => ({
+      ...e,
+      animated: executionPhase === 'running',
+      style: { ...(e.style || {}), strokeWidth: 1.4, stroke: edgeColor }
+    })),
+    [edges, executionPhase, edgeColor]
   );
 
   // Register fitView callback for the keyboard shortcut hook
   useEffect(() => {
-    setFitViewCallback(() => fitView({ padding: 0.15, duration: 400 }));
+    setFitViewCallback(() => fitView({ padding: 0.15, duration: 400, maxZoom: 1 }));
     return () => setFitViewCallback(null);
   }, [fitView, setFitViewCallback]);
 
@@ -543,7 +549,7 @@ export function Canvas() {
     const prev = prevPhaseRef.current;
     prevPhaseRef.current = executionPhase;
     if (prev === 'running' && (executionPhase === 'success' || executionPhase === 'error')) {
-      fitView({ padding: 0.15, duration: 400 });
+      fitView({ padding: 0.15, duration: 400, maxZoom: 1 });
     }
   }, [executionPhase, fitView]);
 
@@ -575,7 +581,7 @@ export function Canvas() {
       if (meta && key === 'c') { e.preventDefault(); copyNodes(); }
       if (meta && key === 'v') { e.preventDefault(); pasteNodes(); }
       if (meta && key === 'd') { e.preventDefault(); duplicateNodes(); }
-      if (meta && e.shiftKey && e.key === 'f') { e.preventDefault(); fitView({ padding: 0.15 }); }
+      if (meta && e.shiftKey && e.key === 'f') { e.preventDefault(); fitView({ padding: 0.15, maxZoom: 1 }); }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         deleteNodes();
       }
@@ -667,13 +673,14 @@ export function Canvas() {
         onPaneContextMenu={onPaneContextMenu}
         onNodeDragStop={onNodeDragStop}
         fitView
+        fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
         deleteKeyCode={null}
         multiSelectionKeyCode="Shift"
         proOptions={{ hideAttribution: true }}
         defaultEdgeOptions={{
           animated: false,
           type: 'default',
-          style: { strokeWidth: 1.4, stroke: 'var(--edge-idle)' },
+          style: { strokeWidth: 1.4, stroke: edgeColor },
         }}
         style={{ background: 'var(--bg-canvas)' }}
       >
