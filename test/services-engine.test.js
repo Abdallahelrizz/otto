@@ -99,3 +99,19 @@ test('configurable base: rejects a non-https baseFrom value', async () => {
     /https/i
   );
 });
+
+test('uses a config credential override when descriptor declares one', async () => {
+  const request = fakeRequest();
+  const d = { ...descriptor, credential: { catalog: 'demoApi', keys: ['token'], overrideField: 'tokenOverride' } };
+  const handler = makeServiceHandler(d, { request });
+  await handler({ config: { operation: 'get_thing', id: '1', tokenOverride: 'pasted' }, credential: { data: { token: 'stored' } } });
+  assert.equal(request.calls[0].options.headers.Authorization, 'Bearer pasted');
+});
+
+test('falls back to the stored credential when no override value is present', async () => {
+  const request = fakeRequest();
+  const d = { ...descriptor, credential: { catalog: 'demoApi', keys: ['token'], overrideField: 'tokenOverride' } };
+  const handler = makeServiceHandler(d, { request });
+  await handler({ config: { operation: 'get_thing', id: '1' }, credential: { data: { token: 'stored' } } });
+  assert.equal(request.calls[0].options.headers.Authorization, 'Bearer stored');
+});

@@ -45,7 +45,9 @@ export function makeServiceHandler(descriptor, { request = safeRequestJson } = {
     }
 
     const base = resolveBase(descriptor, config);
-    const token = credentialValue(credential, descriptor.credential?.keys ?? ['token', 'value', 'apiKey']);
+    const overrideField = descriptor.credential?.overrideField;
+    const override = overrideField ? config[overrideField] : undefined;
+    const token = override || credentialValue(credential, descriptor.credential?.keys ?? ['token', 'value', 'apiKey']);
 
     const headers = { ...(descriptor.auth.headers ?? {}) };
     const queryParams = new URLSearchParams(buildQuery(op.query, config));
