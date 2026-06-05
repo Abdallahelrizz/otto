@@ -1,7 +1,8 @@
 import { memo, useCallback, Fragment } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
+import { PushPin, Note } from '@phosphor-icons/react';
 import { useStore } from '../../store';
-import { getNodeDef, nodeColor, nodeRadius, OTTO_AMBER, NODE_SERVICE_LOGO } from './nodeConfig';
+import { getNodeDef, nodeColor, OTTO_AMBER, NODE_SERVICE_LOGO } from './nodeConfig';
 import { NodeIcon } from '../NodeIcon';
 import { ServiceLogo } from '../ServiceLogo';
 import type { OttoNodeData } from '../../types';
@@ -16,33 +17,62 @@ function hexA(hex: string, a: number): string {
   return `rgba(${r},${g},${b},${a})`;
 }
 
-const NODE_W = 220;
-const NODE_H_MIN = 64;
-const ICON_SIZE = 32;
+const TILE = 76;
+const NODE_HITBOX = 150;
+const TILE_OFFSET_X = (NODE_HITBOX - TILE) / 2;
+const ICON_SIZE = 28;
 const UI_FONT = 'Geist, system-ui, sans-serif';
+const MONO_FONT = 'Geist Mono, monospace';
 
-function cardHeight(inCount: number, outCount: number): number {
-  const max = Math.max(inCount, outCount);
-  if (max <= 1) return NODE_H_MIN;
-  return NODE_H_MIN + (max - 1) * 26;
+function alphaColor(color: string, a: number): string {
+  if (color.startsWith('#') || color.startsWith('rgb')) return hexA(color, a);
+  return `color-mix(in srgb, ${color} ${Math.round(a * 100)}%, transparent)`;
 }
 
-function RunningSpinner({ color }: { color: string }) {
-  return (
-    <span style={{
-      position: 'absolute',
-      top: 7,
-      right: 9,
-      width: 8,
-      height: 8,
-      borderRadius: '50%',
-      border: `1.5px solid ${hexA(color, 0.22)}`,
-      borderTopColor: color,
-      animation: 'otto-spin 0.7s linear infinite',
-      flexShrink: 0,
-      display: 'block',
-    }} />
-  );
+function relativeLuminance(hex: string): number | null {
+  const h = hex.replace('#', '');
+  if (!/^[0-9a-f]{6}$/i.test(h)) return null;
+  const rgb = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+  const linear = rgb.map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+}
+
+export function tileIdentityColor(theme: 'dark' | 'light', color: string): string {
+  const lum = relativeLuminance(color);
+  if (theme === 'dark' && lum !== null && lum < 0.12) return 'var(--text-primary)';
+  return color;
+}
+
+/**
+ * Shared tile surface, built from theme tokens so it matches the dashboard in
+ * both themes (NEVER hardcode the mockup hexes). Used by regular tiles, the agent
+ * hero tile, and the mini tool tiles. `glow=false` drops the color-tinted shadow.
+ */
+export function tileSurface(
+  theme: 'dark' | 'light',
+  color: string,
+  selected: boolean,
+  { glow = true }: { glow?: boolean } = {},
+): React.CSSProperties {
+  const dark = theme === 'dark';
+  const depth = dark
+    ? '0 10px 22px -6px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.07)'
+    : '0 8px 18px -6px rgba(15,15,10,0.16), inset 0 1px 0 rgba(255,255,255,0.95)';
+
+  if (selected) {
+    return {
+      background: 'var(--bg-node-tile)',
+      border: `1px solid ${OTTO_AMBER}`,
+      boxShadow: `0 0 0 3px ${hexA(OTTO_AMBER, dark ? 0.28 : 0.22)}, ${depth}`,
+    };
+  }
+
+  const identityGlow = glow ? `, 0 14px 30px -14px ${alphaColor(color, dark ? 0.55 : 0.32)}` : '';
+  return {
+    background: 'var(--bg-node-tile)',
+    border: '1px solid var(--border-strong)',
+    boxShadow: `${depth}${identityGlow}`,
+  };
 }
 
 export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) => {
@@ -55,6 +85,8 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
 
   const status = execution?.status ?? 'idle';
   const cardColor = nodeColor(def, theme);
+  const identityColor = tileIdentityColor(theme, cardColor);
+  const dark = theme === 'dark';
   const isRunning = status === 'running';
   const isSuccess = status === 'success';
   const isError   = status === 'error';
@@ -66,31 +98,6 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
 
   const inCount  = def.handles.in.length;
   const outCount = def.handles.out.length;
-  const h = cardHeight(inCount, outCount);
-  const noteHeight = showNote ? 48 : 0;
-
-  // Status strip color (left 3px bar)
-  const hasStatus = isRunning || isSuccess || isError || isValidationError || isValidationWarning;
-  const stripColor =
-    isRunning ? 'var(--node-running)' :
-    isSuccess ? 'var(--node-success)' :
-    isError || isValidationError ? 'var(--node-error)' :
-    isValidationWarning ? 'var(--node-running)' :
-    'transparent';
-
-  // Border: subtle at rest, accent on selected/hover (handled by CSS class), status on error
-  const borderColor =
-    isError || isValidationError ? hexA('#ef4444', 0.35) :
-    isValidationWarning ? hexA('#f59e0b', 0.35) :
-    selected ? hexA(cardColor, 0.55) :
-    'var(--border-node)';
-
-  const boxShadow =
-    selected ? `0 0 0 2px ${hexA(cardColor, 0.20)}, var(--shadow)` :
-    isRunning ? 'var(--shadow)' :
-    'var(--shadow)';
-
-  const executionClass = isRunning ? ' otto-node-running' : '';
 
   const onContextMenu = useCallback(
     (e: React.MouseEvent) => {
@@ -101,231 +108,151 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
     [id, setContextMenu]
   );
 
-  const dotStyle = (color: string): React.CSSProperties => ({
-    width: 9,
-    height: 9,
-    borderRadius: '50%',
-    background: color,
-    boxShadow: '0 0 0 2px var(--bg-canvas)',
+  const surface = tileSurface(theme, identityColor, Boolean(selected));
+  const handleActive = isRunning || isSuccess;
+
+  // Status pip color (top-right of the tile)
+  const hasStatus = isRunning || isSuccess || isError || isValidationError || isValidationWarning;
+  const pipColor =
+    isRunning ? 'var(--node-running)' :
+    isSuccess ? 'var(--node-success)' :
+    isError || isValidationError ? 'var(--node-error)' :
+    isValidationWarning ? 'var(--node-running)' :
+    'transparent';
+
+  const subtitleText = def.subtitle ? def.subtitle(data.config ?? {}) : (def.description ?? '');
+  const serviceLogo = NODE_SERVICE_LOGO[data.nodeType];
+
+  const handleStyle: React.CSSProperties = {
+    width: 10,
+    height: 10,
+    borderRadius: 3,
+    background: handleActive ? OTTO_AMBER : 'var(--text-muted)',
+    boxShadow: '0 0 0 2.5px var(--bg-canvas)',
     border: 'none',
     zIndex: 2,
     cursor: 'crosshair',
-    transition: 'transform 0.15s ease',
-  });
-
-  const tagText = def.tag || def.slug || '';
-  const tagColor = tagText === 'TRIGGER' ? OTTO_AMBER : 'var(--text-muted)';
-  const tagBg = tagText === 'TRIGGER' ? hexA(OTTO_AMBER, 0.10) : 'rgba(120,115,110,0.07)';
-  const tagBorder = tagText === 'TRIGGER' ? hexA(OTTO_AMBER, 0.20) : 'rgba(120,115,110,0.14)';
-
-  const subtitleText = def.subtitle ? def.subtitle(data.config ?? {}) : '';
-  // Icon container radius: scale up proportionally from nodeRadius
-  const iconRadius = nodeRadius(def).replace(/\d+px/, (v) => `${Math.round(parseInt(v) * 1.4)}px`);
-  // Brand logo (Slack, GitHub, …) when this node maps to a service catalog entry
-  const serviceLogo = NODE_SERVICE_LOGO[data.nodeType];
+    transition: 'background 0.15s ease',
+  };
 
   return (
     <div
-      style={{ position: 'relative', width: NODE_W, height: h + noteHeight, overflow: 'visible', cursor: 'default', userSelect: 'none' }}
       onContextMenu={onContextMenu}
+      style={{
+        position: 'relative',
+        width: NODE_HITBOX,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 9,
+        cursor: 'grab',
+        userSelect: 'none',
+        opacity: isDisabled ? 0.45 : 1,
+      }}
     >
-      {/* Card body */}
+      {/* Tile */}
       <div
-        className={`otto-node-card${executionClass}`}
+        className={isRunning ? 'otto-node-running' : undefined}
         style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: h,
-          background: 'var(--bg-node-card)',
-          border: `1px solid ${borderColor}`,
-          borderRadius: '12px',
-          boxShadow,
-          opacity: isDisabled ? 0.55 : 1,
-          filter: isDisabled ? 'grayscale(0.3)' : 'none',
+          position: 'relative',
+          width: TILE,
+          height: TILE,
+          borderRadius: 22,
           display: 'flex',
           alignItems: 'center',
-          gap: '11px',
-          padding: '10px 14px 10px 18px',
-          boxSizing: 'border-box',
-          overflow: 'hidden',
+          justifyContent: 'center',
+          filter: isDisabled ? 'grayscale(0.3)' : 'none',
+          ...surface,
         }}
       >
-        {/* Status strip — left edge */}
+        {/* Badges: top-left */}
+        {(isPinned || showNote) && (
+          <div style={{ position: 'absolute', top: 7, left: 8, display: 'flex', gap: 3, zIndex: 3 }}>
+            {isPinned && <PushPin size={11} weight="fill" color={OTTO_AMBER} />}
+            {showNote && <Note size={11} weight="regular" color="var(--text-muted)" />}
+          </div>
+        )}
+
+        {/* Status pip: top-right corner */}
         {hasStatus && (
-          <div
+          <span
             className={isRunning ? 'otto-status-strip-running' : undefined}
             style={{
               position: 'absolute',
-              left: 0,
-              top: 8,
-              bottom: 8,
-              width: 3,
-              borderRadius: '0 2px 2px 0',
-              background: stripColor,
-              transition: 'background 200ms ease, opacity 200ms ease',
+              top: -4,
+              right: -4,
+              width: 10,
+              height: 10,
+              borderRadius: '50%',
+              background: pipColor,
+              boxShadow: '0 0 0 2px var(--bg-canvas)',
+              zIndex: 3,
             }}
           />
         )}
 
-        {isRunning && <RunningSpinner color="var(--node-running)" />}
-
-        {/* Disabled badge */}
-        {isDisabled && (
-          <span style={{
-            position: 'absolute',
-            bottom: 7,
-            right: 10,
-            fontFamily: UI_FONT,
-            fontSize: '10px',
-            fontWeight: 600,
-            color: 'var(--text-muted)',
-            background: 'rgba(120,115,110,0.10)',
-            border: '1px solid rgba(120,115,110,0.20)',
-            borderRadius: '4px',
-            padding: '1px 5px',
-          }}>
-            Off
-          </span>
-        )}
-
-        {/* Pinned badge */}
-        {isPinned && (
-          <span style={{
-            position: 'absolute',
-            right: 9,
-            bottom: 7,
-            fontFamily: UI_FONT,
-            fontSize: '10px',
-            fontWeight: 600,
-            color: OTTO_AMBER,
-            background: hexA(OTTO_AMBER, 0.10),
-            border: `1px solid ${hexA(OTTO_AMBER, 0.20)}`,
-            borderRadius: '4px',
-            padding: '1px 5px',
-          }}>
-            Pinned
-          </span>
-        )}
-
-        {/* Validation badge */}
-        {validationIssue && (
-          <span title={validationIssue.message} style={{
-            position: 'absolute',
-            left: 10,
-            bottom: 7,
-            fontFamily: UI_FONT,
-            fontSize: '10px',
-            fontWeight: 600,
-            color: isValidationError ? 'var(--node-error)' : 'var(--node-running)',
-            background: isValidationError ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)',
-            border: `1px solid ${isValidationError ? 'rgba(239,68,68,0.20)' : 'rgba(245,158,11,0.20)'}`,
-            borderRadius: '4px',
-            padding: '1px 5px',
-          }}>
-            {isValidationError ? 'Error' : 'Warning'}
-          </span>
-        )}
-
-        {/* Icon container — brand logo for service nodes, else the type icon */}
+        {/* Icon: the only thing in the tile */}
         {serviceLogo ? (
-          <span style={{
-            width: ICON_SIZE,
-            height: ICON_SIZE,
-            minWidth: ICON_SIZE,
-            borderRadius: iconRadius,
-            background: 'var(--bg-hover)',
-            border: '1px solid var(--border)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            overflow: 'hidden',
-          }}>
-            <ServiceLogo catalogId={serviceLogo} name={def.label} fallbackColor={cardColor} size={20} />
-          </span>
+          <ServiceLogo catalogId={serviceLogo} name={def.label} fallbackColor={identityColor} size={ICON_SIZE} darkTile={dark} />
         ) : (
-          <span style={{
-            width: ICON_SIZE,
-            height: ICON_SIZE,
-            minWidth: ICON_SIZE,
-            borderRadius: iconRadius,
-            background: hexA(cardColor, theme === 'dark' ? 0.14 : 0.11),
-            border: `1px solid ${hexA(cardColor, theme === 'dark' ? 0.22 : 0.18)}`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}>
-            <NodeIcon type={data.nodeType} size={16} color={cardColor} />
-          </span>
+          <NodeIcon type={data.nodeType} size={ICON_SIZE} color={identityColor} />
         )}
 
-        {/* Label + tag + subtitle */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Label row with inline tag */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: subtitleText ? '2px' : 0 }}>
-            <span style={{
-              fontFamily: UI_FONT,
-              fontSize: '13px',
-              fontWeight: 550,
-              color: 'var(--text-primary)',
-              letterSpacing: '-0.012em',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              flex: 1,
-              minWidth: 0,
-            }}>
-              {data.label}
-            </span>
-            {tagText && (
-              <span style={{
-                fontFamily: UI_FONT,
-                fontSize: '10px',
-                fontWeight: 600,
-                color: tagColor,
-                background: tagBg,
-                border: `1px solid ${tagBorder}`,
-                padding: '1px 5px',
-                borderRadius: '4px',
-                lineHeight: 1.3,
-                whiteSpace: 'nowrap',
-                flexShrink: 0,
-                letterSpacing: '0.01em',
-              }}>
-                {tagText.charAt(0) + tagText.slice(1).toLowerCase()}
-              </span>
-            )}
-          </div>
-          {/* Subtitle — Geist, not mono */}
-          {subtitleText && (
-            <span style={{
-              fontFamily: UI_FONT,
-              fontSize: '11px',
-              fontWeight: 400,
-              color: 'var(--text-muted)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              display: 'block',
-            }}>
-              {subtitleText}
-            </span>
-          )}
-        </div>
+        {/* Identity accent bar: bottom-center */}
+        <span
+          style={{
+            position: 'absolute',
+            bottom: 9,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 24,
+            height: 3.5,
+            borderRadius: 2,
+            background: identityColor,
+            opacity: dark ? 0.95 : 0.85,
+          }}
+        />
+      </div>
+
+      {/* Caption */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, maxWidth: 138 }}>
+        <span style={{
+          fontFamily: UI_FONT,
+          fontSize: '12.5px',
+          fontWeight: 600,
+          letterSpacing: '-0.012em',
+          lineHeight: 1.25,
+          textAlign: 'center',
+          textWrap: 'balance',
+          color: 'var(--text-primary)',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+        }}>
+          {data.label}
+        </span>
+        {subtitleText && (
+          <span style={{
+            fontFamily: MONO_FONT,
+            fontSize: '10px',
+            fontWeight: 400,
+            color: 'var(--text-muted)',
+            textAlign: 'center',
+            maxWidth: 138,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}>
+            {subtitleText}
+          </span>
+        )}
       </div>
 
       {/* Note annotation */}
       {showNote && (
         <div style={{
-          position: 'absolute',
-          top: h + 7,
-          left: 0,
-          width: NODE_W,
-          minHeight: 36,
-          maxHeight: 42,
+          maxWidth: 150,
           boxSizing: 'border-box',
           overflow: 'hidden',
           border: '1px solid var(--border)',
@@ -344,28 +271,27 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
         </div>
       )}
 
-      {/* Input handles */}
+      {/* Input handles: forced to the tile's vertical center */}
       {def.handles.in.map((h_, i) => {
-        const y = ((i + 1) / (inCount + 1)) * h;
-        const color = h_.color ?? cardColor;
+        const y = (TILE * (i + 1)) / (inCount + 1);
         return (
           <Fragment key={`in-${h_.id}`}>
             <Handle
               type="target"
               position={Position.Left}
               id={h_.id}
-              style={{ ...dotStyle(color), position: 'absolute', left: -4, top: y, transform: 'translateY(-50%)' }}
+              style={{ ...handleStyle, left: TILE_OFFSET_X - 5, top: y, transform: 'translateY(-50%)' }}
             />
             {h_.label && (
               <span style={{
                 position: 'absolute',
-                right: `calc(100% + 11px)`,
+                right: NODE_HITBOX - TILE_OFFSET_X + 9,
                 top: y,
                 transform: 'translateY(-50%)',
-                fontFamily: UI_FONT,
-                fontSize: '10px',
+                fontFamily: MONO_FONT,
+                fontSize: '11px',
                 fontWeight: 500,
-                color: hexA(color, 0.85),
+                color: alphaColor(h_.color ?? identityColor, 0.85),
                 pointerEvents: 'none',
                 whiteSpace: 'nowrap',
               }}>
@@ -378,26 +304,25 @@ export const OttoNode = memo(({ id, data, selected }: NodeProps<OttoNodeData>) =
 
       {/* Output handles */}
       {def.handles.out.map((h_, i) => {
-        const y = ((i + 1) / (outCount + 1)) * h;
-        const color = h_.color ?? cardColor;
+        const y = (TILE * (i + 1)) / (outCount + 1);
         return (
           <Fragment key={`out-${h_.id}`}>
             <Handle
               type="source"
               position={Position.Right}
               id={h_.id}
-              style={{ ...dotStyle(color), position: 'absolute', right: -4, top: y, transform: 'translateY(-50%)' }}
+              style={{ ...handleStyle, right: TILE_OFFSET_X - 5, top: y, transform: 'translateY(-50%)' }}
             />
             {h_.label && (
               <span style={{
                 position: 'absolute',
-                left: `calc(100% + 11px)`,
+                left: TILE_OFFSET_X + TILE + 9,
                 top: y,
                 transform: 'translateY(-50%)',
-                fontFamily: UI_FONT,
-                fontSize: '10px',
+                fontFamily: MONO_FONT,
+                fontSize: '11px',
                 fontWeight: 500,
-                color: hexA(color, 0.85),
+                color: alphaColor(h_.color ?? identityColor, 0.85),
                 pointerEvents: 'none',
                 whiteSpace: 'nowrap',
               }}>

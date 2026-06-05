@@ -75,6 +75,26 @@ interface ServiceLogoProps {
   /** Fallback brand color for the initial badge */
   fallbackColor?: string;
   size?: number;
+  darkTile?: boolean;
+}
+
+function relativeLuminance(hex: string): number | null {
+  const h = hex.replace('#', '');
+  if (!/^[0-9a-f]{3}([0-9a-f]{3})?$/i.test(h)) return null;
+  const full = h.length === 3
+    ? h.split('').map((c) => c + c).join('')
+    : h;
+  const rgb = [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16) / 255);
+  const linear = rgb.map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+}
+
+function adaptSvgForDarkTile(svg: string): string {
+  return svg.replace(/\b(fill|stroke)="(#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?)"/g, (match, attr: string, color: string) => {
+    const lum = relativeLuminance(color);
+    if (lum === null || lum > 0.12) return match;
+    return `${attr}="var(--text-primary)"`;
+  });
 }
 
 export function ServiceLogo({
@@ -82,6 +102,7 @@ export function ServiceLogo({
   name = catalogId,
   fallbackColor = '#64748b',
   size = 24,
+  darkTile = false,
 }: ServiceLogoProps) {
   const [loaded, setLoaded] = useState(Boolean(_cache));
 
@@ -96,11 +117,12 @@ export function ServiceLogo({
   const initial = (entry?.name ?? name)[0]?.toUpperCase() ?? '?';
 
   if (loaded && svg && svg.length > 20 && svg.includes('<svg')) {
+    const normalized = normalizeSvg(svg, catalogId);
     return (
       <span
         data-catalog-id={catalogId}
         style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-        dangerouslySetInnerHTML={{ __html: normalizeSvg(svg, catalogId) }}
+        dangerouslySetInnerHTML={{ __html: darkTile ? adaptSvgForDarkTile(normalized) : normalized }}
       />
     );
   }

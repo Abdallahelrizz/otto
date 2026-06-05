@@ -289,6 +289,9 @@ export function Toolbar() {
   const workflowSettings = useStore((s) => s.workflowSettings);
   const updateWorkflowSettings = useStore((s) => s.updateWorkflowSettings);
   const workflowList = useStore((s) => s.workflowList);
+  const activeCanvasTab = useStore((s) => s.activeCanvasTab);
+  const setActiveCanvasTab = useStore((s) => s.setActiveCanvasTab);
+  const setConfigPanelOpen = useStore((s) => s.setConfigPanelOpen);
 
   const [btnState, setBtnState] = useState<BtnState>('idle');
   const [editingName, setEditingName] = useState(false);
@@ -352,6 +355,17 @@ export function Toolbar() {
     }
   }, [savedWorkflowId, nodes, edges, pinnedData, workflowName, loadWorkflow, fetchWorkflows]);
 
+  const modeItems = [
+    { id: 'editor' as const, label: 'Editor' },
+    { id: 'executions' as const, label: 'History' },
+    { id: 'test' as const, label: 'Test input' },
+  ];
+
+  const switchMode = (tab: typeof modeItems[number]['id']) => {
+    setActiveCanvasTab(tab);
+    if (tab !== 'editor') setConfigPanelOpen(false);
+  };
+
   const iconBtn: React.CSSProperties = {
     width: '28px',
     height: '28px',
@@ -374,14 +388,15 @@ export function Toolbar() {
         flexShrink: 0,
         background: 'var(--bg-toolbar)',
         borderBottom: '1px solid var(--border)',
-        display: 'flex',
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)',
         alignItems: 'center',
-        gap: '11px',
+        gap: '12px',
         padding: '0 16px',
       }}
     >
       {/* Breadcrumb */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0, flex: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0 }}>
         <button
           onClick={() => navigate('/app/workflows')}
           title="Back to dashboard"
@@ -485,8 +500,57 @@ export function Toolbar() {
         )}
       </div>
 
+      {/* Editor modes */}
+      <nav
+        aria-label="Workflow editor mode"
+        style={{
+          height: 34,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 3,
+          padding: 3,
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          background: activeCanvasTab === 'executions' ? 'var(--history-tab-bg)' : 'var(--bg-panel)',
+          boxShadow: activeCanvasTab === 'executions' ? '0 10px 34px var(--history-shadow)' : 'none',
+          transition: 'background 160ms ease, box-shadow 160ms ease',
+        }}
+      >
+        {modeItems.map((item) => {
+          const active = activeCanvasTab === item.id;
+          const historyActive = active && item.id === 'executions';
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => switchMode(item.id)}
+              style={{
+                height: 28,
+                minWidth: item.id === 'test' ? 86 : 70,
+                padding: '0 11px',
+                border: 'none',
+                borderRadius: 6,
+                background: historyActive ? 'var(--history-accent)' : active ? 'var(--bg-node-lift)' : 'transparent',
+                color: historyActive ? 'var(--history-accent-contrast)' : active ? 'var(--text-primary)' : 'var(--text-secondary)',
+                cursor: 'pointer',
+                fontFamily: "'Inter'",
+                fontSize: 12,
+                fontWeight: active ? 700 : 600,
+                letterSpacing: '-0.005em',
+                transition: 'background 140ms ease, color 140ms ease, transform 120ms ease',
+              }}
+              onMouseDown={(e) => { e.currentTarget.style.transform = 'translateY(1px)'; }}
+              onMouseUp={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
+            >
+              {item.label}
+            </button>
+          );
+        })}
+      </nav>
+
       {/* Right side controls */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', minWidth: 0 }}>
         {/* Settings gear */}
         <button
           onClick={() => navigate('/app/settings/general')}

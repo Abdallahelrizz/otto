@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -26,55 +26,6 @@ function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName.toLowerCase();
   return tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable;
-}
-
-function CanvasTabs() {
-  const active = useStore((s) => s.activeCanvasTab);
-  const setActive = useStore((s) => s.setActiveCanvasTab);
-  const tabs = [
-    { id: 'editor' as const, label: 'Editor' },
-    { id: 'executions' as const, label: 'Executions' },
-    { id: 'test' as const, label: 'Run with input' },
-  ];
-
-  return (
-    <div style={{
-      position: 'absolute',
-      top: 16,
-      left: '50%',
-      transform: 'translateX(-50%)',
-      display: 'flex',
-      background: 'var(--bg-panel)',
-      border: '1px solid var(--border)',
-      borderRadius: '7px',
-      padding: '3px',
-      boxShadow: 'var(--shadow)',
-      zIndex: 10,
-      pointerEvents: 'all',
-    }}>
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          onClick={() => setActive(tab.id)}
-          style={{
-            padding: '5px 13px',
-            fontSize: '12px',
-            fontWeight: active === tab.id ? 600 : 500,
-            color: active === tab.id ? 'var(--text-primary)' : 'var(--text-secondary)',
-            background: active === tab.id ? 'var(--bg-node-lift)' : 'transparent',
-            border: 'none',
-            borderRadius: '4px',
-            letterSpacing: '-0.005em',
-            cursor: 'pointer',
-            fontFamily: "'Inter'",
-            transition: 'background 100ms ease, color 100ms ease',
-          }}
-        >
-          {tab.label}
-        </button>
-      ))}
-    </div>
-  );
 }
 
 function SelectionActionBar({
@@ -204,6 +155,66 @@ function ImportCompatibilityBanner() {
   );
 }
 
+function CanvasModePage({
+  tone = 'default',
+  title,
+  meta,
+  children,
+}: {
+  tone?: 'default' | 'history';
+  title: string;
+  meta?: ReactNode;
+  children: ReactNode;
+}) {
+  const isHistory = tone === 'history';
+  return (
+    <section
+      style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 8,
+        pointerEvents: 'all',
+        overflow: 'auto',
+        background: isHistory
+          ? 'radial-gradient(circle at 18% 12%, var(--history-glow), transparent 34%), var(--history-bg)'
+          : 'linear-gradient(180deg, var(--bg-canvas) 0%, var(--bg-panel) 100%)',
+        color: isHistory ? 'var(--history-text)' : 'var(--text-primary)',
+        padding: '42px clamp(24px, 4vw, 56px)',
+      }}
+    >
+      <div style={{ maxWidth: 980, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
+          <h1 style={{
+            margin: 0,
+            fontFamily: "'Inter'",
+            fontSize: 22,
+            fontWeight: 800,
+            lineHeight: 1.1,
+            letterSpacing: '-0.02em',
+            color: isHistory ? 'var(--history-text)' : 'var(--text-primary)',
+          }}>
+            {title}
+          </h1>
+          {meta && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              color: isHistory ? 'var(--history-muted)' : 'var(--text-muted)',
+              fontFamily: "'Geist Mono'",
+              fontSize: 11,
+              fontWeight: 600,
+            }}>
+              {meta}
+            </div>
+          )}
+        </header>
+        {children}
+      </div>
+    </section>
+  );
+}
+
 function TestPanel() {
   const testInputText = useStore((s) => s.testInputText);
   const setTestInputText = useStore((s) => s.setTestInputText);
@@ -213,29 +224,27 @@ function TestPanel() {
   const disabled = executionPhase === 'running';
 
   return (
-    <div style={{
-      position: 'absolute',
-      top: 58,
-      left: '50%',
-      transform: 'translateX(-50%)',
-      width: 'min(520px, calc(100vw - 48px))',
-      background: 'var(--bg-panel)',
-      border: '1px solid var(--border)',
-      borderRadius: '7px',
-      boxShadow: 'var(--shadow-main)',
-      zIndex: 9,
-      pointerEvents: 'all',
-      overflow: 'hidden',
-    }}>
+    <CanvasModePage
+      title="Test input"
+      meta={disabled ? 'running' : selectedNodeId ? 'node selected' : 'workflow'}
+    >
       <div style={{
-        height: 34,
+        width: 'min(720px, 100%)',
+        background: 'var(--bg-panel)',
+        border: '1px solid var(--border)',
+        borderRadius: '8px',
+        boxShadow: 'var(--shadow-main)',
+        overflow: 'hidden',
+      }}>
+      <div style={{
+        height: 42,
         display: 'flex',
         alignItems: 'center',
-        padding: '0 12px',
+        padding: '0 14px',
         borderBottom: '1px solid var(--border)',
         gap: 8,
       }}>
-        <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--text-primary)' }}>Run with input</span>
+        <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--text-primary)' }}>Payload</span>
         <div style={{ flex: 1 }} />
         <button
           disabled={disabled}
@@ -258,7 +267,7 @@ function TestPanel() {
         spellCheck={false}
         style={{
           width: '100%',
-          height: 180,
+          minHeight: 360,
           resize: 'vertical',
           background: 'var(--bg-input)',
           color: 'var(--text-primary)',
@@ -271,7 +280,8 @@ function TestPanel() {
           display: 'block',
         }}
       />
-    </div>
+      </div>
+    </CanvasModePage>
   );
 }
 
@@ -316,116 +326,126 @@ function ExecutionsPanel() {
   }, [savedWorkflowId, executionId]);
 
   return (
-    <div style={{
-      position: 'absolute',
-      top: 58,
-      left: '50%',
-      transform: 'translateX(-50%)',
-      width: 'min(560px, calc(100vw - 48px))',
-      maxHeight: 'min(420px, calc(100vh - 160px))',
-      background: 'var(--bg-panel)',
-      border: '1px solid var(--border)',
-      borderRadius: '7px',
-      boxShadow: 'var(--shadow-main)',
-      zIndex: 9,
-      pointerEvents: 'all',
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column',
-    }}>
+    <CanvasModePage
+      tone="history"
+      title="History"
+      meta={loading ? 'loading' : `${rows.length} runs`}
+    >
       <div style={{
-        height: 34,
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 12px',
-        borderBottom: '1px solid var(--border)',
-        gap: 8,
+        background: 'var(--history-panel)',
+        border: '1px solid var(--history-border)',
+        borderRadius: '8px',
+        boxShadow: '0 24px 72px var(--history-shadow)',
+        overflow: 'hidden',
       }}>
-        <span style={{ fontSize: '12.5px', fontWeight: 700, color: 'var(--text-primary)' }}>Workflow executions</span>
-        <div style={{ flex: 1 }} />
-        <span style={{ fontFamily: 'Geist Mono', fontSize: '10px', color: 'var(--text-muted)' }}>
-          {loading ? 'loading' : `${rows.length} runs`}
-        </span>
-      </div>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '104px minmax(180px, 1fr) 92px 104px 68px',
+          gap: 10,
+          alignItems: 'center',
+          padding: '11px 14px',
+          borderBottom: '1px solid var(--history-border)',
+          color: 'var(--history-muted)',
+          fontFamily: "'Geist Mono'",
+          fontSize: 10,
+          fontWeight: 750,
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+        }}>
+          <span>Status</span>
+          <span>Execution</span>
+          <span>Mode</span>
+          <span style={{ textAlign: 'right' }}>Started</span>
+          <span />
+        </div>
 
-      <div style={{ overflow: 'auto', padding: 8 }}>
-        {!savedWorkflowId && (
-          <div style={emptyPanelStyle}>Save or run the workflow once to create execution history.</div>
-        )}
-        {savedWorkflowId && !loading && rows.length === 0 && (
-          <div style={emptyPanelStyle}>No executions for this workflow yet.</div>
-        )}
-        {rows.map((row) => (
-          <div
-            role="button"
-            tabIndex={0}
-            key={row.id}
-            onClick={() => {
-              setBottomPanelsOpen(true);
-              void loadExecutionDetail(row.id);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
+        <div style={{ maxHeight: 'min(620px, calc(100vh - 220px))', overflow: 'auto', padding: 8 }}>
+          {!savedWorkflowId && (
+            <div style={emptyPanelStyle}>Save or run the workflow once to create execution history.</div>
+          )}
+          {savedWorkflowId && !loading && rows.length === 0 && (
+            <div style={emptyPanelStyle}>No executions for this workflow yet.</div>
+          )}
+          {rows.map((row) => (
+            <div
+              role="button"
+              tabIndex={0}
+              key={row.id}
+              onClick={() => {
                 setBottomPanelsOpen(true);
                 void loadExecutionDetail(row.id);
-              }
-            }}
-            style={{
-              width: '100%',
-              display: 'grid',
-              gridTemplateColumns: '86px 1fr 80px 74px 58px',
-              alignItems: 'center',
-              gap: 8,
-              padding: '8px 9px',
-              marginBottom: 4,
-              border: '1px solid transparent',
-              borderRadius: '5px',
-              background: row.id === executionId ? 'var(--bg-hover)' : 'transparent',
-              color: 'var(--text-primary)',
-              cursor: 'pointer',
-              textAlign: 'left',
-              fontFamily: "'Inter'",
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = row.id === executionId ? 'var(--bg-hover)' : 'transparent'; }}
-          >
-            <span style={{ ...statusPillStyle(row.status), justifySelf: 'start' }}>{row.status}</span>
-            <span style={{ fontFamily: 'Geist Mono', fontSize: '11px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {row.id}
-            </span>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{modeLabel(row.mode)}</span>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'right' }}>{formatTime(row.started_at)}</span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                void retryExecution(row.id);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setBottomPanelsOpen(true);
+                  void loadExecutionDetail(row.id);
+                }
               }}
               style={{
-                height: 24,
-                borderRadius: '4px',
-                border: '1px solid var(--border-input)',
-                background: 'var(--bg-input)',
-                color: 'var(--text-primary)',
+                width: '100%',
+                display: 'grid',
+                gridTemplateColumns: '104px minmax(180px, 1fr) 92px 104px 68px',
+                alignItems: 'center',
+                gap: 10,
+                padding: '9px 6px',
+                border: '1px solid transparent',
+                borderRadius: '6px',
+                background: row.id === executionId ? 'var(--history-row-active)' : 'transparent',
+                color: 'var(--history-text)',
                 cursor: 'pointer',
-                fontSize: '11px',
-                fontWeight: 600,
+                textAlign: 'left',
                 fontFamily: "'Inter'",
+                transition: 'background 120ms ease, border-color 120ms ease',
+              }}
+              onMouseEnter={(e) => {
+                const el = e.currentTarget as HTMLElement;
+                el.style.background = 'var(--history-row-hover)';
+                el.style.borderColor = 'var(--history-border)';
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget as HTMLElement;
+                el.style.background = row.id === executionId ? 'var(--history-row-active)' : 'transparent';
+                el.style.borderColor = 'transparent';
               }}
             >
-              Retry
-            </button>
-          </div>
-        ))}
+              <span style={{ ...statusPillStyle(row.status), justifySelf: 'start' }}>{row.status}</span>
+              <span style={{ fontFamily: 'Geist Mono', fontSize: '11px', color: 'var(--history-text)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {row.id}
+              </span>
+              <span style={{ fontSize: '11px', color: 'var(--history-muted)' }}>{modeLabel(row.mode)}</span>
+              <span style={{ fontSize: '11px', color: 'var(--history-muted)', textAlign: 'right' }}>{formatTime(row.started_at)}</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void retryExecution(row.id);
+                }}
+                style={{
+                  height: 26,
+                  borderRadius: '5px',
+                  border: '1px solid var(--history-border)',
+                  background: 'var(--history-button)',
+                  color: 'var(--history-text)',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  fontFamily: "'Inter'",
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+    </CanvasModePage>
   );
 }
 
 const emptyPanelStyle: React.CSSProperties = {
   padding: '22px 12px',
-  color: 'var(--text-secondary)',
+  color: 'var(--history-muted, var(--text-secondary))',
   fontSize: '12px',
   textAlign: 'center',
 };
@@ -473,6 +493,7 @@ export function Canvas() {
   const onConnect = useStore((s) => s.onConnect);
   const setNodes = useStore((s) => s.setNodes);
   const selectNode = useStore((s) => s.selectNode);
+  const setConfigPanelOpen = useStore((s) => s.setConfigPanelOpen);
   const selectedNodeId = useStore((s) => s.selectedNodeId);
   const executionPhase = useStore((s) => s.executionPhase);
   const theme = useStore((s) => s.theme);
@@ -484,7 +505,6 @@ export function Canvas() {
   const selectAllNodes = useStore((s) => s.selectAllNodes);
   const nodeClipboard = useStore((s) => s.nodeClipboard);
   const setContextMenu = useStore((s) => s.setContextMenu);
-  const setBottomPanelsOpen = useStore((s) => s.setBottomPanelsOpen);
   const setActiveSidebarTab = useStore((s) => s.setActiveSidebarTab);
   const setLibraryFocusCategory = useStore((s) => s.setLibraryFocusCategory);
   const setSidebarOpen = useStore((s) => s.setSidebarOpen);
@@ -594,20 +614,21 @@ export function Canvas() {
   );
 
   const onNodeDoubleClick: NodeMouseHandler = useCallback(
-    (_e, node) => {
-      // Focus the node: config shows in the right panel (driven by selection),
-      // and the bottom data/execution panel opens for inspection.
+    (e, node) => {
+      e.stopPropagation();
+      focusCanvas();
       selectNode(node.id);
-      setBottomPanelsOpen(true);
+      setConfigPanelOpen(true);
     },
-    [selectNode, setBottomPanelsOpen]
+    [focusCanvas, selectNode, setConfigPanelOpen]
   );
 
   const onPaneClick = useCallback(() => {
     focusCanvas();
     selectNode(null);
+    setConfigPanelOpen(false);
     setContextMenu(null);
-  }, [focusCanvas, selectNode, setContextMenu]);
+  }, [focusCanvas, selectNode, setConfigPanelOpen, setContextMenu]);
 
   const onNodeContextMenu = useCallback(
     (e: React.MouseEvent, node: Node) => {
@@ -671,7 +692,7 @@ export function Canvas() {
 
       </ReactFlow>
 
-      {nodes.length === 0 && (
+      {activeCanvasTab === 'editor' && nodes.length === 0 && (
         <div style={{
           position: 'absolute', inset: 0,
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -729,8 +750,6 @@ export function Canvas() {
         </div>
       )}
 
-      {/* Floating canvas tabs */}
-      <CanvasTabs />
       {activeCanvasTab === 'editor' && <ImportCompatibilityBanner />}
       {activeCanvasTab === 'editor' && (
         <SelectionActionBar

@@ -3237,7 +3237,7 @@ export function ConfigPanel() {
   const updateNodeConfig = useStore((s) => s.updateNodeConfig);
   const updateNodeLabel = useStore((s) => s.updateNodeLabel);
   const updateNodeControls = useStore((s) => s.updateNodeControls);
-  const selectNode = useStore((s) => s.selectNode);
+  const setConfigPanelOpen = useStore((s) => s.setConfigPanelOpen);
   const nodeExecutions = useStore((s) => s.nodeExecutions);
   const fetchCredentials = useStore((s) => s.fetchCredentials);
   const runExecution = useStore((s) => s.runExecution);
@@ -3348,7 +3348,7 @@ export function ConfigPanel() {
 
         {/* Close */}
         <button
-          onClick={() => selectNode(null)}
+          onClick={() => setConfigPanelOpen(false)}
           style={{
             width: '24px',
             height: '24px',

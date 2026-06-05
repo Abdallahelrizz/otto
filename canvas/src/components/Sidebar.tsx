@@ -22,7 +22,6 @@ const AMBER = OTTO_AMBER;
 
 const NAV_ITEMS = [
   { id: 'library', label: 'Node library', badge: null },
-  { id: 'history', label: 'History',      badge: null },
 ];
 
 // Natural-case display names for category labels (source labels are ALL-CAPS).
@@ -514,103 +513,6 @@ function WorkflowRow({ wf, isActive, onLoad, onDelete }: {
   );
 }
 
-const EXEC_TYPE_LABELS: Record<string, string> = {
-  manual: 'Manual',
-  api: 'API',
-  scheduled: 'Scheduled',
-  sub_workflow: 'Sub-wf',
-  error_workflow: 'Error handler',
-  resume: 'Resumed',
-  production: 'Production',
-};
-
-// ── History Tab ───────────────────────────────────────────────────────────────
-function HistoryTab() {
-  const savedWorkflowId = useStore((s) => s.savedWorkflowId);
-  const loadExecutionDetail = useStore((s) => s.loadExecutionDetail);
-  const [executions, setExecutions] = useState<Array<{ id: string; status: string; started_at: string | null; execution_type?: string }>>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    setLoading(true);
-    api.listExecutions(savedWorkflowId ?? undefined).then((res) => {
-      setExecutions(res.executions as Array<{ id: string; status: string; started_at: string | null; execution_type?: string }>);
-    }).catch(() => {}).finally(() => setLoading(false));
-  }, [savedWorkflowId]);
-
-  const statusColor: Record<string, string> = {
-    success: 'var(--node-success)',
-    error: 'var(--node-error)',
-    running: 'var(--node-running)',
-    pending: 'var(--text-muted)',
-    cancelled: 'var(--text-muted)',
-  };
-
-  return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
-      {loading && (
-        <div style={{ padding: '20px', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>Loading…</div>
-      )}
-      {!loading && executions.length === 0 && (
-        <div style={{ padding: '20px 12px', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-          No executions yet.<br />Run a workflow to see history here.
-        </div>
-      )}
-      {executions.map((ex) => {
-        const ts = ex.started_at
-          ? new Date(ex.started_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-          : '—';
-        return (
-          <div
-            key={ex.id}
-            onClick={() => loadExecutionDetail(ex.id)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '7px 8px',
-              borderRadius: '5px',
-              marginBottom: '1px',
-              cursor: 'pointer',
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-          >
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor[ex.status] ?? 'var(--text-muted)', flexShrink: 0 }} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ fontSize: '11px', fontFamily: "'Inter'", fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0' }}>
-                {ex.id.slice(0, 8)}…
-              </span>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: "'Inter'" }}>{ts}</div>
-            </div>
-            {ex.execution_type && (
-              <span style={{
-                fontSize: '10px',
-                fontFamily: "'Inter'",
-                fontWeight: 500,
-                color: 'var(--text-muted)',
-                letterSpacing: '0',
-                flexShrink: 0,
-              }}>
-                {EXEC_TYPE_LABELS[ex.execution_type] ?? ex.execution_type}
-              </span>
-            )}
-            <span style={{
-              fontSize: '10px',
-              fontFamily: "'Inter'",
-              fontWeight: 600,
-              color: statusColor[ex.status] ?? 'var(--text-muted)',
-              letterSpacing: '0.02em',
-              textTransform: 'uppercase',
-            }}>
-              {ex.status}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 // ── Observability Tab ─────────────────────────────────────────────────────────
 function ObservabilityTab() {
@@ -2694,6 +2596,10 @@ export function Sidebar() {
     setLibraryFocusCategory(null);
   }, [libraryFocusCategory, setActiveSidebarTab, setLibraryFocusCategory]);
 
+  useEffect(() => {
+    if (activeSidebarTab === 'history') setActiveSidebarTab('library');
+  }, [activeSidebarTab, setActiveSidebarTab]);
+
   const libraryMatches = useMemo(() => {
     const q = libraryQuery.trim().toLowerCase();
     return NODE_TYPE_DEFS.filter((def) => {
@@ -2737,7 +2643,7 @@ export function Sidebar() {
   return (
     <aside
       style={{
-        width: '216px',
+        width: '280px',
         height: '100%',
         background: 'var(--bg-sidebar)',
         borderRight: '1px solid var(--border)',
@@ -2994,8 +2900,6 @@ export function Sidebar() {
           )}
         </div>
       )}
-
-      {activeSidebarTab === 'history' && <HistoryTab />}
 
       {/* Footer */}
       <div style={{

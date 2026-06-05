@@ -79,6 +79,8 @@ interface OttoStore {
   // Selection
   selectedNodeId: string | null;
   selectNode: (id: string | null) => void;
+  configPanelOpen: boolean;
+  setConfigPanelOpen: (open: boolean) => void;
 
   // Node config editing
   updateNodeConfig: (id: string, config: Record<string, unknown>) => void;
@@ -325,7 +327,12 @@ export const useStore = create<OttoStore>((set, get) => ({
   setEdges: (edges) => set({ edges }),
 
   selectedNodeId: null,
-  selectNode: (id) => set({ selectedNodeId: id }),
+  selectNode: (id) => set((s) => ({
+    selectedNodeId: id,
+    configPanelOpen: id ? s.configPanelOpen : false,
+  })),
+  configPanelOpen: false,
+  setConfigPanelOpen: (open) => set({ configPanelOpen: open }),
 
   updateNodeConfig: (id, config) =>
     set((s) => ({
@@ -436,6 +443,7 @@ export const useStore = create<OttoStore>((set, get) => ({
       nodes: s.nodes.filter((node) => !selectedSet.has(node.id)),
       edges: s.edges.filter((edge) => !selectedSet.has(edge.source) && !selectedSet.has(edge.target)),
       selectedNodeId: s.selectedNodeId && selectedSet.has(s.selectedNodeId) ? null : s.selectedNodeId,
+      configPanelOpen: s.selectedNodeId && selectedSet.has(s.selectedNodeId) ? false : s.configPanelOpen,
       contextMenu: null,
       pinnedData: Object.fromEntries(Object.entries(s.pinnedData).filter(([nodeId]) => !selectedSet.has(nodeId))),
       validationIssues: s.validationIssues.filter((issue) => !issue.nodeId || !selectedSet.has(issue.nodeId)),
@@ -625,6 +633,7 @@ export const useStore = create<OttoStore>((set, get) => ({
       workflowSettings: savedSettings ? { ...DEFAULT_WORKFLOW_SETTINGS, ...savedSettings } : { ...DEFAULT_WORKFLOW_SETTINGS },
       validationIssues: [],
       selectedNodeId: null,
+      configPanelOpen: false,
     });
     writeLastWorkflowId(id);
   },
@@ -663,6 +672,8 @@ export const useStore = create<OttoStore>((set, get) => ({
         workflowActive: false,
         pinnedData: {},
         workflowImportReport: null,
+        selectedNodeId: null,
+        configPanelOpen: false,
       });
       writeLastWorkflowId(null);
     }
@@ -681,6 +692,7 @@ export const useStore = create<OttoStore>((set, get) => ({
       workflowSettings: { ...DEFAULT_WORKFLOW_SETTINGS },
       validationIssues: [],
       selectedNodeId: null,
+      configPanelOpen: false,
     });
     writeLastWorkflowId(null);
   },

@@ -17,6 +17,7 @@ export function ContextMenu() {
   const clearPinnedDataForNode = useStore((s) => s.clearPinnedDataForNode);
   const pinnedData = useStore((s) => s.pinnedData);
   const setBottomPanelsOpen = useStore((s) => s.setBottomPanelsOpen);
+  const setConfigPanelOpen = useStore((s) => s.setConfigPanelOpen);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -72,7 +73,7 @@ export function ContextMenu() {
 
   const focusNode = () => {
     selectNode(nodeId);
-    setBottomPanelsOpen(true);
+    setConfigPanelOpen(true);
     close();
   };
 
@@ -103,7 +104,7 @@ export function ContextMenu() {
         />
         <MenuItem
           label="Rename"
-          onClick={() => { selectNode(nodeId); close(); }}
+          onClick={() => { selectNode(nodeId); setConfigPanelOpen(true); close(); }}
         />
         <MenuItem
           label={actionCount > 1

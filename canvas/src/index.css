@@ -92,12 +92,14 @@ code, pre, textarea.mono, .mono {
   --bg-node:      var(--surface-container);
   --bg-node-card: var(--surface-container);
   --bg-node-lift: var(--surface-container-high);
+  --bg-node-tile: var(--surface-container-highest); /* icon tiles, clearly lifted off the canvas */
   --bg-panel:     var(--surface-container-low);
   --bg-input:     var(--surface-container-lowest);
   --bg-hover:     rgba(234,162,166,0.07);
 
   --border:       rgba(238,221,224,0.10);
   --border-node:  rgba(234,162,166,0.18);
+  --border-strong: rgba(238,221,224,0.16); /* stronger tile border */
   --border-input: rgba(238,221,224,0.18);
 
   --text-primary:   #f4eef0;
@@ -141,6 +143,21 @@ code, pre, textarea.mono, .mono {
   --ndv-pane:       var(--surface-container-low);
   --ndv-header-bg:  var(--surface-container);
   --ndv-overlay:    rgba(10,10,16,0.76);
+
+  /* History page surface */
+  --history-bg: #0b1214;
+  --history-panel: rgba(16,26,29,0.92);
+  --history-tab-bg: rgba(16,26,29,0.92);
+  --history-row-hover: rgba(102,184,172,0.08);
+  --history-row-active: rgba(102,184,172,0.14);
+  --history-border: rgba(139,214,203,0.18);
+  --history-accent: #66b8ac;
+  --history-accent-contrast: #061111;
+  --history-text: #edf8f5;
+  --history-muted: rgba(191,221,216,0.62);
+  --history-button: rgba(139,214,203,0.08);
+  --history-glow: rgba(102,184,172,0.18);
+  --history-shadow: rgba(2,14,16,0.56);
 }
 
 /* ─────────────────────────────────────────
@@ -164,12 +181,14 @@ code, pre, textarea.mono, .mono {
   --bg-node:      var(--surface-container-lowest);
   --bg-node-card: var(--surface-container-lowest);
   --bg-node-lift: var(--surface-container-low);
+  --bg-node-tile: var(--surface-container-lowest); /* white tile, lifted off the warm canvas via shadow */
   --bg-panel:     var(--surface-container-lowest);
   --bg-input:     var(--surface);
   --bg-hover:     rgba(99,13,22,0.06);
 
   --border:       rgba(137,113,112,0.24);
   --border-node:  rgba(99,13,22,0.16);
+  --border-strong: rgba(137,113,112,0.34); /* stronger tile border */
   --border-input: rgba(137,113,112,0.34);
 
   --text-primary:   #1a1c1b;
@@ -213,6 +232,21 @@ code, pre, textarea.mono, .mono {
   --ndv-pane:       var(--surface-container-lowest);
   --ndv-header-bg:  var(--surface-container-low);
   --ndv-overlay:    rgba(200,185,183,0.55);
+
+  /* History page surface */
+  --history-bg: #eef6f4;
+  --history-panel: rgba(255,255,255,0.88);
+  --history-tab-bg: #e5f1ee;
+  --history-row-hover: rgba(15,118,110,0.07);
+  --history-row-active: rgba(15,118,110,0.12);
+  --history-border: rgba(15,118,110,0.20);
+  --history-accent: #0f766e;
+  --history-accent-contrast: #ffffff;
+  --history-text: #10221f;
+  --history-muted: rgba(31,70,65,0.66);
+  --history-button: rgba(15,118,110,0.07);
+  --history-glow: rgba(15,118,110,0.12);
+  --history-shadow: rgba(15,63,58,0.14);
 }
 
 /* ── React Flow: handles — always visible ── */

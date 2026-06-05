@@ -12,17 +12,20 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useStore } from '../store';
 import { useEditorShortcuts } from '../hooks/useEditorShortcuts';
 
+const SIDEBAR_WIDTH = 280;
+
 function EditorShell() {
   const theme = useStore((s) => s.theme);
   const selectedNodeId = useStore((s) => s.selectedNodeId);
+  const configPanelOpen = useStore((s) => s.configPanelOpen);
+  const activeCanvasTab = useStore((s) => s.activeCanvasTab);
   const sidebarOpen = useStore((s) => s.sidebarOpen);
   const toggleSidebar = useStore((s) => s.toggleSidebar);
   const [shortcutRefOpen, setShortcutRefOpen] = useState(false);
 
   useEditorShortcuts(shortcutRefOpen, setShortcutRefOpen);
 
-  // The right panel is the single node editor; it shows whenever a node is selected.
-  const panelOpen = !!selectedNodeId;
+  const panelOpen = Boolean(activeCanvasTab === 'editor' && selectedNodeId && configPanelOpen);
 
   return (
     <div
@@ -34,7 +37,7 @@ function EditorShell() {
       <div className="flex flex-1 overflow-hidden" style={{ position: 'relative', minHeight: 0 }}>
         <div
           className="sidebar-wrap"
-          style={{ width: sidebarOpen ? '216px' : '0px' }}
+          style={{ width: sidebarOpen ? `${SIDEBAR_WIDTH}px` : '0px' }}
         >
           <Sidebar />
         </div>
@@ -43,7 +46,7 @@ function EditorShell() {
           className="sidebar-chevron"
           onClick={toggleSidebar}
           title={sidebarOpen ? 'Hide sidebar (Ctrl+B)' : 'Show sidebar (Ctrl+B)'}
-          style={{ left: sidebarOpen ? '216px' : '0px' }}
+          style={{ left: sidebarOpen ? `${SIDEBAR_WIDTH}px` : '0px' }}
         >
           <svg
             width="8"
