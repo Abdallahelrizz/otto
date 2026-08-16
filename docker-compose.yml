@@ -9,7 +9,14 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-otto_dev}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+      # NOTE: schema.sql is deliberately NOT mounted into /docker-entrypoint-initdb.d.
+      # It had drifted to 18 tables while migrations produce 28, and seeding it left the
+      # database half-built with no `_migrations` row — so the server's boot migration hit
+      # `001_initial.sql: relation "users" already exists`, and the boot handler does
+      # process.exit(1) on migration failure. A fresh `docker compose up` therefore
+      # CRASH-LOOPED and Otto could not be installed at all.
+      # The server runs migrations on boot (RUN_MIGRATIONS_ON_BOOT), so migrations are the
+      # single source of truth for schema. Do not re-add this mount.
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U otto -d otto']
       interval: 5s
