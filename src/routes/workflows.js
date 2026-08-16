@@ -127,13 +127,15 @@ export async function workflowRoutes(fastify) {
     );
 
     if (definition !== undefined) {
+      // Fix: version child reads are scoped through the already-owned workflow.
       const { rows: latestRows } = await db.query(
         `SELECT id, version_number, is_autosave
          FROM workflow_versions
          WHERE workflow_id = $1
+           AND EXISTS (SELECT 1 FROM workflows w WHERE w.id = $1 AND w.workspace_id = $2)
          ORDER BY version_number DESC
          LIMIT 1`,
-        [id]
+        [id, req.auth.workspaceId]
       );
       const latest = latestRows[0];
 
@@ -141,8 +143,12 @@ export async function workflowRoutes(fastify) {
         await db.query(
           `UPDATE workflow_versions
            SET definition = $1, created_at = NOW(), created_by = $2
-           WHERE id = $3`,
-          [JSON.stringify(definition), req.auth.userId, latest.id]
+           WHERE id = $3
+             AND EXISTS (
+               SELECT 1 FROM workflows w
+               WHERE w.id = workflow_versions.workflow_id AND w.workspace_id = $4
+             )`,
+          [JSON.stringify(definition), req.auth.userId, latest.id, req.auth.workspaceId]
         );
       } else {
         const nextVersion = (latest?.version_number ?? 0) + 1;
@@ -196,12 +202,15 @@ export async function workflowRoutes(fastify) {
 
   fastify.post('/api/v1/workflows/:id/versions/:vnum/restore', async (req, reply) => {
     const { id, vnum } = req.params;
+    const versionNumber = Number(vnum);
+    // Fix: reject non-numeric versions before they reach integer SQL parameters.
+    if (!Number.isInteger(versionNumber)) return reply.code(400).send({ error: 'Invalid version number' });
     const { rows: vRows } = await db.query(
       `SELECT v.definition
        FROM workflow_versions v
        WHERE v.workflow_id = $1 AND v.version_number = $2
          AND EXISTS (SELECT 1 FROM workflows w WHERE w.id = $1 AND w.workspace_id = $3)`,
-      [id, parseInt(vnum, 10), req.auth.workspaceId]
+      [id, versionNumber, req.auth.workspaceId]
     );
     if (!vRows.length) return reply.code(404).send({ error: 'Version not found' });
 
@@ -211,9 +220,13 @@ export async function workflowRoutes(fastify) {
       [JSON.stringify(definition), id, req.auth.workspaceId]
     );
 
+    // Fix: the version aggregate is scoped through the request workspace.
     const { rows: versionRows } = await db.query(
-      'SELECT COALESCE(MAX(version_number), 0) AS max_v FROM workflow_versions WHERE workflow_id = $1',
-      [id]
+      `SELECT COALESCE(MAX(v.version_number), 0) AS max_v
+       FROM workflow_versions v
+       WHERE v.workflow_id = $1
+         AND EXISTS (SELECT 1 FROM workflows w WHERE w.id = $1 AND w.workspace_id = $2)`,
+      [id, req.auth.workspaceId]
     );
     const nextVersion = (versionRows[0]?.max_v ?? 0) + 1;
     await db.query(
@@ -221,7 +234,7 @@ export async function workflowRoutes(fastify) {
       [id, nextVersion, JSON.stringify(definition), req.auth.userId]
     );
 
-    return reply.send({ ok: true, restoredFrom: parseInt(vnum, 10), newVersion: nextVersion });
+    return reply.send({ ok: true, restoredFrom: versionNumber, newVersion: nextVersion });
   });
 
   fastify.post('/api/v1/workflows/:id/activate', async (req, reply) => {

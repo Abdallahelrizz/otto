@@ -101,6 +101,7 @@ export async function publicApiRoutes(fastify) {
     const { id } = req.params;
     const { workspaceId } = req.auth;
 
+    // Fix: the child query previously read node rows by execution ID without workspace isolation.
     const [execResult, nodeResult] = await Promise.all([
       db.query(
         `SELECT id, workflow_id, status, started_at, completed_at, trigger_type, error
@@ -112,8 +113,12 @@ export async function publicApiRoutes(fastify) {
         `SELECT node_id, node_name, status, output
          FROM node_executions
          WHERE execution_id = $1
+           AND EXISTS (
+             SELECT 1 FROM executions e
+             WHERE e.id = node_executions.execution_id AND e.workspace_id = $2
+           )
          ORDER BY started_at ASC`,
-        [id]
+        [id, workspaceId]
       ),
     ]);
 

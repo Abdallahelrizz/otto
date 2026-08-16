@@ -272,6 +272,15 @@ async function getCatalog() {
 }
 
 export async function credentialRoutes(fastify) {
+  function requireCredentialAdmin(req, reply) {
+    // Fix: credential secrets were mutable/testable by editors and viewers, despite the admin-only contract.
+    if (!['owner', 'admin'].includes(req.auth?.role ?? 'viewer')) {
+      reply.code(403).send({ error: 'Insufficient permissions' });
+      return false;
+    }
+    return true;
+  }
+
   fastify.get('/api/v1/credentials/schema/:type', async (req, reply) => {
     const catalog = await getCatalog().catch(() => null);
     if (!catalog) return reply.code(503).send({ error: 'Credential catalog unavailable' });
@@ -286,6 +295,7 @@ export async function credentialRoutes(fastify) {
   });
 
   fastify.post('/api/v1/credentials', async (req, reply) => {
+    if (!requireCredentialAdmin(req, reply)) return;
     const { name, type, data } = req.body ?? {};
     const normalizedType = normalizeType(type);
     if (!name) return reply.code(400).send({ error: 'name is required' });
@@ -333,6 +343,11 @@ export async function credentialRoutes(fastify) {
     return reply.code(201).send(rows[0]);
   });
 
+  // Deliberately NOT admin-gated. This returns metadata only (id, name, type,
+  // created_at) — never `data` — and it is what populates the credential picker in
+  // every node config panel. Editors are allowed to build workflows, so gating this
+  // would leave them unable to configure any node that needs a credential, for zero
+  // security gain. Mutations (create/update/delete/test) ARE admin-gated below.
   fastify.get('/api/v1/credentials', async (req, reply) => {
     const { rows } = await db.query(
       `SELECT id, name, type, created_at
@@ -345,6 +360,7 @@ export async function credentialRoutes(fastify) {
   });
 
   fastify.put('/api/v1/credentials/:id', async (req, reply) => {
+    if (!requireCredentialAdmin(req, reply)) return;
     const { id } = req.params;
     const { name, type, data } = req.body ?? {};
 
@@ -398,6 +414,7 @@ export async function credentialRoutes(fastify) {
   });
 
   fastify.post('/api/v1/credentials/:id/test', async (req, reply) => {
+    if (!requireCredentialAdmin(req, reply)) return;
     const credential = await getCredential(req.params.id, {
       workspaceId: req.auth.workspaceId,
       nodeId: 'credential-test',
@@ -418,6 +435,7 @@ export async function credentialRoutes(fastify) {
   });
 
   fastify.delete('/api/v1/credentials/:id', async (req, reply) => {
+    if (!requireCredentialAdmin(req, reply)) return;
     const { rows } = await db.query(
       'DELETE FROM credentials WHERE id = $1 AND workspace_id = $2 RETURNING id, name, type',
       [req.params.id, req.auth.workspaceId]

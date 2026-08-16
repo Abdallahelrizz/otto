@@ -8,6 +8,10 @@ const ROLES = new Set(['owner', 'admin', 'editor', 'viewer']);
 export async function workspaceRoutes(fastify) {
   // GET /api/v1/workspace/members — list workspace members
   fastify.get('/api/v1/workspace/members', async (req, reply) => {
+    // Fix: member identities and roles were visible to editors/viewers despite the admin-only contract.
+    if (!['owner', 'admin'].includes(req.auth?.role ?? 'viewer')) {
+      return reply.code(403).send({ error: 'Insufficient permissions' });
+    }
     const { rows } = await db.query(
       `SELECT u.id, u.email, u.name, wm.role
        FROM workspace_members wm

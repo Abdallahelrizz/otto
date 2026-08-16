@@ -155,7 +155,9 @@ export async function observabilityRoutes(fastify) {
     }
     const { retentionDays = Number(process.env.EXECUTION_RETENTION_DAYS ?? 30) } = req.body ?? {};
     const { runPruning } = await import('../queue/pruning-job.js');
-    const result = await runPruning({ retentionDays });
+    // Scope to the caller's workspace. Without this an admin of one workspace
+    // deletes every workspace's execution history.
+    const result = await runPruning({ retentionDays, workspaceId: req.auth.workspaceId });
     return reply.send(result);
   });
 

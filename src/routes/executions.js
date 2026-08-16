@@ -49,9 +49,6 @@ async function enqueueManualExecution({
   // resumes and eval runs still go through the queue. Fire-and-forget: return the
   // executionId immediately and let the run stream progress over SSE. runWorkflow
   // owns its own status/error logging; the catch is just a backstop.
-  // --- DIAGNOSTIC (temporary): confirm the in-process path is live + time it ---
-  console.log(`[otto] IN-PROCESS run kicked off: ${executionId}`);
-  const __runStart = Date.now();
   runWorkflow({
     executionId,
     workflowId,
@@ -63,7 +60,6 @@ async function enqueueManualExecution({
     nodeId,
     pinnedData,
   })
-    .then(() => console.log(`[otto-timing] run ${executionId} finished in ${Date.now() - __runStart}ms`))
     .catch((err) => {
       console.error(`[execute] in-process run ${executionId} failed:`, err?.message ?? err);
     });
@@ -73,7 +69,6 @@ async function enqueueManualExecution({
 
 export async function executionRoutes(fastify) {
   fastify.post('/api/v1/execute', async (req, reply) => {
-    const __t0 = Date.now(); // DIAGNOSTIC (temporary)
     const {
       definition,
       workflowId: savedWorkflowId,
@@ -129,7 +124,6 @@ export async function executionRoutes(fastify) {
       pinnedData,
     });
 
-    console.log(`[otto-timing] /execute handler returned in ${Date.now() - __t0}ms (exec ${executionId})`);
     return reply.send({ executionId, workflowId, status: 'pending', validation });
   });
 
@@ -331,14 +325,21 @@ export async function executionRoutes(fastify) {
       res.write(`event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`);
     };
 
+    // Fix: the child snapshot query previously read node rows without workspace isolation.
     const [snapExec, snapNodes] = await Promise.all([
       db.query('SELECT * FROM executions WHERE id = $1 AND workspace_id = $2', [id, req.auth.workspaceId]),
       db.query(
         `SELECT id, node_id, node_name, node_type, status, started_at, completed_at,
                 duration_ms, input, output, error, retry_count, prompt_tokens,
                 completion_tokens, total_tokens, model
-         FROM node_executions WHERE execution_id = $1 ORDER BY started_at ASC`,
-        [id]
+         FROM node_executions
+         WHERE execution_id = $1
+           AND EXISTS (
+             SELECT 1 FROM executions e
+             WHERE e.id = node_executions.execution_id AND e.workspace_id = $2
+           )
+         ORDER BY started_at ASC`,
+        [id, req.auth.workspaceId]
       ),
     ]);
     send('snapshot', { execution: snapExec.rows[0], nodes: snapNodes.rows });
@@ -369,6 +370,7 @@ export async function executionRoutes(fastify) {
   fastify.get('/api/v1/executions/:id', async (req, reply) => {
     const { id } = req.params;
 
+    // Fix: the child detail query previously read node rows without workspace isolation.
     const [execResult, nodeResult] = await Promise.all([
       db.query(
         'SELECT * FROM executions WHERE id = $1 AND workspace_id = $2',
@@ -381,8 +383,12 @@ export async function executionRoutes(fastify) {
                 prompt_tokens, completion_tokens, total_tokens, model
          FROM node_executions
          WHERE execution_id = $1
+           AND EXISTS (
+             SELECT 1 FROM executions e
+             WHERE e.id = node_executions.execution_id AND e.workspace_id = $2
+           )
          ORDER BY started_at ASC`,
-        [id]
+        [id, req.auth.workspaceId]
       ),
     ]);
 

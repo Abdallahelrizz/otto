@@ -66,6 +66,7 @@ export async function expressionRoutes(fastify) {
 
     if (executionId && nodeId) {
       try {
+        // Fix: the child query previously read node rows by execution ID without workspace isolation.
         const [execResult, nodeResult] = await Promise.all([
           db.query(
             `SELECT id FROM executions WHERE id = $1 AND workspace_id = $2`,
@@ -75,8 +76,12 @@ export async function expressionRoutes(fastify) {
             `SELECT node_id, node_name, input, output
              FROM node_executions
              WHERE execution_id = $1
+               AND EXISTS (
+                 SELECT 1 FROM executions e
+                 WHERE e.id = node_executions.execution_id AND e.workspace_id = $2
+               )
              ORDER BY started_at ASC`,
-            [executionId]
+            [executionId, workspaceId]
           ),
         ]);
 

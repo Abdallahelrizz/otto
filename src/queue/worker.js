@@ -12,6 +12,10 @@ export function startWorker() {
       if (job.name === 'prune-old-executions' || job.data?.type === 'prune') {
         const { runPruning } = await import('./pruning-job.js');
         const retentionDays = Number(process.env.EXECUTION_RETENTION_DAYS ?? 30);
+        // Intentionally instance-wide (no workspaceId): this is the scheduled
+        // retention job an operator sets via EXECUTION_RETENTION_DAYS, not a
+        // request. Request-driven pruning MUST pass a workspaceId — see
+        // routes/observability.js.
         const result = await runPruning({ retentionDays });
         console.log(`[pruning] Deleted ${result.deletedExecutions} executions older than ${result.retentionDays} days`);
         return result;
