@@ -37,11 +37,17 @@ export async function approvalRoutes(fastify) {
     const { token } = req.params;
     const { approver = 'unknown', comment = '' } = req.body ?? {};
 
-    // Look up the waiting execution
+    // Atomic compare-and-set, matching routes/resume.js. This was a SELECT followed by
+    // a separate UPDATE — check-then-act. Two concurrent approve/reject requests (a
+    // double-clicked approval link, a retried delivery) could both pass the SELECT and
+    // both enqueue a resume job, resuming the workflow twice and re-running every node
+    // after the approval. Claiming the token in the same statement that reads it makes
+    // it strictly single-use: exactly one caller gets a row.
     const { rows: execRows } = await db.query(
-      `SELECT id, workflow_id, workspace_id, wait_node_id, wait_type, resume_payload
-       FROM executions
-       WHERE resume_token = $1 AND status = 'waiting'`,
+      `UPDATE executions
+          SET status = 'running', resumed_at = NOW(), resume_token = NULL
+        WHERE resume_token = $1 AND status = 'waiting'
+      RETURNING id, workflow_id, workspace_id, wait_node_id, wait_type, resume_payload`,
       [token],
     );
 
@@ -68,13 +74,7 @@ export async function approvalRoutes(fastify) {
     };
     const pinnedData = { ...savedOutputs, [exec.wait_node_id]: resumeInput };
 
-    // Resume the execution
-    await db.query(
-      `UPDATE executions
-       SET status = 'running', resumed_at = NOW(), resume_token = NULL
-       WHERE id = $1`,
-      [exec.id],
-    );
+    // (status/resume_token already claimed by the compare-and-set above)
 
     emitExecutionEvent(exec.id, 'execution:resume', { waitType: exec.wait_type });
 
@@ -96,11 +96,17 @@ export async function approvalRoutes(fastify) {
     const { token } = req.params;
     const { reason = '' } = req.body ?? {};
 
-    // Look up the waiting execution
+    // Atomic compare-and-set, matching routes/resume.js. This was a SELECT followed by
+    // a separate UPDATE — check-then-act. Two concurrent approve/reject requests (a
+    // double-clicked approval link, a retried delivery) could both pass the SELECT and
+    // both enqueue a resume job, resuming the workflow twice and re-running every node
+    // after the approval. Claiming the token in the same statement that reads it makes
+    // it strictly single-use: exactly one caller gets a row.
     const { rows: execRows } = await db.query(
-      `SELECT id, workflow_id, workspace_id, wait_node_id, wait_type, resume_payload
-       FROM executions
-       WHERE resume_token = $1 AND status = 'waiting'`,
+      `UPDATE executions
+          SET status = 'running', resumed_at = NOW(), resume_token = NULL
+        WHERE resume_token = $1 AND status = 'waiting'
+      RETURNING id, workflow_id, workspace_id, wait_node_id, wait_type, resume_payload`,
       [token],
     );
 
@@ -126,13 +132,8 @@ export async function approvalRoutes(fastify) {
     };
     const pinnedData = { ...savedOutputs, [exec.wait_node_id]: resumeInput };
 
-    // Resume the execution (node will output approved:false)
-    await db.query(
-      `UPDATE executions
-       SET status = 'running', resumed_at = NOW(), resume_token = NULL
-       WHERE id = $1`,
-      [exec.id],
-    );
+    // (status/resume_token already claimed by the compare-and-set above; the node
+    //  will output approved:false)
 
     emitExecutionEvent(exec.id, 'execution:resume', { waitType: exec.wait_type });
 

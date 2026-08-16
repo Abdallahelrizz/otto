@@ -130,7 +130,12 @@ export async function runWorkflow({
       parentNodeId,
     });
 
-  if (existingExecutionId) await startExecution(existingExecutionId);
+  if (existingExecutionId) {
+    const started = await startExecution(existingExecutionId);
+    // WHAT was wrong: a stale or redelivered queue job could replay a terminal
+    // execution and repeat side effects. The guarded transition rejects that replay.
+    if (!started) return { executionId, skipped: true };
+  }
   emitExecutionEvent(executionId, 'execution:start', { workflowId, triggerType, mode: executionMode, nodeId });
 
   return withSpan('workflow.run', {
@@ -154,6 +159,9 @@ export async function runWorkflow({
         workflowId,
         triggerInput: input,
         pinnedData,
+        // Resumed `from_node` runs use a reduced DAG, but expressions in descendants
+        // must still resolve completed outputs by both original node ID and name.
+        nodeNames: new Map(definition.nodes.map(node => [node.id, node.name])),
         recursionDepth,
         vars,
         signal,
@@ -255,8 +263,10 @@ export async function runWorkflow({
 
 async function executeDAG(dag, ctx) {
   const nodePromises = new Map();
-  const outputValues = new Map();
   const pinnedData = ctx.pinnedData && typeof ctx.pinnedData === 'object' ? ctx.pinnedData : {};
+  // WHAT was wrong: outputs outside a resumed `from_node` subgraph were never added
+  // to the expression context, so `{{ nodes.completedBranch.* }}` resolved undefined.
+  const outputValues = new Map(Object.entries(pinnedData));
   const hasPinned = (nodeId) => Object.prototype.hasOwnProperty.call(pinnedData, nodeId);
 
   function getOutput(nodeId) {
@@ -300,7 +310,7 @@ async function executeDAG(dag, ctx) {
         value: await getOutput(dep.source),
       })));
 
-      const nodesCtx = buildNodesContext(dag, outputValues);
+      const nodesCtx = buildNodesContext(dag, outputValues, ctx.nodeNames);
 
       const { input, rawInputs, skipped } = deps.length === 0
         ? { input: ctx.triggerInput, rawInputs: [], skipped: false }
@@ -331,6 +341,10 @@ async function executeDAG(dag, ctx) {
   }
 
   const results = await Promise.allSettled([...dag.nodes.keys()].map(id => getOutput(id)));
+  // WHAT was wrong: a WaitSignal took precedence over an independent branch error,
+  // silently suspending a workflow whose sibling had actually failed.
+  const firstError = results.find(r => r.status === 'rejected' && !(r.reason instanceof WaitSignal));
+  if (firstError) throw firstError.reason;
   const waitHit = results.find(r => r.status === 'rejected' && r.reason instanceof WaitSignal);
   if (waitHit) {
     const signal = waitHit.reason;
@@ -340,8 +354,6 @@ async function executeDAG(dag, ctx) {
     }
     return { waited: true, waitNodeId: signal.nodeId, waitDescriptor: signal.descriptor, nodeOutputs: serialized };
   }
-  const firstError = results.find(r => r.status === 'rejected');
-  if (firstError) throw firstError.reason;
   return nodePromises;
 }
 
@@ -490,6 +502,7 @@ async function runNode(node, input, rawInputs, ctx) {
 
     emitExecutionEvent(executionId, 'node:start', { nodeId: node.id, nodeType: node.type, nodeName: node.name });
 
+    let retryCount = 0;
     try {
       const handler = getNodeHandler(node.type);
       const maxTries = node.retryOnFail
@@ -498,7 +511,6 @@ async function runNode(node, input, rawInputs, ctx) {
       const retryDelayMs = node.retryOnFail
         ? clampInt(node.retryDelayMs ?? node.waitBetweenTries, 1000, 0, 60_000)
         : 0;
-      let retryCount = 0;
       let output;
 
       for (let attempt = 1; attempt <= maxTries; attempt += 1) {
@@ -580,10 +592,9 @@ async function runNode(node, input, rawInputs, ctx) {
     } catch (err) {
       await logPromise.catch(() => null);
 
-      const maxTries = node.retryOnFail
-        ? clampInt(node.maxTries ?? node.retryAttempts, 2, 1, 10)
-        : 1;
-      const retryCount = Math.max(0, maxTries - 1);
+      // WHAT was wrong: WaitSignal was logged as an error after logNodeWait(), so the
+      // persisted wait node contradicted the execution's waiting state.
+      if (err instanceof WaitSignal) throw err;
 
       const secrets = credentialSecrets(credential);
       // continueOnError must NOT swallow a cancellation — otherwise cancelling a
@@ -622,13 +633,14 @@ async function runNode(node, input, rawInputs, ctx) {
   });
 }
 
-function buildNodesContext(dag, outputValues) {
+function buildNodesContext(dag, outputValues, nodeNames = new Map()) {
   const nodesCtx = {};
   for (const [id, value] of outputValues) {
     if (value === SKIP) continue;
     const node = dag.nodes.get(id);
     nodesCtx[id] = value;
-    if (node?.name) nodesCtx[node.name] = value;
+    const nodeName = node?.name ?? nodeNames.get(id);
+    if (nodeName) nodesCtx[nodeName] = value;
   }
   return nodesCtx;
 }

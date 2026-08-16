@@ -67,22 +67,27 @@ export async function createExecution({
 }
 
 export async function startExecution(executionId) {
-  await db.query(
+  const result = await db.query(
     `UPDATE executions
      SET status = 'running',
          started_at = COALESCE(started_at, NOW()),
          completed_at = NULL,
          error = NULL
-     WHERE id = $1`,
+     WHERE id = $1
+       AND status IN ('pending', 'waiting', 'running')`,
     [executionId]
   );
+  // WHAT was wrong: a duplicate/stale job could move a terminal execution back to
+  // running. Return whether the transition was accepted so callers can stop replay.
+  return result.rowCount > 0;
 }
 
 export async function completeExecution(executionId, { status, error } = {}) {
   await db.query(
     `UPDATE executions
      SET status = $2, completed_at = NOW(), error = $3
-     WHERE id = $1`,
+     WHERE id = $1
+       AND status = 'running'`,
     [executionId, status ?? 'success', error ?? null]
   );
 }

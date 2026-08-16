@@ -23,13 +23,16 @@ export function startWorker() {
 
       const { executionId, workflowId, workspaceId, triggerType, mode, nodeId, pinnedData } = job.data;
 
-      // For time-based resume jobs, verify the execution is still waiting (not cancelled)
+      // For resume jobs, accept both time waits (still `waiting`) and HTTP/approval
+      // resumes (atomically claimed as `running` before enqueue).
       if (job.name === 'resume' && executionId) {
         const { rows: statusRows } = await db.query(
           'SELECT status FROM executions WHERE id = $1',
           [executionId]
         );
-        if (!statusRows.length || statusRows[0].status !== 'waiting') return;
+        // WHAT was wrong: token-based resume routes set `running` before enqueueing,
+        // so the worker discarded every valid webhook/form/approval resume job.
+        if (!statusRows.length || !['waiting', 'running'].includes(statusRows[0].status)) return;
       }
       const input = job.data.input?.schedule?.firedAt === '{{ scheduled_at }}'
         ? { ...job.data.input, schedule: { ...job.data.input.schedule, firedAt: new Date().toISOString() } }
