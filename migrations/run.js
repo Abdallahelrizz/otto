@@ -15,6 +15,7 @@
 import { readFileSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { createHash } from 'crypto';
 import { config } from 'dotenv';
 import pg from 'pg';
 
@@ -36,10 +37,14 @@ export async function runMigrations({ pool, log = console.log } = {}) {
   const ownPool = !pool;
   pool = pool ?? new Pool({ connectionString: process.env.DATABASE_URL });
 
-  const client = await pool.connect();
+  let client;
   let applied = 0;
   let skipped = 0;
   try {
+    // A failed initial connection previously bypassed cleanup and left the runner's own
+    // pool retrying/holding the CLI process open instead of exiting after the boot failure.
+    client = await pool.connect();
+
     // Serialize across replicas/processes so two instances don't race the DDL.
     await client.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_KEY]);
 
@@ -47,29 +52,60 @@ export async function runMigrations({ pool, log = console.log } = {}) {
     await client.query(`
       CREATE TABLE IF NOT EXISTS _migrations (
         name       TEXT PRIMARY KEY,
-        applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        checksum   TEXT
       )
     `);
+    await client.query('ALTER TABLE _migrations ADD COLUMN IF NOT EXISTS checksum TEXT');
 
-    const { rows } = await client.query('SELECT name FROM _migrations');
-    const appliedSet = new Set(rows.map((r) => r.name));
+    const { rows } = await client.query('SELECT name, checksum FROM _migrations ORDER BY name');
+    const appliedByName = new Map(rows.map((r) => [r.name, r.checksum]));
 
     const files = readdirSync(__dirname)
       .filter((f) => f.endsWith('.sql'))
       .sort(); // alphabetical = chronological with numbered prefixes
 
+    const fileSet = new Set(files);
+    // Removing an applied file previously went unnoticed, so a fresh database and an
+    // upgraded database could no longer be proven to have the same migration history.
+    const missingAppliedFile = rows.find((row) => !fileSet.has(row.name));
+    if (missingAppliedFile) {
+      throw new Error(`applied migration file is missing: ${missingAppliedFile.name}`);
+    }
+
+    const latestApplied = rows.at(-1)?.name;
+
     for (const file of files) {
-      if (appliedSet.has(file)) {
+      const sql = readFileSync(join(__dirname, file), 'utf8');
+      const checksum = createHash('sha256').update(sql).digest('hex');
+
+      if (appliedByName.has(file)) {
+        const recordedChecksum = appliedByName.get(file);
+        // Applied files were previously trusted by name only, so an edited migration
+        // silently produced different schemas across replicas and fresh installations.
+        if (recordedChecksum && recordedChecksum !== checksum) {
+          throw new Error(`migration ${file} was modified after it was applied`);
+        }
+        // Existing installations predate checksum tracking. Record their current files so
+        // subsequent edits fail closed; historical divergence cannot be reconstructed.
+        if (!recordedChecksum) {
+          await client.query('UPDATE _migrations SET checksum = $2 WHERE name = $1', [file, checksum]);
+        }
         skipped++;
         continue;
       }
 
-      const sql = readFileSync(join(__dirname, file), 'utf8');
+      // A newly introduced migration that sorts before an already-applied migration used
+      // to run late, after schema changes it may have been designed to precede.
+      if (latestApplied && file < latestApplied) {
+        throw new Error(`out-of-order migration ${file} sorts before already-applied ${latestApplied}`);
+      }
+
       log(`  apply ${file} ...`);
       try {
         await client.query('BEGIN');
         await client.query(sql);
-        await client.query('INSERT INTO _migrations (name) VALUES ($1)', [file]);
+        await client.query('INSERT INTO _migrations (name, checksum) VALUES ($1, $2)', [file, checksum]);
         await client.query('COMMIT');
         applied++;
         log(`  done  ${file}`);
@@ -81,8 +117,10 @@ export async function runMigrations({ pool, log = console.log } = {}) {
 
     return { applied, skipped };
   } finally {
-    await client.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK_KEY]).catch(() => {});
-    client.release();
+    if (client) {
+      await client.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK_KEY]).catch(() => {});
+      client.release();
+    }
     if (ownPool) await pool.end();
   }
 }
