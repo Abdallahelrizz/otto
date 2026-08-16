@@ -1,7 +1,20 @@
 import { randomUUID } from 'crypto';
-import { mkdir, readFile, readdir, lstat, writeFile, realpath } from 'fs/promises';
+import { mkdir, open, readdir, lstat, writeFile, realpath } from 'fs/promises';
 import path from 'path';
 import { db } from '../db/client.js';
+
+const DEFAULT_MAX_BINARY_BYTES = 10 * 1024 * 1024;
+
+function maxBinaryBytes() {
+  const configured = Number(process.env.BINARY_DATA_MAX_BYTES ?? DEFAULT_MAX_BINARY_BYTES);
+  // Invalid limits previously made the shared allocation boundary effectively unlimited.
+  return Number.isSafeInteger(configured) && configured > 0 ? configured : DEFAULT_MAX_BINARY_BYTES;
+}
+
+function assertBinarySize(size) {
+  const limit = maxBinaryBytes();
+  if (size > limit) throw new Error(`Binary data exceeds the ${limit} byte limit`);
+}
 
 // Defense-in-depth against symlink escapes: resolve real path and re-check it
 // is still inside the workspace root. Tolerates non-existent files (write path).
@@ -92,7 +105,23 @@ function fileEntry(workspaceRoot, filePath, stat, type) {
 export async function readWorkspaceFile(workspaceId, requestedPath) {
   const { filePath, workspaceRoot } = resolveWorkspaceFilePath(workspaceId, requestedPath);
   await assertRealInsideRoot(workspaceRoot, filePath);
-  const data = await readFile(filePath);
+  const handle = await open(filePath, 'r');
+  let data;
+  try {
+    const stat = await handle.stat();
+    // A plain readFile allocated the entire file before any caller could reject it.
+    assertBinarySize(stat.size);
+    data = Buffer.allocUnsafe(stat.size);
+    let offset = 0;
+    while (offset < stat.size) {
+      const { bytesRead } = await handle.read(data, offset, stat.size - offset, offset);
+      if (bytesRead === 0) break;
+      offset += bytesRead;
+    }
+    data = data.subarray(0, offset);
+  } finally {
+    await handle.close();
+  }
   return {
     buffer: data,
     fileName: path.basename(filePath),
@@ -106,6 +135,8 @@ export async function writeWorkspaceFile(workspaceId, requestedPath, buffer) {
   if (filePath === workspaceRoot) throw new Error('Write file: path must include a file name');
   await mkdir(path.dirname(filePath), { recursive: true });
   await assertRealInsideRoot(workspaceRoot, filePath);
+  // Writes previously allowed arbitrarily large buffers into workspace storage.
+  assertBinarySize(buffer?.length ?? 0);
   await writeFile(filePath, buffer);
   return { filePath, workspaceRoot };
 }
@@ -185,6 +216,8 @@ export async function listWorkspaceFiles(workspaceId, options = {}) {
 export async function saveBinaryData({ workspaceId, fileName, mimeType, buffer, metadata = {} }) {
   if (!workspaceId) throw new Error('Binary data: workspaceId is required');
   if (!Buffer.isBuffer(buffer)) throw new Error('Binary data: buffer is required');
+  // Every ingestion path converges here; reject oversized S3/file payloads before DB insertion.
+  assertBinarySize(buffer.length);
 
   const id = randomUUID();
   const safeName = fileName || `${id}.bin`;
@@ -204,8 +237,9 @@ export async function getBinaryData(workspaceId, id) {
   const { rows } = await db.query(
     `SELECT id, file_name, mime_type, size_bytes, data, metadata, created_at
      FROM binary_data
-     WHERE id = $1 AND workspace_id = $2`,
-    [id, workspaceId]
+     WHERE id = $1 AND workspace_id = $2 AND octet_length(data) <= $3`,
+    // Existing oversized rows previously bypassed the new ingestion limit on retrieval.
+    [id, workspaceId, maxBinaryBytes()]
   );
   return rows[0] ?? null;
 }
@@ -279,4 +313,44 @@ export function bufferFromValue(value, encoding = 'utf8') {
   if (value == null) return Buffer.alloc(0);
   if (typeof value === 'string') return Buffer.from(value, encoding);
   return Buffer.from(JSON.stringify(value, null, 2), 'utf8');
+}
+
+/**
+ * Read a fetch Response body into a Buffer, aborting once the shared binary ceiling
+ * is exceeded.
+ *
+ * `saveBinaryData` enforces the limit, but by then the whole payload is already in
+ * memory: `await response.arrayBuffer()` allocates the full body before anything can
+ * check it, so a large S3 object could exhaust memory before the guard ever ran. This
+ * counts bytes while streaming and cancels the moment the ceiling is passed, so the
+ * allocation itself stays bounded.
+ *
+ * Lives here rather than in a node so every caller shares one limit instead of each
+ * inventing its own.
+ */
+export async function readResponseWithinBinaryCap(response, label = 'Binary download') {
+  const limit = maxBinaryBytes();
+
+  const declared = Number(response.headers?.get?.('content-length'));
+  if (Number.isFinite(declared) && declared > limit) {
+    throw new Error(`${label} exceeds the ${limit} byte limit`);
+  }
+  if (!response.body) return Buffer.alloc(0);
+
+  const reader = response.body.getReader();
+  const chunks = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > limit) {
+      // Content-Length is optional and sender-controlled, so the declared check above
+      // is bypassable — the streamed count is the real guard.
+      await reader.cancel();
+      throw new Error(`${label} exceeds the ${limit} byte limit`);
+    }
+    chunks.push(Buffer.from(value));
+  }
+  return Buffer.concat(chunks);
 }

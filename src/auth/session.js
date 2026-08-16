@@ -21,7 +21,12 @@ function parseCookies(header = '') {
       .map((part) => {
         const idx = part.indexOf('=');
         if (idx === -1) return [part, ''];
-        return [part.slice(0, idx), decodeURIComponent(part.slice(idx + 1))];
+        try {
+          return [part.slice(0, idx), decodeURIComponent(part.slice(idx + 1))];
+        } catch {
+          // A malformed percent escape previously turned an unauthenticated cookie into a 500.
+          return [part.slice(0, idx), ''];
+        }
       })
   );
 }
@@ -59,10 +64,14 @@ export async function hashPassword(password) {
 }
 
 export async function verifyPassword(password, storedHash) {
-  if (!storedHash || !storedHash.startsWith('scrypt$')) return false;
-  const [, saltB64, hashB64] = storedHash.split('$');
+  if (typeof storedHash !== 'string' || !storedHash.startsWith('scrypt$')) return false;
+  const parts = storedHash.split('$');
+  if (parts.length !== 3 || !parts[1] || !parts[2]) return false;
+  const [, saltB64, hashB64] = parts;
   const salt = Buffer.from(saltB64, 'base64url');
   const expected = Buffer.from(hashB64, 'base64url');
+  // Malformed hashes previously controlled scrypt's output allocation and could throw.
+  if (salt.length !== 16 || expected.length !== 64) return false;
   const actual = await scrypt(password, salt, expected.length);
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
@@ -107,7 +116,8 @@ export async function getAuthContext(req) {
      FROM sessions s
      JOIN users u ON u.id = s.user_id
      JOIN workspaces w ON w.id = s.workspace_id
-     LEFT JOIN workspace_members wm ON wm.workspace_id = s.workspace_id AND wm.user_id = s.user_id
+     -- A removed member's surviving session previously fell back to owner privileges.
+     JOIN workspace_members wm ON wm.workspace_id = s.workspace_id AND wm.user_id = s.user_id
      WHERE s.token_hash = $1 AND s.expires_at > NOW()`,
     [hashToken(token)]
   );
@@ -121,7 +131,7 @@ export async function getAuthContext(req) {
     sessionId: rows[0].session_id,
     userId: rows[0].user_id,
     workspaceId: rows[0].workspace_id,
-    role: rows[0].member_role ?? 'owner',
+    role: rows[0].member_role,
     user: { id: rows[0].user_id, email: rows[0].email, name: rows[0].name },
     workspace: { id: rows[0].workspace_id, name: rows[0].workspace_name, plan: rows[0].plan, ottobot_settings: rows[0].ottobot_settings },
   };

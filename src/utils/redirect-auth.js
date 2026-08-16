@@ -10,7 +10,8 @@ const AUTH_HEADERS = new Set(['authorization', 'proxy-authorization', 'cookie'])
 export function stripAuthAcrossHost(options, fromUrl, toUrl) {
   let sameHost;
   try {
-    sameHost = new URL(toUrl, fromUrl).host === new URL(fromUrl).host;
+    // Host-only comparison retained credentials on HTTPS-to-HTTP downgrade redirects.
+    sameHost = new URL(toUrl, fromUrl).origin === new URL(fromUrl).origin;
   } catch {
     sameHost = false; // unparseable target → treat as cross-host (safer)
   }

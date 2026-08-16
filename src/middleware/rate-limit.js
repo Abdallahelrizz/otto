@@ -1,4 +1,6 @@
 const store = new Map();
+const configuredStoreLimit = Number(process.env.RATE_LIMIT_MAX_KEYS ?? 100_000);
+const MAX_STORE_KEYS = Number.isSafeInteger(configuredStoreLimit) && configuredStoreLimit > 0 ? configuredStoreLimit : 100_000;
 
 function nowMs() {
   return Date.now();
@@ -6,19 +8,29 @@ function nowMs() {
 
 export function checkRateLimit(key, { limit, windowMs }) {
   const current = nowMs();
+  const safeLimit = Number(limit);
+  const safeWindowMs = Number(windowMs);
+  // NaN/zero configuration previously made comparisons false and failed open.
+  if (!Number.isSafeInteger(safeLimit) || safeLimit <= 0 || !Number.isFinite(safeWindowMs) || safeWindowMs <= 0) {
+    return { allowed: false, remaining: 0, resetAt: current + 60_000 };
+  }
   const existing = store.get(key);
 
   if (!existing || existing.resetAt <= current) {
-    store.set(key, { count: 1, resetAt: current + windowMs });
-    return { allowed: true, remaining: limit - 1, resetAt: current + windowMs };
+    if (!existing && store.size >= MAX_STORE_KEYS) {
+      // Attacker-controlled key cardinality previously grew the Map without a hard bound.
+      return { allowed: false, remaining: 0, resetAt: current + safeWindowMs };
+    }
+    store.set(key, { count: 1, resetAt: current + safeWindowMs });
+    return { allowed: true, remaining: safeLimit - 1, resetAt: current + safeWindowMs };
   }
 
   existing.count += 1;
-  if (existing.count > limit) {
+  if (existing.count > safeLimit) {
     return { allowed: false, remaining: 0, resetAt: existing.resetAt };
   }
 
-  return { allowed: true, remaining: limit - existing.count, resetAt: existing.resetAt };
+  return { allowed: true, remaining: safeLimit - existing.count, resetAt: existing.resetAt };
 }
 
 export function rateLimitReply(reply, result) {

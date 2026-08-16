@@ -1,4 +1,5 @@
 import { db } from '../db/client.js';
+import { redactObject } from './redact.js';
 
 /**
  * Write an audit event to audit_log.
@@ -26,7 +27,8 @@ export async function auditLog(opts) {
         opts.action,
         opts.resourceType ?? null,
         opts.resourceId   ?? null,
-        JSON.stringify(opts.metadata ?? {}),
+        // Arbitrary audit metadata previously persisted bearer tokens and URL secrets verbatim.
+        JSON.stringify(redactObject(opts.metadata ?? {})),
         opts.ip        ?? null,
         opts.userAgent ?? null,
       ]

@@ -6,6 +6,7 @@ import {
   getBinaryData,
   getBinaryRef,
   saveBinaryData,
+  readResponseWithinBinaryCap,
 } from '../utils/binary-data.js';
 import { getByPath } from '../utils/path.js';
 import { safeFetch } from '../utils/safe-fetch.js';
@@ -282,8 +283,10 @@ export async function s3Object({ input, config, credential, workspaceId, signal 
     const headers = signS3Request({ method: 'GET', url, credentials });
     const response = await safeFetch(url, { method: 'GET', headers, signal });
     await assertOk(response, 'get');
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    // Stream with a byte ceiling instead of `response.arrayBuffer()`. The latter
+    // allocates the ENTIRE object before saveBinaryData's limit can reject it, so a
+    // large S3 object exhausted memory before the guard ever ran.
+    const buffer = await readResponseWithinBinaryCap(response, 'S3 download');
     const binaryProperty = config.binaryProperty ?? 'data';
     const fileName = config.fileName || path.basename(String(config.key));
     const ref = await saveBinaryData({

@@ -1,9 +1,7 @@
 const SENSITIVE_KEYS = new Set([
-  'password', 'token', 'apiKey', 'api_key', 'secret', 'secretKey', 'secret_key',
-  'accessToken', 'access_token', 'refreshToken', 'refresh_token',
-  'privateKey', 'private_key', 'clientSecret', 'client_secret',
-  'webhookUrl', 'webhook_url', 'botToken', 'bot_token',
-  'connectionString', 'connection_string', 'Authorization', 'authorization',
+  'password', 'token', 'apikey', 'secret', 'secretkey',
+  'accesstoken', 'refreshtoken', 'privatekey', 'clientsecret',
+  'webhookurl', 'bottoken', 'connectionstring', 'authorization',
 ]);
 
 const REDACTED = '[REDACTED]';
@@ -20,6 +18,8 @@ const SECRET_PATTERNS = [
   /\bgh[pousr]_[A-Za-z0-9]{20,}/g,                    // GitHub
   /\bAKIA[0-9A-Z]{16}/g,                              // AWS access key id
   /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{6,}/g, // JWT
+  /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g,
+  /([?&](?:access_token|api_key|apikey|auth|key|secret|token)=)[^&#\s]*/gi,
 ];
 
 export function redactString(str, extraSecrets = []) {
@@ -39,25 +39,53 @@ export function redactString(str, extraSecrets = []) {
 export function credentialSecrets(credential) {
   const out = [];
   const data = credential?.data;
-  if (data && typeof data === 'object') {
-    for (const v of Object.values(data)) {
-      if (typeof v === 'string' && v.length >= 6) out.push(v);
+  const seen = new WeakSet();
+  function collect(value) {
+    if (typeof value === 'string') {
+      if (value.length >= 6) out.push(value);
+      return;
     }
+    if (!value || typeof value !== 'object' || seen.has(value)) return;
+    seen.add(value);
+    // Nested credential objects, arrays, and Maps previously escaped exact-value redaction.
+    const values = value instanceof Map ? value.values() : Object.values(value);
+    for (const nested of values) collect(nested);
   }
+  collect(data);
   return out;
 }
 
-export function redactObject(obj, depth = 0) {
-  if (depth > 8) return obj;
+export function redactObject(obj, depth = 0, seen = new WeakMap()) {
+  // Primitive string values previously bypassed the free-text scrubber entirely.
+  if (typeof obj === 'string') return redactString(obj);
   if (obj == null || typeof obj !== 'object') return obj;
-  if (Array.isArray(obj)) return obj.map(item => redactObject(item, depth + 1));
+  if (seen.has(obj)) return seen.get(obj);
+  if (Array.isArray(obj)) {
+    const result = [];
+    seen.set(obj, result);
+    for (const item of obj) result.push(redactObject(item, depth + 1, seen));
+    return result;
+  }
+  if (obj instanceof Map) {
+    const result = new Map();
+    seen.set(obj, result);
+    for (const [key, value] of obj) {
+      const normalized = String(key).toLowerCase().replace(/[_-]/g, '');
+      result.set(key, SENSITIVE_KEYS.has(normalized) ? (value ? REDACTED : value) : redactObject(value, depth + 1, seen));
+    }
+    return result;
+  }
 
   const result = {};
+  seen.set(obj, result);
   for (const [key, value] of Object.entries(obj)) {
-    if (SENSITIVE_KEYS.has(key)) {
+    // Exact matching was case-sensitive and missed common separator variants.
+    const normalized = key.toLowerCase().replace(/[_-]/g, '');
+    if (SENSITIVE_KEYS.has(normalized)) {
       result[key] = value ? REDACTED : value;
     } else {
-      result[key] = redactObject(value, depth + 1);
+      // The old depth-8 cutoff returned the original secret-bearing subtree unchanged.
+      result[key] = redactObject(value, depth + 1, seen);
     }
   }
   return result;

@@ -90,7 +90,7 @@ const SCOPE_MAP = [
   [/^\/api\/v1\/executions\/[^/]+\/stream$/, 'GET',   'executions:read'],
   [/^\/api\/v1\/executions\/[^/]+$/, 'GET',           'executions:read'],
   [/^\/api\/v1\/executions$/, 'GET',                  'executions:read'],
-  [/^\/api\/v1\/executions/, 'DELETE',                'executions:write'],
+  [/^\/api\/v1\/executions(?:\/|$)/, 'DELETE',       'executions:write'],
 
   // Execute workflow
   [/^\/api\/v1\/execute$/, 'POST',                    'workflows:execute'],
@@ -110,7 +110,7 @@ const SCOPE_MAP = [
   [/^\/api\/v1\/workflows\/[^/]+$/, 'DELETE',         'workflows:write'],
 
   // Nodes registry
-  [/^\/api\/v1\/nodes/, 'GET',                        'nodes:read'],
+  [/^\/api\/v1\/nodes(?:\/|$)/, 'GET',               'nodes:read'],
 
   // Credentials — schema and test before general CRUD
   [/^\/api\/v1\/credentials\/schema\//, 'GET',        'credentials:schema:read'],
@@ -121,47 +121,47 @@ const SCOPE_MAP = [
   [/^\/api\/v1\/credentials\/[^/]+$/, ['PUT', 'DELETE'], 'credentials:write'],
 
   // Tags
-  [/^\/api\/v1\/tags/, 'GET',                         'tags:read'],
-  [/^\/api\/v1\/tags/, ['POST', 'PUT', 'DELETE'],     'tags:write'],
+  [/^\/api\/v1\/tags(?:\/|$)/, 'GET',                'tags:read'],
+  [/^\/api\/v1\/tags(?:\/|$)/, ['POST', 'PUT', 'DELETE'], 'tags:write'],
 
   // Variables
-  [/^\/api\/v1\/variables/, 'GET',                    'variables:read'],
-  [/^\/api\/v1\/variables/, ['POST', 'PUT', 'DELETE'], 'variables:write'],
+  [/^\/api\/v1\/variables(?:\/|$)/, 'GET',           'variables:read'],
+  [/^\/api\/v1\/variables(?:\/|$)/, ['POST', 'PUT', 'DELETE'], 'variables:write'],
 
   // Integrations
-  [/^\/api\/v1\/integrations/, 'GET',                 'integrations:read'],
-  [/^\/api\/v1\/integrations/, ['POST', 'DELETE'],    'integrations:write'],
+  [/^\/api\/v1\/integrations(?:\/|$)/, 'GET',        'integrations:read'],
+  [/^\/api\/v1\/integrations(?:\/|$)/, ['POST', 'DELETE'], 'integrations:write'],
 
   // Observability
-  [/^\/api\/v1\/observability/, 'GET',                'observability:read'],
+  [/^\/api\/v1\/observability(?:\/|$)/, 'GET',       'observability:read'],
 
   // Usage / spend — reads share the observability scope; writes are session-only (enforced in-route)
-  [/^\/api\/v1\/usage/, 'GET',                        'observability:read'],
+  [/^\/api\/v1\/usage(?:\/|$)/, 'GET',               'observability:read'],
 
   // Audit
-  [/^\/api\/v1\/audit/, 'GET',                        'audit:read'],
+  [/^\/api\/v1\/audit(?:\/|$)/, 'GET',               'audit:read'],
 
   // Memory
-  [/^\/api\/v1\/memory/, 'GET',                       'memory:read'],
-  [/^\/api\/v1\/memory/, ['POST', 'PUT', 'DELETE'],   'memory:write'],
+  [/^\/api\/v1\/memory(?:\/|$)/, 'GET',              'memory:read'],
+  [/^\/api\/v1\/memory(?:\/|$)/, ['POST', 'PUT', 'DELETE'], 'memory:write'],
 
   // Binary data
-  [/^\/api\/v1\/binary/, 'GET',                       'binary_data:read'],
-  [/^\/api\/v1\/binary/, 'POST',                      'binary_data:write'],
+  [/^\/api\/v1\/binary(?:\/|$)/, 'GET',              'binary_data:read'],
+  [/^\/api\/v1\/binary(?:\/|$)/, ['POST', 'PUT', 'PATCH', 'DELETE'], 'binary_data:write'],
 
   // Approvals
-  [/^\/api\/v1\/approvals/, 'GET',                    'approvals:read'],
-  [/^\/api\/v1\/approvals/, ['POST', 'PUT', 'PATCH'], 'approvals:write'],
+  [/^\/api\/v1\/approvals(?:\/|$)/, 'GET',           'approvals:read'],
+  [/^\/api\/v1\/approvals(?:\/|$)/, ['POST', 'PUT', 'PATCH'], 'approvals:write'],
 
   // Evaluations
-  [/^\/api\/v1\/evaluations/, 'GET',                  'evaluations:read'],
-  [/^\/api\/v1\/evaluations/, ['POST', 'PUT', 'DELETE'], 'evaluations:write'],
+  [/^\/api\/v1\/evaluations(?:\/|$)/, 'GET',         'evaluations:read'],
+  [/^\/api\/v1\/evaluations(?:\/|$)/, ['POST', 'PUT', 'DELETE'], 'evaluations:write'],
 
   // Templates
-  [/^\/api\/v1\/templates/, 'GET',                    'templates:read'],
+  [/^\/api\/v1\/templates(?:\/|$)/, 'GET',           'templates:read'],
 
   // External secrets
-  [/^\/api\/v1\/external-secrets/, 'GET',             'external_secrets:read'],
+  [/^\/api\/v1\/external-secrets(?:\/|$)/, 'GET',    'external_secrets:read'],
 
   // Expression preview
   [/^\/api\/v1\/expressions\/preview$/, 'POST',       'expressions:preview'],
@@ -171,15 +171,15 @@ const SCOPE_MAP = [
   [/^\/api\/v1\/ottobot\/credentials$/, 'GET',        'ottobot:invoke'],
 
   // Import / Export
-  [/^\/api\/v1\/import/, 'POST',                      'import:write'],
-  [/^\/api\/v1\/export/, 'GET',                       'export:read'],
+  [/^\/api\/v1\/import(?:\/|$)/, 'POST',             'import:write'],
+  [/^\/api\/v1\/export(?:\/|$)/, 'GET',              'export:read'],
 
   // MCP
-  [/^\/api\/v1\/mcp/, null,                           'mcp:invoke'],
+  [/^\/api\/v1\/mcp(?:\/|$)/, null,                  'mcp:invoke'],
 
   // Workspace members
-  [/^\/api\/v1\/workspace\/members/, 'GET',           'workspace:members:read'],
-  [/^\/api\/v1\/workspace\/members/, ['POST', 'PUT', 'DELETE', 'PATCH'], 'workspace:members:write'],
+  [/^\/api\/v1\/workspace\/members(?:\/|$)/, 'GET',  'workspace:members:read'],
+  [/^\/api\/v1\/workspace\/members(?:\/|$)/, ['POST', 'PUT', 'DELETE', 'PATCH'], 'workspace:members:write'],
 ];
 
 export function resolveScope(pathname, method) {
@@ -192,5 +192,7 @@ export function resolveScope(pathname, method) {
       if (methods === method) return scope;
     }
   }
-  return null; // unmatched path — no scope required (e.g. health, auth)
+  // Authenticated /api routes previously failed open whenever a new route was omitted above.
+  if (pathname === '/api/v1' || pathname.startsWith('/api/v1/')) return '__unmapped_api_scope__';
+  return null; // non-API paths (e.g. health) do not use API-key scopes
 }
