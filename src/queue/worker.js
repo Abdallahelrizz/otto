@@ -48,17 +48,45 @@ export function startWorker() {
       const parentCtx = job.data?.traceparent
         ? propagation.extract(context.active(), { traceparent: job.data.traceparent })
         : context.active();
-      await context.with(parentCtx, () => runWorkflow({
-        executionId,
-        workflowId,
-        workspaceId,
-        definition,
-        input,
-        triggerType,
-        mode,
-        nodeId,
-        pinnedData,
-      }));
+      try {
+        await context.with(parentCtx, () => runWorkflow({
+          executionId,
+          workflowId,
+          workspaceId,
+          definition,
+          input,
+          triggerType,
+          mode,
+          nodeId,
+          pinnedData,
+        }));
+      } catch (err) {
+        // A workflow that FAILED is not a job that needs retrying.
+        //
+        // The queue runs with attempts: 3, so rethrowing here made BullMQ replay the
+        // ENTIRE workflow from node 1 — re-executing every node that had already
+        // succeeded. A workflow that sends an email at node 2 and fails at node 5 sent
+        // that email three times. Node-level retry (`retryOnFail`) is the correct
+        // granularity for business-logic failures and already exists.
+        //
+        // So: if the execution reached a terminal state, the outcome is recorded and the
+        // job is done — swallow, and let the execution row carry the failure. Only
+        // rethrow when nothing was recorded (the job died before/while starting, e.g. the
+        // DB was unreachable), where a retry is safe because no nodes ran.
+        if (!executionId) throw err;
+        let recorded = null;
+        try {
+          const { rows } = await db.query('SELECT status FROM executions WHERE id = $1', [executionId]);
+          recorded = rows[0]?.status ?? null;
+        } catch {
+          throw err; // can't tell — fail loudly rather than silently drop it
+        }
+        if (['success', 'error', 'cancelled', 'waiting'].includes(recorded)) {
+          console.error(`[worker] execution ${executionId} finished as "${recorded}": ${err?.message ?? err}`);
+          return; // outcome persisted; replaying would duplicate side effects
+        }
+        throw err;
+      }
     },
     {
       connection: redis,

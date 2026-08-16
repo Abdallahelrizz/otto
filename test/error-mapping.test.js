@@ -127,3 +127,31 @@ test('network failures name the host so they stay diagnosable', async () => {
     },
   );
 });
+
+// The queue runs with attempts: 3. Rethrowing a workflow failure from the worker made
+// BullMQ replay the ENTIRE workflow from node 1, re-running every node that had already
+// succeeded — a workflow that emails at node 2 and fails at node 5 sent that email three
+// times. Node-level retry (retryOnFail) is the right granularity for business-logic
+// failures. This guards the fix, because the consequence is duplicate side effects.
+test('worker does not replay a workflow that reached a terminal state', async () => {
+  const src = await readFile(path.join(root, 'src/queue/worker.js'), 'utf-8');
+  assert.ok(
+    /catch\s*\(\s*err\s*\)/.test(src),
+    'worker must catch runWorkflow failures, or BullMQ replays the whole workflow',
+  );
+  for (const status of ['success', 'error', 'cancelled', 'waiting']) {
+    assert.ok(
+      src.includes(`'${status}'`),
+      `terminal status "${status}" must suppress the job-level retry`,
+    );
+  }
+  assert.ok(
+    src.includes('SELECT status FROM executions'),
+    'the replay decision must be based on the recorded execution status',
+  );
+});
+
+test('queue still retries, so the guard is load-bearing not decorative', async () => {
+  const src = await readFile(path.join(root, 'src/queue/client.js'), 'utf-8');
+  assert.match(src, /attempts:\s*[2-9]/, 'attempts > 1 is what makes the replay guard necessary');
+});
