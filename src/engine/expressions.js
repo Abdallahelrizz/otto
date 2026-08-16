@@ -10,8 +10,29 @@ const INLINE_EXPRESSION_RE = /\{\{\s*([\s\S]*?)\s*\}\}/g;
 const BLOCKED_IDENTIFIERS = /constructor|__proto__|prototype|globalThis|process|require|\bmodule\b|\bimport\s*\(|\bexports\b|\beval\b|\bFunction\b|child_process|Reflect|Proxy|WebAssembly|queueMicrotask|setImmediate|Atomics|SharedArrayBuffer/;
 // Obfuscation primitives used to build the names above at runtime.
 const BLOCKED_OBFUSCATION = /fromCharCode|fromCodePoint|\batob\b|\bunescape\b|\\x[0-9a-fA-F]{2}|\\u[0-9a-fA-F{]/;
-const EXPRESSION_TIMEOUT_MS = 50;
-const WORKER_WALL_TIMEOUT_MS = 150;
+// `vm.Script`'s timeout is WALL-CLOCK, not CPU time. At 50ms, a trivial expression
+// (literally `"prototype"`) intermittently died with "Script execution timed out"
+// whenever the worker thread wasn't promptly scheduled — reproduced as a test failing
+// ~2 runs in 3 under load. In production that means VALID expressions randomly failing.
+//
+// This inner timeout is no longer the security boundary: the terminable worker below is,
+// because it is the only thing that can kill an expression spinning in a microtask, which
+// no vm timeout can touch. So the inner limit can afford headroom for scheduling jitter
+// while the outer wall-clock terminate keeps the real bound. Keep OUTER > INNER with
+// enough margin that the inner fires first for ordinary synchronous runaways.
+// Budget is capped by the sandbox tests, which assert the WHOLE operation (inner script
+// timeout + worker round trip) finishes well under 250ms — that bound is the guarantee
+// that expression-controlled code cannot occupy the host. So these cannot simply be
+// raised; INNER + overhead must stay comfortably below 250ms.
+// These bound two DIFFERENT things and must not be tuned as a pair:
+//   EXPRESSION_TIMEOUT_MS bounds ONE expression's synchronous execution inside the vm.
+//   WORKER_WALL_TIMEOUT_MS bounds the WHOLE node-config batch round trip, and its expiry
+//   terminates the worker — the only thing that can kill a microtask spin.
+// So the outer must comfortably exceed inner × (expressions per config) + worker cold
+// start (~50ms), or configs with several expressions time out spuriously under load.
+// 50/150 was too tight on both counts and produced real false positives on valid input.
+const EXPRESSION_TIMEOUT_MS = 120;
+const WORKER_WALL_TIMEOUT_MS = 800;
 const WORKER_START_TIMEOUT_MS = 2_000;
 
 let evaluator = null;

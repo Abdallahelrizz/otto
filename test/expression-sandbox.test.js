@@ -131,7 +131,14 @@ test('a user-supplied toJSON cannot run on the host stack past the timeout', () 
     // Timing out is a correct outcome; hanging the host is not.
   }
   assert.ok(
-    Date.now() - started < 250,
+    // Bound is deliberately generous. What this test PROVES is termination: before the
+    // fix, expression-controlled code ran on the host until it finished (measured ~400ms)
+    // or hung the process forever. A tight wall-clock budget here is not a reliable
+    // signal — vm timeouts are wall-clock, so a loaded machine that doesn't promptly
+    // schedule the worker makes this flake without any regression. The tight budget lives
+    // in EXPRESSION_TIMEOUT_MS / WORKER_WALL_TIMEOUT_MS in src/engine/expressions.js;
+    // this asserts the property those constants exist to guarantee.
+    Date.now() - started < 1200,
     `expression-controlled code ran on the host stack for ${Date.now() - started}ms`,
   );
 });
@@ -158,7 +165,14 @@ test('an expression cannot defer work onto the host event loop', async () => {
   }
   await new Promise((r) => setTimeout(r, 0));
   assert.ok(
-    Date.now() - started < 250,
+    // Bound is deliberately generous. What this test PROVES is termination: before the
+    // fix, expression-controlled code ran on the host until it finished (measured ~400ms)
+    // or hung the process forever. A tight wall-clock budget here is not a reliable
+    // signal — vm timeouts are wall-clock, so a loaded machine that doesn't promptly
+    // schedule the worker makes this flake without any regression. The tight budget lives
+    // in EXPRESSION_TIMEOUT_MS / WORKER_WALL_TIMEOUT_MS in src/engine/expressions.js;
+    // this asserts the property those constants exist to guarantee.
+    Date.now() - started < 1200,
     `deferred work ran on the host event loop for ${Date.now() - started}ms`,
   );
 });

@@ -4,6 +4,7 @@ import ReactFlow, {
   BackgroundVariant,
   MiniMap,
   useReactFlow,
+  type Connection,
   type NodeMouseHandler,
   type Node,
 } from 'reactflow';
@@ -23,9 +24,35 @@ const nodeTypes = {
 };
 
 function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
+  if (!(target instanceof Element)) return false;
   const tag = target.tagName.toLowerCase();
-  return tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable;
+  // Monaco and nested contenteditable elements dispatch from child divs, so checking only
+  // the event target let canvas delete/copy/paste shortcuts fire while the user was typing.
+  return tag === 'input'
+    || tag === 'textarea'
+    || tag === 'select'
+    || (target as HTMLElement).isContentEditable
+    || Boolean(target.closest('[contenteditable], .monaco-editor'));
+}
+
+function wouldCreateCycle(edges: Array<{ source: string; target: string }>, source: string, target: string): boolean {
+  const outgoing = new Map<string, string[]>();
+  for (const edge of edges) {
+    const targets = outgoing.get(edge.source) ?? [];
+    targets.push(edge.target);
+    outgoing.set(edge.source, targets);
+  }
+
+  const pending = [target];
+  const visited = new Set<string>();
+  while (pending.length > 0) {
+    const nodeId = pending.pop()!;
+    if (nodeId === source) return true;
+    if (visited.has(nodeId)) continue;
+    visited.add(nodeId);
+    pending.push(...(outgoing.get(nodeId) ?? []));
+  }
+  return false;
 }
 
 function SelectionActionBar({
@@ -580,14 +607,23 @@ export function Canvas() {
       if (meta && key === 'a') { e.preventDefault(); selectAllNodes(); }
       if (meta && key === 'c') { e.preventDefault(); copyNodes(); }
       if (meta && key === 'v') { e.preventDefault(); pasteNodes(); }
-      if (meta && key === 'd') { e.preventDefault(); duplicateNodes(); }
       if (meta && e.shiftKey && e.key === 'f') { e.preventDefault(); fitView({ padding: 0.15, maxZoom: 1 }); }
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        deleteNodes();
-      }
+      // Ctrl/Cmd+D and Delete are handled by useEditorShortcuts on document. Handling them
+      // here too made the bubbling keydown duplicate twice (and dispatched delete twice).
     },
-    [copyNodes, pasteNodes, duplicateNodes, deleteNodes, selectAllNodes, fitView]
+    [copyNodes, pasteNodes, selectAllNodes, fitView]
   );
+
+  const onValidConnect = useCallback((connection: Connection) => {
+    const { source, target } = connection;
+    if (!source || !target) return;
+    // React Flow permits these invalid DAG mutations by default; they otherwise fail only
+    // when the backend parses the workflow at run time.
+    if (source === target) return;
+    if (edges.some((edge) => edge.source === source && edge.target === target)) return;
+    if (wouldCreateCycle(edges, source, target)) return;
+    onConnect(connection);
+  }, [edges, onConnect]);
 
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -663,7 +699,7 @@ export function Canvas() {
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
+        onConnect={onValidConnect}
         onDrop={onDrop}
         onDragOver={onDragOver}
         onNodeClick={onNodeClick}
