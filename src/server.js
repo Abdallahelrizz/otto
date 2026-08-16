@@ -3,7 +3,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import { csrfPlugin } from './middleware/csrf.js';
-import { readFile } from 'fs/promises';
+import { readFile, realpath } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -59,15 +59,14 @@ for (const key of REQUIRED_ENV) {
   }
 }
 
-// Reflecting an arbitrary origin while sending credentials is a CSRF-grade hole.
-// In production, refuse to reflect: an unset allowlist means same-origin only.
-// In dev we still reflect for convenience.
-const isProduction = process.env.NODE_ENV === 'production';
+// An unset allowlist previously reflected every origin outside production while also
+// allowing credentials, so any website visited by a developer could read local Otto data.
+// Vite proxies Otto in development, so same-origin-only is safe in every environment.
 const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim())
-  : (isProduction ? false : true);
-if (isProduction && allowedOrigins === false) {
-  console.warn('[otto] ALLOWED_ORIGINS is not set in production — CORS is restricted to same-origin. Set ALLOWED_ORIGINS for cross-origin canvas/API access.');
+  ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)
+  : false;
+if (allowedOrigins === false) {
+  console.warn('[otto] ALLOWED_ORIGINS is not set — CORS is restricted to same-origin. Set ALLOWED_ORIGINS for cross-origin canvas/API access.');
 }
 
 const fastify = Fastify({ logger: true, bodyLimit: 10 * 1024 * 1024 });
@@ -283,13 +282,16 @@ fastify.get('/health', async () => ({ status: 'ok', version: '0.1.0' }));
 fastify.get('/ready', async (req, reply) => {
   const checks = { db: 'ok', redis: 'ok' };
   let healthy = true;
+  let client;
   try {
-    const client = await db.pool.connect();
+    client = await db.pool.connect();
     await client.query('SELECT 1');
-    client.release();
   } catch {
     checks.db = 'unavailable';
     healthy = false;
+  } finally {
+    // A failed SELECT previously skipped release(), permanently consuming a pool slot.
+    client?.release();
   }
   try {
     await redis.ping();
@@ -351,10 +353,12 @@ fastify.get('/metrics', async (req, reply) => {
     }
     reply.header('Content-Type', 'text/plain; version=0.0.4').send(lines.join('\n') + '\n');
   } catch (err) {
+    req.log.error({ err }, 'metrics query failed');
     reply
       .status(503)
       .header('Content-Type', 'text/plain; version=0.0.4')
-      .send(`# ERROR db unavailable: ${err.message}\n`);
+      // Raw driver messages previously exposed database/schema details to this public endpoint.
+      .send('# ERROR database unavailable\n');
   }
 });
 
@@ -401,7 +405,26 @@ fastify.get('/*', async (req, reply) => {
   // vs /app/public — can't slip through.
   const withinPublic = filePath === publicDir || filePath.startsWith(publicDir + path.sep);
   const safePath = withinPublic ? filePath : path.join(publicDir, 'index.html');
-  const finalPath = existsSync(safePath) ? safePath : path.join(publicDir, 'index.html');
+  let finalPath = existsSync(safePath) ? safePath : path.join(publicDir, 'index.html');
+  try {
+    const [canonicalPublicDir, canonicalFile, canonicalIndex] = await Promise.all([
+      realpath(publicDir),
+      realpath(finalPath),
+      realpath(path.join(publicDir, 'index.html')),
+    ]);
+    // Lexical path checks do not stop a symlink inside publicDir from targeting a secret
+    // outside it. Require the filesystem-resolved target to remain under the real root.
+    const withinCanonicalPublic = canonicalFile === canonicalPublicDir
+      || canonicalFile.startsWith(canonicalPublicDir + path.sep);
+    const indexWithinCanonicalPublic = canonicalIndex === canonicalPublicDir
+      || canonicalIndex.startsWith(canonicalPublicDir + path.sep);
+    if (!indexWithinCanonicalPublic) {
+      return reply.code(404).send({ error: 'Frontend asset not found' });
+    }
+    finalPath = withinCanonicalPublic ? canonicalFile : canonicalIndex;
+  } catch {
+    return reply.code(404).send({ error: 'Frontend asset not found' });
+  }
   const ext = path.extname(finalPath);
 
   reply.header('Content-Type', contentTypes[ext] ?? 'application/octet-stream');
