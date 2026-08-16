@@ -70,6 +70,20 @@ export type WorkflowSaveStatus = 'saved' | 'pending' | 'saving' | 'error';
 
 let activeWorkflowSave: Promise<void> | null = null;
 let workflowSaveQueued = false;
+let workflowContextVersion = 0;
+let workflowLoadRequest = 0;
+let workflowListRequest = 0;
+let workflowActiveRequest = 0;
+let executionDetailRequest = 0;
+let executionFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+let executionPhaseTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearExecutionTimers(): void {
+  if (executionFallbackTimer) clearTimeout(executionFallbackTimer);
+  if (executionPhaseTimer) clearTimeout(executionPhaseTimer);
+  executionFallbackTimer = null;
+  executionPhaseTimer = null;
+}
 
 interface OttoStore {
   // React Flow state
@@ -519,20 +533,29 @@ export const useStore = create<OttoStore>((set, get) => ({
     return issues;
   },
   setWorkflowActive: async (active) => {
+    const request = ++workflowActiveRequest;
+    const contextVersion = workflowContextVersion;
     const prev = get().workflowActive;
     set({ workflowActive: active });
     try {
       if (active && !get().savedWorkflowId) {
         await get().saveWorkflow();
       }
+      // A delayed activation must never target a workflow opened while the save was pending.
+      if (contextVersion !== workflowContextVersion || request !== workflowActiveRequest) return;
       const { savedWorkflowId } = get();
       if (savedWorkflowId) {
         await api.updateWorkflow(savedWorkflowId, { active });
+        if (contextVersion === workflowContextVersion && request !== workflowActiveRequest) {
+          // Concurrent toggle requests can reach the server out of order; reassert the latest choice after a stale response.
+          await api.updateWorkflow(savedWorkflowId, { active: get().workflowActive });
+        }
       }
     } catch (err) {
       const validation = (err as { validation?: { issues?: WorkflowValidationIssue[] } })?.validation;
       if (validation?.issues) set({ validationIssues: validation.issues });
-      set({ workflowActive: prev });
+      // An older failed toggle must not roll back a newer user choice.
+      if (contextVersion === workflowContextVersion && request === workflowActiveRequest) set({ workflowActive: prev });
       throw err;
     }
   },
@@ -557,9 +580,12 @@ export const useStore = create<OttoStore>((set, get) => ({
       return activeWorkflowSave;
     }
 
+    let attemptedContextVersion = workflowContextVersion;
     activeWorkflowSave = (async () => {
       do {
         workflowSaveQueued = false;
+        const saveContextVersion = workflowContextVersion;
+        attemptedContextVersion = saveContextVersion;
         set({ isSaving: true, saveStatus: 'saving', saveError: null });
 
         const { nodes, edges, workflowName, savedWorkflowId, pinnedData, workflowImportReport, workflowSettings } = get();
@@ -568,10 +594,14 @@ export const useStore = create<OttoStore>((set, get) => ({
 
         if (savedWorkflowId) {
           const res = await api.updateWorkflow(savedWorkflowId, { name: workflowName, definition, autosave: true });
+          // Navigation/new-workflow can happen while the request is in flight; the old save must not overwrite the new editor.
+          if (saveContextVersion !== workflowContextVersion) continue;
           if (res.validation?.issues) set({ validationIssues: res.validation.issues });
           writeLastWorkflowId(savedWorkflowId);
         } else {
           const { id, validation } = await api.createWorkflow(workflowName, definition);
+          // A late create response used to attach its old id to a newly opened blank workflow.
+          if (saveContextVersion !== workflowContextVersion) continue;
           set({ savedWorkflowId: id });
           if (validation?.issues) set({ validationIssues: validation.issues });
           writeLastWorkflowId(id);
@@ -588,24 +618,32 @@ export const useStore = create<OttoStore>((set, get) => ({
     try {
       await activeWorkflowSave;
     } catch (err) {
-      set({
-        saveStatus: 'error',
-        saveError: err instanceof Error ? err.message : 'Workflow could not be saved',
-      });
+      // Failure from an abandoned workflow must not mark the newly opened workflow as failed.
+      if (attemptedContextVersion === workflowContextVersion) {
+        set({
+          saveStatus: 'error',
+          saveError: err instanceof Error ? err.message : 'Workflow could not be saved',
+        });
+      }
       throw err;
     } finally {
       activeWorkflowSave = null;
       set({ isSaving: false });
+      // If the new workflow became dirty while an obsolete save was failing, its save must not be lost.
+      if (workflowSaveQueued && get().saveStatus === 'pending') void get().saveWorkflow().catch(() => {});
     }
   },
 
   loadWorkflow: async (id) => {
+    const loadRequest = ++workflowLoadRequest;
     if (get().saveStatus === 'pending') {
       await get().saveWorkflow();
     } else if (activeWorkflowSave) {
       await activeWorkflowSave;
     }
     const wf = await api.getWorkflow(id);
+    // Concurrent workflow loads may resolve out of order; only the latest navigation may commit state.
+    if (loadRequest !== workflowLoadRequest) return;
     const def = wf.definition ?? { nodes: [], edges: [], pinnedData: {} };
 
     const loadedNodes = (def.nodes as Array<{
@@ -659,6 +697,8 @@ export const useStore = create<OttoStore>((set, get) => ({
     }));
 
     const savedSettings = (def as { settings?: WorkflowSettings }).settings;
+    workflowContextVersion += 1;
+    get().resetExecution();
     set({
       savedWorkflowId: id,
       workflowName: wf.name,
@@ -683,27 +723,38 @@ export const useStore = create<OttoStore>((set, get) => ({
     try {
       await get().loadWorkflow(id);
     } catch {
-      writeLastWorkflowId(null);
+      // A failed stale restore used to erase the id written by a newer successful navigation.
+      if (readLastWorkflowId() === id) writeLastWorkflowId(null);
     }
   },
 
   fetchWorkflows: async (reset = true) => {
+    const request = ++workflowListRequest;
     const PAGE = 50;
     const current = reset ? [] : get().workflowList;
     set({ workflowListLoading: true });
     try {
       const list = await api.listWorkflows(PAGE, current.length);
-      set({ workflowList: reset ? list : [...current, ...list], workflowListHasMore: list.length === PAGE });
+      // Reset/load-more responses can arrive out of order and previously replaced the newer list.
+      if (request === workflowListRequest) {
+        set({ workflowList: reset ? list : [...current, ...list], workflowListHasMore: list.length === PAGE });
+      }
     } finally {
-      set({ workflowListLoading: false });
+      if (request === workflowListRequest) set({ workflowListLoading: false });
     }
   },
 
   deleteWorkflow: async (id) => {
+    // Deleting while an autosave PUT is in flight could let the late save race the delete.
+    if (get().saveStatus === 'pending') await get().saveWorkflow();
+    else if (activeWorkflowSave) await activeWorkflowSave;
     await api.deleteWorkflow(id);
     const { savedWorkflowId } = get();
     if (readLastWorkflowId() === id) writeLastWorkflowId(null);
     if (savedWorkflowId === id) {
+      workflowContextVersion += 1;
+      workflowLoadRequest += 1;
+      get().resetExecution();
       set({
         savedWorkflowId: null,
         workflowName: 'Untitled Workflow',
@@ -723,6 +774,10 @@ export const useStore = create<OttoStore>((set, get) => ({
   },
 
   newWorkflow: () => {
+    // Invalidate late save/load responses so they cannot repopulate this new editor.
+    workflowContextVersion += 1;
+    workflowLoadRequest += 1;
+    get().resetExecution();
     set({
       savedWorkflowId: null,
       workflowName: 'Untitled Workflow',
@@ -858,7 +913,8 @@ export const useStore = create<OttoStore>((set, get) => ({
   _sseSource: null,
 
   setExecutionStarted: (executionId) =>
-    set({ executionId, executionPhase: 'running', nodeExecutions: {}, selectedExecutionDetail: null }),
+    (clearExecutionTimers(), executionDetailRequest += 1,
+      set({ executionId, executionPhase: 'running', nodeExecutions: {}, selectedExecutionDetail: null })),
 
   setNodeExecutions: (executions) =>
     set({
@@ -946,9 +1002,11 @@ export const useStore = create<OttoStore>((set, get) => ({
       get().setExecutionStarted(res.executionId);
       get().startSSE(res.executionId);
 
-      setTimeout(async () => {
+      executionFallbackTimer = setTimeout(async () => {
         try {
           const detail = normalizeExecutionDetail(await api.getExecution(res.executionId));
+          // A fallback fetch from an older run must not replace the currently selected execution.
+          if (get().executionId !== res.executionId) return;
           set({
             selectedExecutionDetail: detail,
             nodeExecutions: Object.fromEntries(detail.nodes.map((ne) => [ne.node_id, ne])),
@@ -986,9 +1044,11 @@ export const useStore = create<OttoStore>((set, get) => ({
       get().setExecutionStarted(res.executionId);
       get().startSSE(res.executionId);
 
-      setTimeout(async () => {
+      executionFallbackTimer = setTimeout(async () => {
         try {
           const detail = normalizeExecutionDetail(await api.getExecution(res.executionId));
+          // A retry fallback can resolve after another run has started.
+          if (get().executionId !== res.executionId) return;
           set({
             selectedExecutionDetail: detail,
             nodeExecutions: Object.fromEntries(detail.nodes.map((ne) => [ne.node_id, ne])),
@@ -1004,9 +1064,12 @@ export const useStore = create<OttoStore>((set, get) => ({
   },
 
   loadExecutionDetail: async (executionId) => {
+    const request = ++executionDetailRequest;
     set({ executionDetailLoading: true });
     try {
       const detail = normalizeExecutionDetail(await api.getExecution(executionId));
+      // History selections can resolve out of order; keep the most recently requested detail.
+      if (request !== executionDetailRequest) return;
       set({
         selectedExecutionDetail: detail,
         executionId,
@@ -1020,7 +1083,7 @@ export const useStore = create<OttoStore>((set, get) => ({
         nodeExecutions: Object.fromEntries(detail.nodes.map((e) => [e.node_id, e])),
       });
     } finally {
-      set({ executionDetailLoading: false });
+      if (request === executionDetailRequest) set({ executionDetailLoading: false });
     }
   },
 
@@ -1028,6 +1091,8 @@ export const useStore = create<OttoStore>((set, get) => ({
 
   resetExecution: () => {
     get().stopSSE();
+    clearExecutionTimers();
+    executionDetailRequest += 1;
     set({ executionId: null, executionPhase: 'idle', nodeExecutions: {} });
   },
 
@@ -1035,7 +1100,11 @@ export const useStore = create<OttoStore>((set, get) => ({
     get().stopSSE();
     const source = api.streamExecution(executionId);
 
+    // Closing EventSource does not discard already-queued callbacks; stale events must be ignored explicitly.
+    const isCurrentSource = () => get()._sseSource === source && get().executionId === executionId;
+
     const mergeEvent = (raw: unknown, status: NodeExecution['status']) => {
+      if (!isCurrentSource()) return;
       const data = raw as { nodeId?: string; node_id?: string; nodeName?: string; node_name?: string; nodeType?: string; node_type?: string; error?: string | null };
       const nodeId = data.node_id ?? data.nodeId;
       if (!nodeId) return;
@@ -1058,6 +1127,7 @@ export const useStore = create<OttoStore>((set, get) => ({
 
     source.addEventListener('snapshot', (e: MessageEvent) => {
       try {
+        if (!isCurrentSource()) return;
         const data = normalizeExecutionDetail(JSON.parse(e.data) as ExecutionDetail);
         const phase = data.execution.status === 'success'
           ? 'success'
@@ -1093,24 +1163,28 @@ export const useStore = create<OttoStore>((set, get) => ({
 
     source.addEventListener('execution:end', (e: MessageEvent) => {
       try {
+        if (!isCurrentSource()) return;
         const data = JSON.parse(e.data) as { status: string };
-        const phase = data.status === 'success' ? 'success' : 'error';
+        const phase = data.status === 'success' ? 'success' : data.status === 'cancelled' ? 'idle' : 'error';
         set({ executionPhase: phase });
         api.getExecution(executionId).then((rawDetail) => {
+          if (get().executionId !== executionId) return;
           const detail = normalizeExecutionDetail(rawDetail);
           set({
             selectedExecutionDetail: detail,
             nodeExecutions: Object.fromEntries(detail.nodes.map((ne) => [ne.node_id, ne])),
           });
-        }).catch(() => {});
-        setTimeout(() => {
-          set({ executionPhase: 'idle' });
+        }).catch((err) => console.warn('Could not refresh completed execution detail', err));
+        executionPhaseTimer = setTimeout(() => {
+          // The old completion timer previously reset a newer run to idle.
+          if (get().executionId === executionId) set({ executionPhase: 'idle' });
         }, 3000);
       } catch {}
       get().stopSSE();
     });
 
     source.onerror = () => {
+      if (!isCurrentSource()) return;
       set({ executionPhase: 'error' });
       get().stopSSE();
     };

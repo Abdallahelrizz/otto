@@ -1511,23 +1511,35 @@ function ReadOnlyUrlField({ label, value }: { label: string; value: string }) {
 function LatestTriggerSample({ workflowId, nodeId }: { workflowId: string | null; nodeId?: string }) {
   const [sample, setSample] = useState<TriggerSample | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
 
   const load = async () => {
+    const requestId = ++requestIdRef.current;
     if (!workflowId || !nodeId) {
       setSample(null);
+      setLoadError(null);
       return;
     }
     setLoading(true);
+    setLoadError(null);
     try {
       const result = await api.getTriggerSample(workflowId, nodeId);
+      // A response for the previously selected trigger must not replace this node's sample.
+      if (requestId !== requestIdRef.current) return;
       setSample(result.sample);
+    } catch (err) {
+      if (requestId !== requestIdRef.current) return;
+      setLoadError(err instanceof Error ? err.message : 'Could not load the trigger sample');
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   };
 
   useEffect(() => {
     void load();
+    // Invalidate the request on node changes/unmount so its completion cannot write stale data.
+    return () => { requestIdRef.current += 1; };
   }, [workflowId, nodeId]);
 
   if (!workflowId || !nodeId) return null;
@@ -1542,6 +1554,8 @@ function LatestTriggerSample({ workflowId, nodeId }: { workflowId: string | null
       </div>
       {sample ? (
         <JsonViewer label={`${sample.trigger_type} sample`} data={sample.payload} />
+      ) : loadError ? (
+        <div style={{ ...monoStyle, minHeight: 0, color: 'var(--node-error)' }}>{loadError}</div>
       ) : (
         <div style={{ ...monoStyle, minHeight: 0, color: 'var(--text-muted)' }}>No sample</div>
       )}

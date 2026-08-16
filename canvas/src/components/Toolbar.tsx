@@ -322,8 +322,15 @@ export function Toolbar() {
   }, [btnState, cancelExecution, runExecution]);
 
   const handleBack = useCallback(async () => {
-    if (useStore.getState().saveStatus === 'pending') {
-      await saveWorkflow().catch(() => {});
+    const status = useStore.getState().saveStatus;
+    if (status === 'pending' || status === 'error') {
+      try {
+        await saveWorkflow();
+      } catch (err) {
+        // Navigating after a failed flush discards edits that only exist in the editor.
+        alert(`Save failed; staying in the editor: ${err instanceof Error ? err.message : String(err)}`);
+        return;
+      }
     }
     navigate('/app/workflows');
   }, [navigate, saveWorkflow]);
@@ -353,8 +360,9 @@ export function Toolbar() {
       void fetchWorkflows();
       navigate(`/app/editor/${newId}`);
     } catch (err: unknown) {
-      // No alert() — log and let the user notice no navigation occurred
       console.error('[otto] Duplicate workflow failed:', err instanceof Error ? err.message : err);
+      // A duplicate action that fails without feedback looks like a dead menu item.
+      alert(`Duplicate failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }, [savedWorkflowId, nodes, edges, pinnedData, workflowName, fetchWorkflows, navigate, saveWorkflow]);
 

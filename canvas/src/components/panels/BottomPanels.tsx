@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { OttoBotPanel } from './OttoBotPanel';
 import { ExecutionPanel } from './ExecutionPanel';
 import { useStore } from '../../store';
@@ -62,6 +62,12 @@ export function BottomPanels() {
 
   // ── Height drag (top edge) ─────────────────────────────────────
   const heightDrag = useRef<{ startY: number; startH: number } | null>(null);
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => () => {
+    // Closing the dock during a drag previously left window listeners alive indefinitely.
+    dragCleanupRef.current?.();
+  }, []);
 
   const onHeightDragStart = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
@@ -78,7 +84,10 @@ export function BottomPanels() {
       heightDrag.current = null;
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      dragCleanupRef.current = null;
     };
+    dragCleanupRef.current?.();
+    dragCleanupRef.current = onUp;
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
   }, [dockHeight, setDockHeight]);
@@ -104,7 +113,10 @@ export function BottomPanels() {
       splitDrag.current = null;
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      dragCleanupRef.current = null;
     };
+    dragCleanupRef.current?.();
+    dragCleanupRef.current = onUp;
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
   }, [dockSplit, setDockSplit]);

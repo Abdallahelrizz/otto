@@ -371,9 +371,13 @@ function WorkflowCard({
 
       <div className="otto-workflow-card-footer">
         <div className="otto-tag-list">
-          {(workflow.tags?.length ? workflow.tags : ['automation']).slice(0, 3).map((tag) => (
-            <span key={tag}>{tag}</span>
-          ))}
+          {/* Show only REAL tags. This used to fall back to a fabricated 'automation'
+              pill for untagged workflows, which contradicted the list view ("No tags")
+              and the "N tags across this workspace" count — and, worse, displayed a tag
+              that search could never match, because filtering runs on workflow.tags. */}
+          {workflow.tags?.length
+            ? workflow.tags.slice(0, 3).map((tag) => <span key={tag}>{tag}</span>)
+            : <span className="otto-tag-empty">No tags</span>}
         </div>
       </div>
     </article>

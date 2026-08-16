@@ -83,6 +83,7 @@ export function ModelSelect({ provider, value, onChange }: ModelSelectProps) {
   const [models, setModels] = useState<ModelEntry[]>([]);
 
   useEffect(() => {
+    let cancelled = false;
     if (provider === 'anthropic') {
       setModels(ANTHROPIC_MODELS);
       setStatus('loaded');
@@ -102,8 +103,13 @@ export function ModelSelect({ provider, value, onChange }: ModelSelectProps) {
 
     setStatus('loading');
     fetchOpenRouterModels()
-      .then((result) => { MODEL_CACHE.set('openrouter', result); setModels(result); setStatus('loaded'); })
-      .catch(() => setStatus('error'));
+      .then((result) => {
+        MODEL_CACHE.set('openrouter', result);
+        // A slow OpenRouter response must not replace the list after the provider changed.
+        if (!cancelled) { setModels(result); setStatus('loaded'); }
+      })
+      .catch(() => { if (!cancelled) setStatus('error'); });
+    return () => { cancelled = true; };
   }, [provider]);
 
   if (status === 'error') {

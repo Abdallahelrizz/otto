@@ -1693,6 +1693,16 @@ input[type="range"]::-moz-range-thumb {
   gap: 6px;
 }
 
+/* The empty state must NOT look like a tag — it is the absence of one. Overrides the
+   pill treatment below so "No tags" reads as muted text, matching the list view. */
+.otto-tag-list span.otto-tag-empty {
+  border: none;
+  border-radius: 0;
+  padding: 4px 0;
+  font-style: italic;
+  opacity: 0.65;
+}
+
 .otto-tag-list span {
   max-width: 120px;
   overflow: hidden;

@@ -96,6 +96,12 @@ function EditorShell({ autosaveSession }: { autosaveSession: string }) {
 
   useEditorShortcuts(shortcutRefOpen, setShortcutRefOpen);
 
+  // Close the execution EventSource when the editor unmounts. Every other teardown
+  // path (loading another workflow, starting a new run) calls stopSSE, but simply
+  // navigating away did not — leaving a live stream writing execution state for a
+  // workflow the user has already left.
+  useEffect(() => () => useStore.getState().stopSSE(), []);
+
   const panelOpen = Boolean(activeCanvasTab === 'editor' && selectedNodeId && configPanelOpen);
 
   return (
