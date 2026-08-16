@@ -59,12 +59,20 @@ export async function getApiKeyAuthContext(req) {
   const userAgent = req.headers['user-agent'] ?? null;
 
   const { rows } = await db.query(
+    // NOTE the workspace_members join: without it `role` is undefined, and callers
+    // silently disagree about what that means — server.js defaulted to 'editor'
+    // (so a viewer's key got write access) while routes/audit.js defaulted to
+    // 'viewer' (so the documented `audit:read` scope was unusable). Resolve the
+    // real role here, exactly as session auth does in auth/session.js.
     `SELECT ak.id AS api_key_id, ak.user_id, ak.workspace_id, ak.name AS api_key_name,
             ak.key_hash, ak.scopes,
-            u.email, u.name AS user_name, w.name AS workspace_name, w.plan
+            u.email, u.name AS user_name, w.name AS workspace_name, w.plan,
+            wm.role AS member_role
      FROM api_keys ak
      LEFT JOIN users u ON u.id = ak.user_id
      JOIN workspaces w ON w.id = ak.workspace_id
+     LEFT JOIN workspace_members wm
+       ON wm.workspace_id = ak.workspace_id AND wm.user_id = ak.user_id
      WHERE ak.key_prefix = $1
        AND ak.revoked_at IS NULL
        AND (ak.expires_at IS NULL OR ak.expires_at > NOW())`,
@@ -127,7 +135,13 @@ export async function getApiKeyAuthContext(req) {
     authMethod: 'api_key',
     apiKeyId: row.api_key_id,
     apiKeyName: row.api_key_name,
-    scopes: row.scopes ?? ['*'],
+    // Default-DENY: a key row with no scopes grants nothing (reissue such keys).
+    // A full-access key must carry an explicit ['*'].
+    scopes: Array.isArray(row.scopes) ? row.scopes : [],
+    // An API key can never exceed the role of the user who owns it. Fall back to
+    // 'viewer' (least privilege) when the owner has no membership row, rather than
+    // letting each caller invent its own default.
+    role: row.member_role ?? 'viewer',
     userId: row.user_id,
     workspaceId: row.workspace_id,
     user: row.user_id ? { id: row.user_id, email: row.email, name: row.user_name } : null,

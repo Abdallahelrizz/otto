@@ -59,9 +59,16 @@ for (const key of REQUIRED_ENV) {
   }
 }
 
+// Reflecting an arbitrary origin while sending credentials is a CSRF-grade hole.
+// In production, refuse to reflect: an unset allowlist means same-origin only.
+// In dev we still reflect for convenience.
+const isProduction = process.env.NODE_ENV === 'production';
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim())
-  : true; // true = reflect request origin (dev default)
+  : (isProduction ? false : true);
+if (isProduction && allowedOrigins === false) {
+  console.warn('[otto] ALLOWED_ORIGINS is not set in production — CORS is restricted to same-origin. Set ALLOWED_ORIGINS for cross-origin canvas/API access.');
+}
 
 const fastify = Fastify({ logger: true, bodyLimit: 10 * 1024 * 1024 });
 
@@ -80,6 +87,18 @@ fastify.setErrorHandler((err, req, reply) => {
     : null;
   if (status) {
     return reply.code(status).send({ error: err.message, code: err.code });
+  }
+
+  // Malformed client input that Postgres rejects → 400, not 500. Without this a
+  // request like GET /workflows/not-a-uuid surfaces as "Internal server error",
+  // which is both the wrong status and indistinguishable from a genuine fault in
+  // monitoring. These are all "you sent something invalid" classes:
+  //   22P02 invalid_text_representation (bad uuid/int/enum literal)
+  //   22003 numeric_value_out_of_range
+  //   22007/22008 invalid/out-of-range datetime
+  //   22001 string_data_right_truncation (value longer than the column)
+  if (['22P02', '22003', '22007', '22008', '22001'].includes(err.code)) {
+    return reply.code(400).send({ error: 'Invalid request parameter', code: 'INVALID_INPUT' });
   }
 
   // Infra connectivity → 503 with an actionable (but non-leaky) message.
@@ -210,7 +229,7 @@ fastify.addHook('onRequest', async (req, reply) => {
     // Scope gate — only applies to API key auth; sessions carry full role-based access
     if (req.auth.authMethod === 'api_key') {
       const requiredScope = resolveScope(pathname, method);
-      const grantedScopes = req.auth.scopes ?? ['*'];
+      const grantedScopes = Array.isArray(req.auth.scopes) ? req.auth.scopes : [];
       if (requiredScope && !grantedScopes.includes('*') && !grantedScopes.includes(requiredScope)) {
         auditLog({
           workspaceId: req.auth.workspaceId,
@@ -306,8 +325,17 @@ fastify.get('/api/v1/admin/queue', async (req, reply) => {
   return reply.send({ waiting, active, completed, failed, delayed, concurrency: Number(process.env.WORKER_CONCURRENCY ?? 10) });
 });
 
-// Metrics — Prometheus-compatible execution counters
+// Metrics — Prometheus-compatible execution counters.
+// Optional gate: if METRICS_TOKEN is set, require it (Bearer header or ?token=).
+const METRICS_TOKEN = process.env.METRICS_TOKEN;
 fastify.get('/metrics', async (req, reply) => {
+  if (METRICS_TOKEN) {
+    const bearer = (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+    const provided = bearer || req.query?.token;
+    if (provided !== METRICS_TOKEN) {
+      return reply.code(401).header('Content-Type', 'text/plain; version=0.0.4').send('# unauthorized\n');
+    }
+  }
   const lines = [
     '# HELP otto_executions_total Total executions by status',
     '# TYPE otto_executions_total counter',

@@ -53,16 +53,83 @@ function isBlockedIP(ip) {
   return false;
 }
 
+// Resolve EVERY address for a hostname and ensure they are all public. Returns the
+// resolved records so a caller can pin the connection to a validated address.
 async function resolveAndCheck(hostname) {
-  let address;
+  let records;
   try {
-    ({ address } = await dns.lookup(hostname, { family: 4 }));
+    records = await dns.lookup(hostname, { all: true });
   } catch {
-    ({ address } = await dns.lookup(hostname, { family: 6 }));
+    records = [];
   }
-  if (isBlockedIP(address)) {
-    throw new SsrfBlockedError(`Blocked: ${hostname} resolves to a private/reserved address`);
+  if (!records.length) {
+    // Some resolvers/hosts only answer per-family; try both explicitly.
+    for (const family of [4, 6]) {
+      try {
+        const one = await dns.lookup(hostname, { family });
+        records.push({ address: one.address, family });
+      } catch { /* try the other family */ }
+    }
   }
+  if (!records.length) throw new SsrfBlockedError(`Blocked: ${hostname} did not resolve`);
+  for (const { address } of records) {
+    if (isBlockedIP(address)) {
+      throw new SsrfBlockedError(`Blocked: ${hostname} resolves to a private/reserved address`);
+    }
+  }
+  return records;
+}
+
+// A single shared undici dispatcher whose DNS lookup re-validates at CONNECT time,
+// so the socket cannot be pointed at a private IP after our pre-check passed
+// (DNS-rebinding TOCTOU).
+//
+// `undici` is a declared dependency (package.json). If it cannot be loaded, the
+// connect-time guard is absent and the pre-check alone is TOCTOU-vulnerable — so
+// this FAILS CLOSED (HARDENING.md item 2) rather than silently downgrading. A
+// silent downgrade is how the docs came to claim a protection that wasn't running.
+let _dispatcher;
+let _dispatcherTried = false;
+let _dispatcherError = null;
+async function getGuardedDispatcher() {
+  if (_dispatcherTried) {
+    if (_dispatcherError) throw _dispatcherError;
+    return _dispatcher;
+  }
+  _dispatcherTried = true;
+  try {
+    const undici = await import('undici');
+    if (!undici?.Agent) {
+      _dispatcherError = new SsrfBlockedError(
+        'SSRF guard unavailable: undici loaded but exposes no Agent export. Refusing to send an unpinned request.'
+      );
+      throw _dispatcherError;
+    }
+    _dispatcher = new undici.Agent({
+      connect: {
+        lookup: (hostname, _opts, cb) => {
+          dns.lookup(hostname, { all: true })
+            .then((records) => {
+              const bad = records.find((r) => isBlockedIP(r.address));
+              if (bad) return cb(new SsrfBlockedError(`Blocked: ${hostname} → ${bad.address}`), null, null);
+              const chosen = records[0];
+              cb(null, chosen.address, chosen.family);
+            })
+            .catch((err) => cb(err, null, null));
+        },
+      },
+    });
+  } catch (err) {
+    // Fail closed. Do not fall back to the pre-check-only path.
+    _dispatcherError = err instanceof SsrfBlockedError
+      ? err
+      : new SsrfBlockedError(
+          `SSRF guard unavailable: could not load undici (${err?.message ?? err}). ` +
+          'Install dependencies (npm ci) — refusing to send an unpinned request.'
+        );
+    throw _dispatcherError;
+  }
+  return _dispatcher;
 }
 
 /**
@@ -100,14 +167,22 @@ export async function assertSafeConnectionTarget(target) {
 }
 
 /**
- * Fetch wrapper that prevents SSRF by resolving the hostname and checking
- * it against private/reserved IP ranges before making the request.
- * Follows redirects safely (each hop is checked).
+ * Fetch wrapper that prevents SSRF by resolving the hostname and checking every
+ * resolved address against private/reserved ranges before the request, then
+ * pinning the connection to a validated address (re-checked at connect time to
+ * defeat DNS rebinding). Redirects are followed safely — each hop is re-checked.
  *
  * Set SSRF_ALLOW_PRIVATE=true to disable checks (self-hosted internal workflows).
+ * That switch is a TOTAL bypass, so it is ignored when OTTO_HOSTED=true — a
+ * multi-tenant deployment must never be able to turn egress filtering off
+ * (HARDENING.md item 2).
  */
+export function isHostedBuild() {
+  return process.env.OTTO_HOSTED === 'true';
+}
+
 export async function safeFetch(url, options = {}) {
-  if (process.env.SSRF_ALLOW_PRIVATE === 'true') {
+  if (process.env.SSRF_ALLOW_PRIVATE === 'true' && !isHostedBuild()) {
     return fetch(url, options);
   }
 
@@ -128,7 +203,13 @@ export async function safeFetch(url, options = {}) {
     await resolveAndCheck(hostname);
   }
 
-  const resp = await fetch(url, { ...options, redirect: 'manual' });
+  // `options.signal` is forwarded to fetch by the spread, and is deliberately
+  // preserved across redirect hops below so a cancel aborts the whole chain.
+  const fetchOptions = { ...options, redirect: 'manual' };
+  const dispatcher = await getGuardedDispatcher();
+  if (dispatcher) fetchOptions.dispatcher = dispatcher;
+
+  const resp = await fetch(url, fetchOptions);
 
   // Follow redirects safely — each hop re-checks the IP, and auth headers are
   // stripped when the hop crosses to a different host.

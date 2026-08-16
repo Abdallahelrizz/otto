@@ -248,13 +248,27 @@ import path from 'path';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let _catalog = null;
 async function getCatalog() {
-  if (!_catalog) {
-    const catalogPath = path.resolve(__dirname, '../../public/credential-catalog.json');
-    const raw = await readFile(catalogPath, 'utf-8');
-    const entries = JSON.parse(raw);
-    _catalog = new Map(entries.map(e => [e.id, e]));
+  if (_catalog) return _catalog;
+
+  // Production (Docker) serves the built canvas from ./public. In local dev that
+  // directory only exists after `npm run build --prefix canvas`, so without the
+  // second candidate every dev hit on /credentials/schema/:type 503s and the
+  // Credentials page can't render its type picker. Fall back to the canvas source.
+  const candidates = [
+    path.resolve(__dirname, '../../public/credential-catalog.json'),
+    path.resolve(__dirname, '../../canvas/public/credential-catalog.json'),
+  ];
+
+  for (const catalogPath of candidates) {
+    try {
+      const raw = await readFile(catalogPath, 'utf-8');
+      _catalog = new Map(JSON.parse(raw).map(e => [e.id, e]));
+      return _catalog;
+    } catch {
+      // try the next candidate
+    }
   }
-  return _catalog;
+  return null;
 }
 
 export async function credentialRoutes(fastify) {

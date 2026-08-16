@@ -53,3 +53,6 @@ Thumbs.db
 
 # Claude Code local settings (personal, not project)
 .claude/settings.local.json
+
+# Internal pre-release audit — keep local (public repo)
+HARDENING.md

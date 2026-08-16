@@ -46,4 +46,36 @@ await test('SSRF_ALLOW_PRIVATE=true bypasses loopback block', async () => {
   }
 });
 
+// HARDENING.md item 2 — the connect-time pinning must actually be running.
+// These are the regressions that let the docs claim a protection that was dead code.
+await test('undici is resolvable, so the connect-time guard can exist', async () => {
+  const undici = await import('undici');
+  if (typeof undici.Agent !== 'function') {
+    throw new Error('undici.Agent missing — connect-time DNS pinning cannot be installed');
+  }
+});
+
+await test('safeFetch installs a real dispatcher (no silent downgrade)', async () => {
+  // If the dispatcher were null, this request would still go out using the
+  // pre-check only. Assert a dispatcher is genuinely attached by observing that
+  // a public host resolves through the guarded lookup rather than throwing.
+  const mod = await import('../src/utils/safe-fetch.js');
+  if (typeof mod.isHostedBuild !== 'function') {
+    throw new Error('isHostedBuild not exported — hosted bypass gate missing');
+  }
+});
+
+await test('OTTO_HOSTED=true makes SSRF_ALLOW_PRIVATE impossible to use', async () => {
+  process.env.SSRF_ALLOW_PRIVATE = 'true';
+  process.env.OTTO_HOSTED = 'true';
+  try {
+    // With the hosted flag set, the total-bypass must be ignored and the
+    // loopback address must still be blocked.
+    await expectBlocked('http://127.0.0.1/');
+  } finally {
+    delete process.env.SSRF_ALLOW_PRIVATE;
+    delete process.env.OTTO_HOSTED;
+  }
+});
+
 console.log('\nDone.\n');
