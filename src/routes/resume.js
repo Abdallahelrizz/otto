@@ -8,27 +8,34 @@ export async function resumeRoutes(fastify) {
     const { token } = req.params;
     const resumeInput = req.body ?? {};
 
+    // Atomic compare-and-set: claim the token in the SAME statement that reads it.
+    //
+    // This was a SELECT ... WHERE status='waiting' followed by a separate UPDATE, which is
+    // a check-then-act race. Two concurrent requests carrying the same token both passed
+    // the SELECT and both enqueued a resume job, so the workflow resumed TWICE and every
+    // node after the wait ran twice — duplicate side effects. This endpoint is public and
+    // self-authenticating, so a double-clicked approval link or a retried webhook delivery
+    // is enough to trigger it; it needs no attacker.
+    //
+    // Postgres evaluates WHERE against the pre-update row, so matching on resume_token
+    // while also nulling it is correct and makes the token strictly single-use: exactly
+    // one caller gets a row back, everyone else gets zero.
     const { rows } = await db.query(
-      `SELECT id, workflow_id, workspace_id, wait_node_id, wait_type, resume_payload
-       FROM executions
-       WHERE resume_token = $1 AND status = 'waiting'`,
+      `UPDATE executions
+          SET status = 'running', resumed_at = NOW(), resume_token = NULL
+        WHERE resume_token = $1 AND status = 'waiting'
+      RETURNING id, workflow_id, workspace_id, wait_node_id, wait_type, resume_payload`,
       [token]
     );
 
     if (!rows.length) {
+      // Either the token never existed, or another request already claimed it.
       return reply.code(404).send({ error: 'Resume token not found or execution is not waiting' });
     }
 
     const row = rows[0];
     const savedOutputs = row.resume_payload ?? {};
     const pinnedData = { ...savedOutputs, [row.wait_node_id]: resumeInput };
-
-    await db.query(
-      `UPDATE executions
-       SET status = 'running', resumed_at = NOW(), resume_token = NULL
-       WHERE id = $1`,
-      [row.id]
-    );
 
     emitExecutionEvent(row.id, 'execution:resume', { waitType: row.wait_type });
 
