@@ -108,9 +108,10 @@ export async function codeNode({ input, config }) {
     compile_memory_limit: memoryLimitMb * 1024 * 1024,
   };
 
-  // Try primary Piston first; if unreachable (e.g. local dev without Docker) fall back
-  // to the public emkc.org instance. Set PISTON_URL in production to skip the fallback.
-  const usingFallback = false;
+  // The public emkc.org fallback sends the user's CODE and INPUT DATA off-box, so it
+  // is OPT-IN only. Set PISTON_ALLOW_PUBLIC=true to enable it; otherwise an unreachable
+  // Piston is a hard error rather than a silent third-party exfiltration.
+  const allowPublic = process.env.PISTON_ALLOW_PUBLIC === 'true';
   async function executePiston(url) {
     const res = await fetch(`${url}/execute`, {
       method: 'POST',
@@ -123,8 +124,11 @@ export async function codeNode({ input, config }) {
   let res;
   try {
     res = await executePiston(`${primaryUrl}/api/v2`);
-  } catch {
-    // Primary unavailable — try public Piston
+  } catch (primaryErr) {
+    if (!allowPublic) {
+      throw new Error(`Code node: Piston is unreachable at ${primaryUrl}. Point PISTON_URL at a reachable Piston, or set PISTON_ALLOW_PUBLIC=true to allow the public emkc.org fallback (which sends your code and input off-box).`);
+    }
+    // Explicitly opted in — try public Piston
     try {
       res = await executePiston(PUBLIC_PISTON);
     } catch (err2) {

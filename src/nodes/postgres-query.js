@@ -5,8 +5,12 @@ import { assertSafeConnectionTarget } from '../utils/safe-fetch.js';
 const { Pool } = pg;
 const credentialPools = new Map();
 
+// Allowing the Postgres node to run against Otto's OWN control-plane database is a
+// cross-tenant data-exposure risk (arbitrary SQL over users / api_keys / credentials).
+// It is therefore opt-in and only ever intended for single-tenant self-hosting.
+const ALLOW_SYSTEM_DB = process.env.POSTGRES_NODE_ALLOW_SYSTEM_DB === 'true';
+
 function getPool(credential) {
-  if (!credential?.data?.connectionString) return db;
   const key = credential.data.connectionString;
   if (!credentialPools.has(key)) {
     credentialPools.set(key, new Pool({ connectionString: key, max: 3 }));
@@ -17,6 +21,15 @@ function getPool(credential) {
 export async function postgresQuery({ config, credential }) {
   const { query, params: paramsRaw = '[]' } = config;
   if (!query) throw new Error('Postgres Query: query is required');
+
+  // Require an explicit Postgres credential. Never silently fall back to Otto's
+  // own database. (Set POSTGRES_NODE_ALLOW_SYSTEM_DB=true to opt into the legacy
+  // shared-DB behaviour on a trusted single-tenant instance.)
+  if (!credential?.data?.connectionString) {
+    if (!ALLOW_SYSTEM_DB) {
+      throw new Error('Postgres Query: select a Postgres credential on this node. Add one under Credentials.');
+    }
+  }
 
   let params;
   try {
@@ -30,7 +43,7 @@ export async function postgresQuery({ config, credential }) {
     await assertSafeConnectionTarget(credential.data.connectionString);
   }
 
-  const pool = getPool(credential);
+  const pool = credential?.data?.connectionString ? getPool(credential) : db;
 
   // 30-second query timeout via statement_timeout
   const client = await pool.connect();

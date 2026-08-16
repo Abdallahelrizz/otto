@@ -3,6 +3,7 @@ import { createExecution, completeExecution } from '../engine/logger.js';
 import { subscribeExecution, unsubscribeExecution } from '../engine/events.js';
 import { executionQueue } from '../queue/client.js';
 import { runWorkflow } from '../engine/executor.js';
+import { abortExecution } from '../engine/abort-registry.js';
 import { randomUUID } from 'crypto';
 import {
   hasBlockingIssues,
@@ -178,14 +179,43 @@ export async function executionRoutes(fastify) {
       return reply.send({ ok: true, status: rows[0].status });
     }
 
-    const job = await executionQueue.getJob(id);
-    if (job) {
-      const state = await job.getState();
-      if (['waiting', 'delayed', 'prioritized'].includes(state)) await job.remove();
+    // 1. Not-yet-started queued job → remove it so it never runs.
+    let removedJob = false;
+    try {
+      const job = await executionQueue.getJob(id);
+      if (job) {
+        const state = await job.getState();
+        if (['waiting', 'delayed', 'prioritized'].includes(state)) {
+          await job.remove();
+          removedJob = true;
+        }
+      }
+    } catch {
+      // Redis unavailable (regular mode). The in-process abort below still applies.
     }
 
+    // 2. Already-running in THIS process → actually abort it. Manual runs execute
+    //    in-process (see POST /execute above), so without this the row was marked
+    //    cancelled while the LLM/HTTP calls kept going and downstream nodes kept
+    //    running. The executor writes the terminal `cancelled` row itself.
+    const aborted = abortExecution(id, 'Cancelled by user');
+    if (aborted) {
+      return reply.send({
+        ok: true,
+        status: 'cancelling',
+        aborted: true,
+        // Be honest about the semantics: we stop waiting and stop starting new
+        // work. Side effects already committed upstream are not rolled back.
+        note: 'In-flight requests aborted. Side effects already sent are not undone.',
+      });
+    }
+
+    // 3. Not running here: either it finished, or another worker owns it. Mark it
+    //    cancelled so it stops being reported as running. NOTE: a run already in
+    //    progress in a DIFFERENT worker process is not aborted by this — that needs
+    //    a cross-process signal and is not implemented.
     await completeExecution(id, { status: 'cancelled', error: 'Cancelled by user' });
-    return reply.send({ ok: true, status: 'cancelled' });
+    return reply.send({ ok: true, status: 'cancelled', removedJob, aborted: false });
   });
 
   fastify.post('/api/v1/executions/:id/retry', async (req, reply) => {

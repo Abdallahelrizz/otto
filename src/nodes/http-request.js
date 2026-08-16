@@ -1,6 +1,6 @@
 import { safeFetch } from '../utils/safe-fetch.js';
 
-export async function httpRequest({ input, config, credential }) {
+export async function httpRequest({ input, config, credential, signal }) {
   const {
     url,
     method = 'GET',
@@ -52,13 +52,20 @@ export async function httpRequest({ input, config, credential }) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
 
+  // Combine, don't replace: the request must abort on EITHER its own timeout OR
+  // the execution being cancelled. Dropping one to honour the other would either
+  // break per-request timeouts or leave the call running after cancel.
+  const reqSignal = signal
+    ? AbortSignal.any([controller.signal, signal])
+    : controller.signal;
+
   let response;
   try {
     response = await safeFetch(url, {
       method: methodUpper,
       headers: reqHeaders,
       body: bodyStr,
-      signal: controller.signal,
+      signal: reqSignal,
     });
   } finally {
     clearTimeout(timer);

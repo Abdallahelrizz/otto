@@ -33,7 +33,7 @@ function applyAuth(descriptor, config, token, headers, params) {
  * SSRF-guarded safeRequestJson and is injectable for tests.
  */
 export function makeServiceHandler(descriptor, { request = safeRequestJson } = {}) {
-  return async function serviceHandler({ config = {}, credential } = {}) {
+  return async function serviceHandler({ config = {}, credential, signal } = {}) {
     const opName = config.operation || descriptor.defaultOperation;
     const op = descriptor.operations[opName];
     if (!op) throw new Error(`${descriptor.type}: unknown operation "${opName}"`);
@@ -71,7 +71,11 @@ export function makeServiceHandler(descriptor, { request = safeRequestJson } = {
       method: op.method,
       headers,
       body,
-      signal: AbortSignal.timeout(op.timeoutMs || DEFAULT_TIMEOUT_MS),
+      // Per-operation timeout OR execution cancellation — whichever fires first.
+      // Combined, not replaced, so cancelling never disables the timeout.
+      signal: signal
+        ? AbortSignal.any([AbortSignal.timeout(op.timeoutMs || DEFAULT_TIMEOUT_MS), signal])
+        : AbortSignal.timeout(op.timeoutMs || DEFAULT_TIMEOUT_MS),
       maxBytes: op.maxBytes || DEFAULT_MAX_BYTES,
     });
   };

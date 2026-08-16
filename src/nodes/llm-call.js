@@ -22,7 +22,7 @@ function getApiKey(provider, credential) {
   }[provider];
 }
 
-export async function llmCall({ config, credential }) {
+export async function llmCall({ config, credential, signal }) {
   const {
     provider     = 'openai',
     model        = 'gpt-4o-mini',
@@ -45,7 +45,11 @@ export async function llmCall({ config, credential }) {
     };
     if (systemPrompt) body.system = String(systemPrompt);
 
-    const response = await client.messages.create(body);
+    // `signal` aborts the underlying fetch: the socket closes and this promise
+    // rejects immediately instead of waiting out a long completion. Note this
+    // stops US waiting — a non-streaming completion may still finish provider-side,
+    // and tokens already produced are generally still billed.
+    const response = await client.messages.create(body, { signal });
     return {
       text: response.content[0]?.text ?? '',
       model: response.model,
@@ -73,7 +77,7 @@ export async function llmCall({ config, credential }) {
     messages,
     temperature: Number(temperature),
     max_tokens: Number(maxTokens),
-  });
+  }, { signal });
 
   const choice = response.choices[0];
   return {

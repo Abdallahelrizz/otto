@@ -1,6 +1,6 @@
 import { bearerHeaders, credentialValue, parseJson, requestJson } from './service-utils.js';
 
-export async function airtableRecords({ config, credential }) {
+export async function airtableRecords({ config, credential, signal }) {
   const token = config.token || credentialValue(credential, ['token', 'value', 'apiKey']);
   const {
     operation = 'list',
@@ -79,5 +79,6 @@ export async function airtableRecords({ config, credential }) {
     method,
     headers: bearerHeaders(token),
     body: body ? JSON.stringify(body) : undefined,
+    signal,
   });
 }

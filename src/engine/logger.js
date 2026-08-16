@@ -1,11 +1,41 @@
 import { db } from '../db/client.js';
 import { randomUUID } from 'crypto';
 
+/**
+ * Derive execution_type from how the run was triggered.
+ *
+ * This used to default to the literal 'production' and no caller ever overrode it,
+ * so EVERY execution — canvas runs, sub-workflows, error handlers, eval cases — was
+ * recorded as production. That is not cosmetic: the save policy
+ * (`saveManualExecutions`), retention, redaction rules, and production-vs-manual
+ * metrics all key off this column, and a canvas run showed a "Production" badge.
+ *
+ * Values intentionally match EXEC_TYPE_LABELS in
+ * canvas/src/components/panels/ExecutionPanel.tsx.
+ */
+const EXECUTION_TYPE_BY_TRIGGER = {
+  manual: 'manual',
+  api: 'api',
+  schedule: 'scheduled',
+  scheduled: 'scheduled',
+  sub_workflow: 'sub_workflow',
+  error_workflow: 'error_workflow',
+  resume: 'resume',
+  test: 'test',
+  webhook: 'production',
+  // form / chat / anything unknown → 'production' via the fallback below.
+};
+
+export function executionTypeFor(triggerType) {
+  return EXECUTION_TYPE_BY_TRIGGER[triggerType] ?? 'production';
+}
+
 export async function createExecution({
   workflowId,
   workspaceId,
   triggerType,
-  executionType = 'production',
+  // Derived from triggerType unless a caller is explicit.
+  executionType = undefined,
   input,
   status = 'running',
   mode = 'full',
@@ -24,7 +54,7 @@ export async function createExecution({
       workspaceId,
       status,
       triggerType,
-      executionType,
+      executionType ?? executionTypeFor(triggerType),
       mode,
       focusNodeId,
       JSON.stringify(pinnedData ?? {}),

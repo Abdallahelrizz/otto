@@ -2,21 +2,21 @@ import { credentialValue, parseJson, requestJson } from './service-utils.js';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 
-export async function discordSendMessage({ config, credential }) {
+export async function discordSendMessage({ config, credential, signal }) {
   const operation = config.operation || 'send_message';
 
   switch (operation) {
     case 'send_message':
-      return _sendMessage({ config, credential });
+      return _sendMessage({ config, credential, signal });
 
     case 'send_embed':
-      return _sendEmbed({ config, credential });
+      return _sendEmbed({ config, credential, signal });
 
     case 'get_guild_channels':
-      return _getGuildChannels({ config, credential });
+      return _getGuildChannels({ config, credential, signal });
 
     case 'get_messages':
-      return _getMessages({ config, credential });
+      return _getMessages({ config, credential, signal });
 
     default:
       throw new Error(`Discord: unknown operation "${operation}"`);
@@ -25,7 +25,7 @@ export async function discordSendMessage({ config, credential }) {
 
 // ── send_message ──────────────────────────────────────────────────────────────
 // POST to a webhook URL with content, optional embeds, and optional username.
-async function _sendMessage({ config, credential }) {
+async function _sendMessage({ config, credential, signal }) {
   const webhookUrl = config.webhookUrl || credentialValue(credential, ['webhookUrl', 'url', 'value']);
   if (!webhookUrl) throw new Error('Discord send_message: webhookUrl is required');
 
@@ -40,6 +40,7 @@ async function _sendMessage({ config, credential }) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal,
   });
 
   return { ok: true, statusCode: result.statusCode, body: result.body };
@@ -48,7 +49,7 @@ async function _sendMessage({ config, credential }) {
 // ── send_embed ────────────────────────────────────────────────────────────────
 // POST a single rich embed to a webhook.
 // config: webhookUrl, title, description, color (decimal int), fields (JSON array)
-async function _sendEmbed({ config, credential }) {
+async function _sendEmbed({ config, credential, signal }) {
   const webhookUrl = config.webhookUrl || credentialValue(credential, ['webhookUrl', 'url', 'value']);
   if (!webhookUrl) throw new Error('Discord send_embed: webhookUrl is required');
 
@@ -65,6 +66,7 @@ async function _sendEmbed({ config, credential }) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ embeds: [embed] }),
+    signal,
   });
 
   return { ok: true, statusCode: result.statusCode, body: result.body };
@@ -73,7 +75,7 @@ async function _sendEmbed({ config, credential }) {
 // ── get_guild_channels ────────────────────────────────────────────────────────
 // GET /guilds/:guildId/channels  — requires a bot token.
 // config: guildId
-async function _getGuildChannels({ config, credential }) {
+async function _getGuildChannels({ config, credential, signal }) {
   const token = config.botToken || credentialValue(credential, ['botToken', 'token', 'value']);
   if (!token)           throw new Error('Discord get_guild_channels: botToken is required');
   const { guildId } = config;
@@ -85,6 +87,7 @@ async function _getGuildChannels({ config, credential }) {
       Authorization: `Bot ${token}`,
       'Content-Type': 'application/json',
     },
+    signal,
   });
 
   return { ok: true, channels: result.body };
@@ -93,7 +96,7 @@ async function _getGuildChannels({ config, credential }) {
 // ── get_messages ──────────────────────────────────────────────────────────────
 // GET /channels/:channelId/messages?limit=50  — requires a bot token.
 // config: channelId, limit (default 50)
-async function _getMessages({ config, credential }) {
+async function _getMessages({ config, credential, signal }) {
   const token = config.botToken || credentialValue(credential, ['botToken', 'token', 'value']);
   if (!token)             throw new Error('Discord get_messages: botToken is required');
   const { channelId } = config;
@@ -108,6 +111,7 @@ async function _getMessages({ config, credential }) {
       Authorization: `Bot ${token}`,
       'Content-Type': 'application/json',
     },
+    signal,
   });
 
   return { ok: true, messages: result.body };

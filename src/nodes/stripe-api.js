@@ -20,7 +20,7 @@ function flattenMetadata(metadata) {
   return out;
 }
 
-export async function stripeApi({ config, credential }) {
+export async function stripeApi({ config, credential, signal }) {
   const apiKey = config.apiKey || credentialValue(credential, ['secretKey', 'apiKey', 'value']);
   const operation = config.operation ?? 'create_payment_intent';
   const headers = stripeHeaders(apiKey);
@@ -39,6 +39,7 @@ export async function stripeApi({ config, credential }) {
         method: 'POST',
         headers,
         body: new URLSearchParams(params).toString(),
+        signal,
       })).body;
     }
 
@@ -48,6 +49,7 @@ export async function stripeApi({ config, credential }) {
       return (await requestJson(`${STRIPE_BASE}/v1/payment_intents/${encodeURIComponent(paymentIntentId)}`, {
         method: 'GET',
         headers,
+        signal,
       })).body;
     }
 
@@ -57,6 +59,7 @@ export async function stripeApi({ config, credential }) {
       return (await requestJson(`${STRIPE_BASE}/v1/customers?${params}`, {
         method: 'GET',
         headers,
+        signal,
       })).body;
     }
 
@@ -73,6 +76,7 @@ export async function stripeApi({ config, credential }) {
         method: 'POST',
         headers,
         body: new URLSearchParams(params).toString(),
+        signal,
       })).body;
     }
 
@@ -82,6 +86,7 @@ export async function stripeApi({ config, credential }) {
       return (await requestJson(`${STRIPE_BASE}/v1/customers/${encodeURIComponent(customerId)}`, {
         method: 'GET',
         headers,
+        signal,
       })).body;
     }
 

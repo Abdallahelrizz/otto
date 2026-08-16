@@ -1,8 +1,14 @@
 import { parseDAG } from './dag.js';
-import { logNodeStart, logNodeEnd, logNodeSkipped, logNodeWait, createExecution, startExecution, completeExecution, suspendExecution, deleteExecution } from './logger.js';
+import { logNodeStart, logNodeEnd, logNodeSkipped, logNodeWait, createExecution, startExecution, completeExecution, suspendExecution, deleteExecution, executionTypeFor } from './logger.js';
 import { randomUUID } from 'crypto';
 import { getCredential } from './credentials.js';
-import { resolveConfig } from './expressions.js';
+import { resolveConfigAsync } from './expressions.js';
+import {
+  registerExecution,
+  unregisterExecution,
+  isCancellation,
+  throwIfAborted,
+} from './abort-registry.js';
 import { getNodeHandler } from '../nodes/index.js';
 import { SKIP } from './skip.js';
 import { db } from '../db/client.js';
@@ -14,16 +20,12 @@ import { withSpan } from '../utils/otel.js';
 
 const EXECUTION_MODES = new Set(['full', 'single_node', 'to_node', 'from_node']);
 
-function getExecutionType(triggerType) {
-  if (triggerType === 'manual') return 'manual';
-  if (triggerType === 'api') return 'api';
-  if (triggerType === 'resume') return 'resume';
-  if (triggerType === 'error_workflow') return 'error_workflow';
-  if (triggerType === 'schedule') return 'scheduled';
-  if (triggerType === 'sub_workflow') return 'sub_workflow';
-  if (triggerType === 'test') return 'test';
-  return 'production'; // webhook, form, chat, unknown → production
-}
+// Single source of truth lives in engine/logger.js. There used to be a second copy of
+// this mapping here, and the two had already drifted ('test' was handled here but not
+// there), so the recorded execution_type depended on WHICH path created the row —
+// routes/executions.js creates it without an explicit executionType, the executor passes
+// one. Same trigger, two answers. Keep exactly one mapping.
+const getExecutionType = executionTypeFor;
 
 // Trigger types that are always saved regardless of workflow save settings.
 const ALWAYS_SAVE_TRIGGER_TYPES = new Set(['error_workflow', 'resume']);
@@ -55,7 +57,23 @@ class WaitSignal extends Error {
   }
 }
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/** Abortable sleep — rejects immediately if `signal` fires, so a long retry
+ *  backoff cannot delay a cancellation by its full duration. */
+const sleep = (ms, signal) => new Promise((resolve, reject) => {
+  if (signal?.aborted) {
+    reject(signal.reason instanceof Error ? signal.reason : new Error('Cancelled by user'));
+    return;
+  }
+  const timer = setTimeout(() => {
+    signal?.removeEventListener?.('abort', onAbort);
+    resolve();
+  }, ms);
+  function onAbort() {
+    clearTimeout(timer);
+    reject(signal.reason instanceof Error ? signal.reason : new Error('Cancelled by user'));
+  }
+  signal?.addEventListener?.('abort', onAbort, { once: true });
+});
 
 function clampInt(value, fallback, min, max) {
   const parsed = Number.parseInt(value, 10);
@@ -119,6 +137,9 @@ export async function runWorkflow({
     'workflow.trigger_type': triggerType ?? 'manual',
     'execution.id': executionId,
   }, async (span) => {
+    // One AbortController per execution. `signal` is threaded down to every node so
+    // that cancelling actually stops in-flight network calls, not just the DB row.
+    const signal = registerExecution(executionId);
     try {
       const dag = parseDAG(scopedDefinition);
       const timeoutSeconds = definition?.settings?.timeoutSeconds;
@@ -134,6 +155,7 @@ export async function runWorkflow({
         pinnedData,
         recursionDepth,
         vars,
+        signal,
       });
       const outputs = (timeoutSeconds > 0)
         ? await Promise.race([
@@ -177,6 +199,16 @@ export async function runWorkflow({
       return { executionId, outputs };
     } catch (err) {
       const message = errorMessage(err);
+
+      // A cancelled run is not a failed run. Record it as `cancelled`, skip the
+      // error-workflow dispatch (the user asked for this — it is not an incident),
+      // and do not let the save policy silently delete the record.
+      if (isCancellation(err)) {
+        await completeExecution(executionId, { status: 'cancelled', error: 'Cancelled by user' });
+        emitExecutionEvent(executionId, 'execution:end', { status: 'cancelled' });
+        throw err;
+      }
+
       if (shouldDeleteExecution({ settings: definition?.settings, status: 'error', triggerType })) {
         await deleteExecution(executionId);
         emitExecutionEvent(executionId, 'execution:end', { status: 'error', error: message, saved: false });
@@ -207,6 +239,9 @@ export async function runWorkflow({
       }
 
       throw err;
+    } finally {
+      // Must always run, or the registry leaks one controller per execution.
+      unregisterExecution(executionId);
     }
   });
 }
@@ -422,7 +457,10 @@ async function runNode(node, input, rawInputs, ctx) {
       currentNode: { id: node.id, name: node.name, type: node.type },
     };
 
-    const resolvedConfig = resolveConfig(node.config ?? {}, expressionCtx);
+    // Async on purpose: expression evaluation happens in a terminable worker, and
+    // awaiting it keeps the event loop free so sibling branches actually run
+    // concurrently. See resolveConfigAsync in expressions.js.
+    const resolvedConfig = await resolveConfigAsync(node.config ?? {}, expressionCtx);
 
     let credential = null;
     if (resolvedConfig.credentialId) {
@@ -458,21 +496,29 @@ async function runNode(node, input, rawInputs, ctx) {
 
       for (let attempt = 1; attempt <= maxTries; attempt += 1) {
         try {
+          // Don't start (or re-try) work for an execution that's already cancelled.
+          throwIfAborted(ctx.signal);
           output = await handler({
             input,
             rawInputs,
             config: resolvedConfig,
             credential,
             workspaceId,
+            // Top-level too: most handlers destructure this directly.
+            signal: ctx.signal,
             ctx: {
               executionId: ctx.executionId,
               workflowId: ctx.workflowId,
               nodeId: node.id,
               recursionDepth: ctx.recursionDepth ?? 0,
+              signal: ctx.signal,
             },
           });
           break;
         } catch (err) {
+          // Never retry a cancellation — that would defeat the cancel and can
+          // re-send a side effect the user just asked us to stop.
+          if (isCancellation(err)) throw err;
           if (attempt >= maxTries) throw err;
           retryCount = attempt;
           const message = errorMessage(err);
@@ -484,7 +530,8 @@ async function runNode(node, input, rawInputs, ctx) {
             maxTries,
             error: message,
           });
-          if (retryDelayMs > 0) await sleep(retryDelayMs);
+          // Abortable sleep — a 60s retry backoff must not make cancel wait 60s.
+          if (retryDelayMs > 0) await sleep(retryDelayMs, ctx.signal);
         }
       }
 
@@ -532,7 +579,10 @@ async function runNode(node, input, rawInputs, ctx) {
       const retryCount = Math.max(0, maxTries - 1);
 
       const secrets = credentialSecrets(credential);
-      const shouldContinue = node.continueOnError || node.onError === 'continueRegular' || node.onError === 'continueErrorOutput';
+      // continueOnError must NOT swallow a cancellation — otherwise cancelling a
+      // workflow whose nodes are set to continue would just keep running it.
+      const shouldContinue = !isCancellation(err)
+        && (node.continueOnError || node.onError === 'continueRegular' || node.onError === 'continueErrorOutput');
       if (shouldContinue) {
         const message = redactString(errorMessage(err), secrets);
         const output = node.onError === 'continueErrorOutput'

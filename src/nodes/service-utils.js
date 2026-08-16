@@ -54,6 +54,11 @@ async function _jsonFromResponse(response, maxBytes) {
 // pass; only private/reserved targets are blocked. Self-hosters that need
 // internal calls set SSRF_ALLOW_PRIVATE=true. requestJson and safeRequestJson
 // are intentionally identical so no call site can accidentally skip the guard.
+//
+// Cancellation: `options.signal` needs no special handling here — it falls into
+// `fetchOptions` and reaches `fetch` via safeFetch (which also preserves it across
+// redirect hops). Callers pass `signal` from their handler params. Do not "fix"
+// the apparent absence of `signal` in this file; the pass-through is deliberate.
 export async function requestJson(url, options = {}) {
   const { maxBytes, ...fetchOptions } = options;
   return _jsonFromResponse(await safeFetch(url, fetchOptions), maxBytes);

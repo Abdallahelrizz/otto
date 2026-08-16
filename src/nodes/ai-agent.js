@@ -26,13 +26,18 @@ function getApiKey(provider, credential) {
   }[provider];
 }
 
-async function runTool(toolDef, toolArgs, workspaceId) {
+async function runTool(toolDef, toolArgs, workspaceId, signal) {
   const handler = getNodeHandler(toolDef.handler ?? toolDef.type ?? 'http_request');
   const config = { ...(toolDef.config ?? {}), ...toolArgs };
-  return handler({ input: toolArgs, rawInputs: [], config, credential: null, workspaceId });
+  // Forward the signal: an agent tool IS a node handler (often http_request), so
+  // without this a cancelled agent would keep issuing tool requests.
+  return handler({
+    input: toolArgs, rawInputs: [], config, credential: null, workspaceId,
+    signal, ctx: { signal },
+  });
 }
 
-export async function aiAgent({ input, config, credential, workspaceId }) {
+export async function aiAgent({ input, config, credential, workspaceId, signal }) {
   const {
     provider     = 'openai',
     model        = 'gpt-4o-mini',
@@ -49,18 +54,18 @@ export async function aiAgent({ input, config, credential, workspaceId }) {
 
   if (provider === 'anthropic') {
     return runAnthropicLoop({
-      input, systemPrompt, model, apiKey, tools, effectiveMaxSteps, workspaceId, steps, totalUsage,
+      input, systemPrompt, model, apiKey, tools, effectiveMaxSteps, workspaceId, steps, totalUsage, signal,
     });
   }
 
   return runOpenAILoop({
-    input, systemPrompt, model, apiKey, provider, tools, effectiveMaxSteps, workspaceId, steps, totalUsage,
+    input, systemPrompt, model, apiKey, provider, tools, effectiveMaxSteps, workspaceId, steps, totalUsage, signal,
   });
 }
 
 // ── OpenAI / OpenRouter tool-use loop ─────────────────────────────────────────
 
-async function runOpenAILoop({ input, systemPrompt, model, apiKey, provider, tools, effectiveMaxSteps, workspaceId, steps, totalUsage }) {
+async function runOpenAILoop({ input, systemPrompt, model, apiKey, provider, tools, effectiveMaxSteps, workspaceId, steps, totalUsage, signal }) {
   const client = new OpenAI({
     apiKey,
     ...(provider === 'openrouter' ? { baseURL: 'https://openrouter.ai/api/v1' } : {}),
@@ -83,13 +88,16 @@ async function runOpenAILoop({ input, systemPrompt, model, apiKey, provider, too
   let finalText = '';
 
   while (stepCount < effectiveMaxSteps) {
+    // Stop the agent loop on cancel — otherwise it keeps stepping (and paying)
+    // after the user cancelled.
+    if (signal?.aborted) throw signal.reason instanceof Error ? signal.reason : new Error('Cancelled by user');
     stepCount++;
     const response = await client.chat.completions.create({
       model,
       messages,
       tools: openaiTools.length > 0 ? openaiTools : undefined,
       tool_choice: openaiTools.length > 0 ? 'auto' : undefined,
-    });
+    }, { signal });
 
     const usage = response.usage ?? {};
     totalUsage.prompt_tokens     += usage.prompt_tokens ?? 0;
@@ -112,7 +120,7 @@ async function runOpenAILoop({ input, systemPrompt, model, apiKey, provider, too
         if (!toolDef) throw new Error(`AI Agent: unknown tool "${tc.function.name}"`);
         const toolArgs = JSON.parse(tc.function.arguments ?? '{}');
         const t0 = Date.now();
-        const output = await runTool(toolDef, toolArgs, workspaceId);
+        const output = await runTool(toolDef, toolArgs, workspaceId, signal);
         steps.push({ tool: tc.function.name, input: toolArgs, output, durationMs: Date.now() - t0 });
         return { role: 'tool', tool_call_id: tc.id, content: JSON.stringify(output) };
       })
@@ -126,7 +134,7 @@ async function runOpenAILoop({ input, systemPrompt, model, apiKey, provider, too
 
 // ── Anthropic tool-use loop ────────────────────────────────────────────────────
 
-async function runAnthropicLoop({ input, systemPrompt, model, apiKey, tools, effectiveMaxSteps, workspaceId, steps, totalUsage }) {
+async function runAnthropicLoop({ input, systemPrompt, model, apiKey, tools, effectiveMaxSteps, workspaceId, steps, totalUsage, signal }) {
   const client = new Anthropic({ apiKey });
 
   const anthropicTools = tools.map(t => ({
@@ -142,6 +150,9 @@ async function runAnthropicLoop({ input, systemPrompt, model, apiKey, tools, eff
   let finalText = '';
 
   while (stepCount < effectiveMaxSteps) {
+    // Stop the agent loop on cancel — otherwise it keeps stepping (and paying)
+    // after the user cancelled.
+    if (signal?.aborted) throw signal.reason instanceof Error ? signal.reason : new Error('Cancelled by user');
     stepCount++;
     const response = await client.messages.create({
       model,
@@ -149,7 +160,7 @@ async function runAnthropicLoop({ input, systemPrompt, model, apiKey, tools, eff
       messages,
       ...(systemBlock ? { system: systemBlock } : {}),
       ...(anthropicTools.length > 0 ? { tools: anthropicTools } : {}),
-    });
+    }, { signal });
 
     const usage = response.usage ?? {};
     totalUsage.prompt_tokens     += usage.input_tokens ?? 0;
@@ -169,7 +180,7 @@ async function runAnthropicLoop({ input, systemPrompt, model, apiKey, tools, eff
         const toolDef = tools.find(t => t.name === tb.name);
         if (!toolDef) throw new Error(`AI Agent: unknown tool "${tb.name}"`);
         const t0 = Date.now();
-        const output = await runTool(toolDef, tb.input ?? {}, workspaceId);
+        const output = await runTool(toolDef, tb.input ?? {}, workspaceId, signal);
         steps.push({ tool: tb.name, input: tb.input, output, durationMs: Date.now() - t0 });
         return { type: 'tool_result', tool_use_id: tb.id, content: JSON.stringify(output) };
       })

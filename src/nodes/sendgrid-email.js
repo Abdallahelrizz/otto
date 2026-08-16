@@ -10,7 +10,7 @@ function sendgridHeaders(apiKey) {
   };
 }
 
-export async function sendgridEmail({ config, credential }) {
+export async function sendgridEmail({ config, credential, signal }) {
   const apiKey = config.apiKey || credentialValue(credential, ['apiKey', 'value', 'token']);
   const operation = config.operation ?? 'send_email';
   const headers = sendgridHeaders(apiKey);
@@ -38,6 +38,7 @@ export async function sendgridEmail({ config, credential }) {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
+        signal,
       });
 
       // SendGrid returns 202 with an empty body on success
@@ -58,6 +59,7 @@ export async function sendgridEmail({ config, credential }) {
         method: 'PUT',
         headers,
         body: JSON.stringify(body),
+        signal,
       })).body;
     }
 

@@ -217,7 +217,7 @@ async function bodyForPut({ input, config, workspaceId }) {
   };
 }
 
-export async function s3Object({ input, config, credential, workspaceId }) {
+export async function s3Object({ input, config, credential, workspaceId, signal }) {
   const operation = config.operation ?? 'list';
   const credentials = s3Credentials(config, credential);
   assertS3Shape(config, credentials);
@@ -235,7 +235,7 @@ export async function s3Object({ input, config, credential, workspaceId }) {
       forcePathStyle: credentials.forcePathStyle,
     });
     const headers = signS3Request({ method: 'GET', url, credentials });
-    const response = await safeFetch(url, { method: 'GET', headers });
+    const response = await safeFetch(url, { method: 'GET', headers, signal });
     await assertOk(response, 'list');
     const xml = await response.text();
     const objects = parseListObjectsXml(xml);
@@ -261,7 +261,7 @@ export async function s3Object({ input, config, credential, workspaceId }) {
       'content-type': contentType,
     };
     const headers = signS3Request({ method: 'PUT', url, headers: baseHeaders, body, credentials });
-    const response = await safeFetch(url, { method: 'PUT', headers, body });
+    const response = await safeFetch(url, { method: 'PUT', headers, body, signal });
     await assertOk(response, 'put');
     return {
       bucket: credentials.bucket,
@@ -280,7 +280,7 @@ export async function s3Object({ input, config, credential, workspaceId }) {
       forcePathStyle: credentials.forcePathStyle,
     });
     const headers = signS3Request({ method: 'GET', url, credentials });
-    const response = await safeFetch(url, { method: 'GET', headers });
+    const response = await safeFetch(url, { method: 'GET', headers, signal });
     await assertOk(response, 'get');
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
@@ -315,7 +315,7 @@ export async function s3Object({ input, config, credential, workspaceId }) {
       forcePathStyle: credentials.forcePathStyle,
     });
     const headers = signS3Request({ method: 'HEAD', url, credentials });
-    const response = await safeFetch(url, { method: 'HEAD', headers });
+    const response = await safeFetch(url, { method: 'HEAD', headers, signal });
     await assertOk(response, 'head');
     return {
       bucket: credentials.bucket,
@@ -333,7 +333,7 @@ export async function s3Object({ input, config, credential, workspaceId }) {
       forcePathStyle: credentials.forcePathStyle,
     });
     const headers = signS3Request({ method: 'DELETE', url, credentials });
-    const response = await safeFetch(url, { method: 'DELETE', headers });
+    const response = await safeFetch(url, { method: 'DELETE', headers, signal });
     await assertOk(response, 'delete');
     return {
       bucket: credentials.bucket,

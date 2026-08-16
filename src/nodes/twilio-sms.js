@@ -10,7 +10,7 @@ function twilioHeaders(accountSid, authToken) {
   };
 }
 
-export async function twilioSms({ config, credential }) {
+export async function twilioSms({ config, credential, signal }) {
   const accountSid = config.accountSid || credentialValue(credential, ['accountSid']);
   const authToken  = config.authToken  || credentialValue(credential, ['authToken', 'value']);
   const operation  = config.operation ?? 'send_sms';
@@ -34,6 +34,7 @@ export async function twilioSms({ config, credential }) {
         method: 'POST',
         headers,
         body: params.toString(),
+        signal,
       })).body;
     }
 
@@ -43,6 +44,7 @@ export async function twilioSms({ config, credential }) {
       return (await requestJson(`${base}/Messages/${encodeURIComponent(messageSid)}.json`, {
         method: 'GET',
         headers,
+        signal,
       })).body;
     }
 
@@ -55,6 +57,7 @@ export async function twilioSms({ config, credential }) {
       return (await requestJson(`${base}/Messages.json${qs ? '?' + qs : ''}`, {
         method: 'GET',
         headers,
+        signal,
       })).body;
     }
 

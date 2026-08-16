@@ -11,7 +11,7 @@ function _checkResponse(result) {
   return result.body;
 }
 
-export async function telegramSendMessage({ config, credential }) {
+export async function telegramSendMessage({ config, credential, signal }) {
   const operation = config.operation || 'send_message';
 
   const botToken = config.botToken || credentialValue(credential, ['botToken', 'token', 'value', 'apiKey']);
@@ -19,16 +19,16 @@ export async function telegramSendMessage({ config, credential }) {
 
   switch (operation) {
     case 'send_message':
-      return _sendMessage({ config, botToken });
+      return _sendMessage({ config, botToken, signal });
 
     case 'send_photo':
-      return _sendPhoto({ config, botToken });
+      return _sendPhoto({ config, botToken, signal });
 
     case 'get_updates':
-      return _getUpdates({ config, botToken });
+      return _getUpdates({ config, botToken, signal });
 
     case 'get_chat':
-      return _getChat({ config, botToken });
+      return _getChat({ config, botToken, signal });
 
     default:
       throw new Error(`Telegram: unknown operation "${operation}"`);
@@ -38,7 +38,7 @@ export async function telegramSendMessage({ config, credential }) {
 // ── send_message ──────────────────────────────────────────────────────────────
 // Sends a text message to a chat.
 // config: chatId, text, parseMode (optional)
-async function _sendMessage({ config, botToken }) {
+async function _sendMessage({ config, botToken, signal }) {
   const { chatId, text = '', parseMode = '' } = config;
   if (!chatId) throw new Error('Telegram send_message: chatId is required');
 
@@ -52,6 +52,7 @@ async function _sendMessage({ config, botToken }) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal,
   });
 
   return _checkResponse(result);
@@ -60,7 +61,7 @@ async function _sendMessage({ config, botToken }) {
 // ── send_photo ────────────────────────────────────────────────────────────────
 // Sends a photo (file_id or public URL) to a chat.
 // config: chatId, photo, caption (optional), parseMode (optional)
-async function _sendPhoto({ config, botToken }) {
+async function _sendPhoto({ config, botToken, signal }) {
   const { chatId, photo, caption = '', parseMode = '' } = config;
   if (!chatId) throw new Error('Telegram send_photo: chatId is required');
   if (!photo)  throw new Error('Telegram send_photo: photo (file_id or URL) is required');
@@ -76,6 +77,7 @@ async function _sendPhoto({ config, botToken }) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal,
   });
 
   return _checkResponse(result);
@@ -84,7 +86,7 @@ async function _sendPhoto({ config, botToken }) {
 // ── get_updates ───────────────────────────────────────────────────────────────
 // Fetches pending updates (long-poll, offset-based).
 // config: offset (optional), limit (default 100)
-async function _getUpdates({ config, botToken }) {
+async function _getUpdates({ config, botToken, signal }) {
   const body = {
     limit: Number(config.limit ?? 100),
   };
@@ -94,6 +96,7 @@ async function _getUpdates({ config, botToken }) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal,
   });
 
   return _checkResponse(result);
@@ -102,7 +105,7 @@ async function _getUpdates({ config, botToken }) {
 // ── get_chat ──────────────────────────────────────────────────────────────────
 // Returns info about a chat / channel / group.
 // config: chatId
-async function _getChat({ config, botToken }) {
+async function _getChat({ config, botToken, signal }) {
   const { chatId } = config;
   if (!chatId) throw new Error('Telegram get_chat: chatId is required');
 
@@ -110,6 +113,7 @@ async function _getChat({ config, botToken }) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId }),
+    signal,
   });
 
   return _checkResponse(result);

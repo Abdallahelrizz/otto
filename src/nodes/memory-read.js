@@ -5,8 +5,8 @@ function normalizeMode(mode) {
   return ['semantic', 'session', 'summary', 'all'].includes(mode) ? mode : 'semantic';
 }
 
-async function readPatterns({ workspaceId, query, category, topK, minScore, credential }) {
-  const embedding = await embedText(query, credential);
+async function readPatterns({ workspaceId, query, category, topK, minScore, credential, signal }) {
+  const embedding = await embedText(query, credential, signal);
   if (!embedding) return [];
 
   const params = [vectorLiteral(embedding), workspaceId, topK];
@@ -62,7 +62,7 @@ async function readSummary({ workspaceId, sessionId }) {
   return rows[0] ?? null;
 }
 
-export async function memoryRead({ input, config, credential, workspaceId }) {
+export async function memoryRead({ input, config, credential, workspaceId, signal }) {
   const mode = normalizeMode(config.mode);
   const query = config.query || input?.query || input?.text || input?.message;
   const sessionId = config.sessionId || input?.sessionId || input?.session_id || 'default';
@@ -90,6 +90,7 @@ export async function memoryRead({ input, config, credential, workspaceId }) {
       topK,
       minScore,
       credential,
+      signal,
     });
   }
 

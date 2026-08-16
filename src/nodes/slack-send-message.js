@@ -1,6 +1,6 @@
 import { bearerHeaders, credentialValue, parseJson, requestJson } from './service-utils.js';
 
-export async function slackSendMessage({ config, credential }) {
+export async function slackSendMessage({ config, credential, signal }) {
   const token = config.token || credentialValue(credential, ['botToken', 'token', 'value', 'apiKey']);
   const operation = config.operation ?? 'send_message';
 
@@ -20,6 +20,7 @@ export async function slackSendMessage({ config, credential }) {
         method: 'POST',
         headers: bearerHeaders(token),
         body: JSON.stringify(body),
+        signal,
       });
 
       if (result.body && result.body.ok === false) {
@@ -34,6 +35,7 @@ export async function slackSendMessage({ config, credential }) {
       const result = await requestJson(`https://slack.com/api/conversations.list?${params}`, {
         method: 'GET',
         headers: bearerHeaders(token),
+        signal,
       });
       if (result.body && result.body.ok === false) {
         throw new Error(`Slack: ${result.body.error ?? 'list_channels failed'}`);
@@ -48,6 +50,7 @@ export async function slackSendMessage({ config, credential }) {
       const result = await requestJson(`https://slack.com/api/conversations.info?${params}`, {
         method: 'GET',
         headers: bearerHeaders(token),
+        signal,
       });
       if (result.body && result.body.ok === false) {
         throw new Error(`Slack: ${result.body.error ?? 'get_channel failed'}`);
@@ -60,6 +63,7 @@ export async function slackSendMessage({ config, credential }) {
       const result = await requestJson(`https://slack.com/api/users.list?${params}`, {
         method: 'GET',
         headers: bearerHeaders(token),
+        signal,
       });
       if (result.body && result.body.ok === false) {
         throw new Error(`Slack: ${result.body.error ?? 'list_users failed'}`);
@@ -75,6 +79,7 @@ export async function slackSendMessage({ config, credential }) {
         method: 'POST',
         headers: bearerHeaders(token),
         body: JSON.stringify({ channel: channelId, ts }),
+        signal,
       });
       if (result.body && result.body.ok === false) {
         throw new Error(`Slack: ${result.body.error ?? 'delete_message failed'}`);

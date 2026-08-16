@@ -12,16 +12,17 @@ function notionHeaders(token, notionVersion) {
   };
 }
 
-function notion(path, { token, method = 'GET', body, notionVersion } = {}) {
+function notion(path, { token, method = 'GET', body, notionVersion, signal } = {}) {
   const url = /^https?:\/\//i.test(path) ? path : `${BASE}/${path.replace(/^\//, '')}`;
   return requestJson(url, {
     method,
     headers: notionHeaders(token, notionVersion),
     body: body != null ? JSON.stringify(body) : undefined,
+    signal,
   });
 }
 
-export async function notionApi({ config, credential }) {
+export async function notionApi({ config, credential, signal }) {
   const token = config.token || credentialValue(credential, ['token', 'value', 'apiKey']);
   const notionVersion = config.notionVersion ?? NOTION_VERSION;
   const operation = config.operation ?? 'generic';
@@ -40,12 +41,12 @@ export async function notionApi({ config, credential }) {
         },
       };
       if (content) body.children = [{ object: 'block', type: 'paragraph', paragraph: { rich_text: [{ text: { content } }] } }];
-      return notion('/pages', { token, method: 'POST', body, notionVersion });
+      return notion('/pages', { token, method: 'POST', body, notionVersion, signal });
     }
     case 'get_page': {
       const { pageId } = config;
       if (!pageId) throw new Error('Notion get_page requires pageId');
-      return notion(`/pages/${pageId}`, { token, notionVersion });
+      return notion(`/pages/${pageId}`, { token, notionVersion, signal });
     }
     case 'update_page': {
       const { pageId, properties } = config;
@@ -54,6 +55,7 @@ export async function notionApi({ config, credential }) {
         token, method: 'PATCH',
         body: { properties: parseJson(properties, {}) },
         notionVersion,
+        signal,
       });
     }
     case 'list_pages': {
@@ -63,14 +65,14 @@ export async function notionApi({ config, credential }) {
       if (filter) body.filter = parseJson(filter, undefined);
       if (sorts) body.sorts = parseJson(sorts, undefined);
       if (config.pageSize) body.page_size = Math.min(100, Number(config.pageSize));
-      return notion(`/databases/${databaseId}/query`, { token, method: 'POST', body, notionVersion });
+      return notion(`/databases/${databaseId}/query`, { token, method: 'POST', body, notionVersion, signal });
     }
     case 'search': {
       const body = {};
       if (config.query) body.query = config.query;
       if (config.filter) body.filter = parseJson(config.filter, undefined);
       if (config.sort) body.sort = parseJson(config.sort, undefined);
-      return notion('/search', { token, method: 'POST', body, notionVersion });
+      return notion('/search', { token, method: 'POST', body, notionVersion, signal });
     }
     case 'delete_page': {
       const { pageId } = config;
@@ -79,6 +81,7 @@ export async function notionApi({ config, credential }) {
         token, method: 'PATCH',
         body: { archived: true },
         notionVersion,
+        signal,
       });
     }
     case 'append_block': {
@@ -89,25 +92,26 @@ export async function notionApi({ config, credential }) {
         token, method: 'POST',
         body: { children },
         notionVersion,
+        signal,
       });
     }
     case 'list_databases': {
       const body = { filter: { value: 'database', property: 'object' } };
       if (config.query) body.query = config.query;
       if (config.pageSize) body.page_size = Math.min(100, Number(config.pageSize));
-      return notion('/search', { token, method: 'POST', body, notionVersion });
+      return notion('/search', { token, method: 'POST', body, notionVersion, signal });
     }
     case 'get_database': {
       const { databaseId } = config;
       if (!databaseId) throw new Error('Notion get_database requires databaseId');
-      return notion(`/databases/${databaseId}`, { token, notionVersion });
+      return notion(`/databases/${databaseId}`, { token, notionVersion, signal });
     }
     case 'generic':
     default: {
       const method = String(config.method ?? 'GET').toUpperCase();
       const path = config.path || '/users/me';
       const body = parseJson(config.body, null);
-      return notion(path, { token, method, body: body ?? undefined, notionVersion });
+      return notion(path, { token, method, body: body ?? undefined, notionVersion, signal });
     }
   }
 }

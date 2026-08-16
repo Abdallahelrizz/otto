@@ -11,7 +11,7 @@ function textFrom(value, fallback = '') {
   return JSON.stringify(value);
 }
 
-export async function memoryWrite({ input, config, credential, workspaceId }) {
+export async function memoryWrite({ input, config, credential, workspaceId, signal }) {
   const mode = normalizeMode(config.mode);
   const sessionId = config.sessionId || input?.sessionId || input?.session_id || 'default';
   const category = String(config.category ?? input?.category ?? 'general').trim() || 'general';
@@ -21,7 +21,7 @@ export async function memoryWrite({ input, config, credential, workspaceId }) {
     const content = textFrom(config.content || input?.content || input?.text || input?.message).trim();
     if (!content) throw new Error('Memory Write: content is required');
 
-    const embedding = await embedText(content, credential);
+    const embedding = await embedText(content, credential, signal);
     const { rows } = await db.query(
       `INSERT INTO memory_patterns (workspace_id, content, category, confidence, embedding, last_invoked_at)
        VALUES ($1, $2, $3, $4, $5::vector, NOW())
@@ -36,7 +36,7 @@ export async function memoryWrite({ input, config, credential, workspaceId }) {
     const outputText = textFrom(config.outputText || input?.output || input?.answer || input?.response).trim();
     if (!inputText && !outputText) throw new Error('Memory Write: input or output text is required');
 
-    const embedding = await embedText(`${inputText}\n${outputText}`.trim(), credential);
+    const embedding = await embedText(`${inputText}\n${outputText}`.trim(), credential, signal);
     const { rows } = await db.query(
       `INSERT INTO memory_interactions (workspace_id, session_id, input, output, confidence, embedding)
        VALUES ($1, $2, $3, $4, $5, $6::vector)

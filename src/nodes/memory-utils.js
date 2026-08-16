@@ -4,7 +4,7 @@ export function readOpenAiKey(credential) {
   return credential?.data?.value ?? credential?.data?.apiKey ?? process.env.OPENAI_API_KEY;
 }
 
-export async function embedText(text, credential) {
+export async function embedText(text, credential, signal) {
   const input = String(text ?? '').trim();
   if (!input) return null;
 
@@ -15,7 +15,7 @@ export async function embedText(text, credential) {
   const response = await client.embeddings.create({
     model: 'text-embedding-3-small',
     input,
-  });
+  }, { signal });
   return response.data[0].embedding;
 }
 

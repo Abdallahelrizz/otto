@@ -1,6 +1,6 @@
 import { credentialValue, parseJson, safeRequestJson } from './service-utils.js';
 
-export async function graphqlRequest({ config, credential }) {
+export async function graphqlRequest({ config, credential, signal }) {
   const { endpoint, query } = config;
   if (!endpoint) throw new Error('GraphQL: endpoint is required');
   if (!query) throw new Error('GraphQL: query is required');
@@ -16,6 +16,7 @@ export async function graphqlRequest({ config, credential }) {
       query,
       variables: parseJson(config.variablesJson, {}),
     }),
+    signal,
   });
 
   if (result.body?.errors?.length) {

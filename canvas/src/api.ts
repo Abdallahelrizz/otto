@@ -66,6 +66,8 @@ async function req<T>(path: string, options?: RequestInit): Promise<T> {
     apiError.validation = err.validation;
     throw apiError;
   }
+  // A successful 204 has no JSON body; parsing it made completed deletes reject in the UI.
+  if (res.status === 204) return undefined as T;
   return res.json();
 }
 
@@ -144,8 +146,26 @@ export const api = {
     return req(`/executions/${executionId}`);
   },
 
+  /**
+   * Cancel a running execution.
+   *
+   * `aborted: true` means a run in the API process was signalled — in-flight HTTP/LLM
+   * requests are aborted and no further nodes start. `aborted: false` means this
+   * process wasn't running it (already finished, or another worker owns it); the row
+   * is marked cancelled but a run in a different worker is NOT stopped.
+   *
+   * Cancel stops future work. It does NOT undo side effects already sent (a POST that
+   * landed, an email delivered), and an LLM provider may still bill for tokens already
+   * generated. Don't present this as "undo" in the UI.
+   */
   async cancelExecution(executionId: string) {
-    return req<{ ok: boolean; status: string }>(`/executions/${executionId}/cancel`, { method: 'POST' });
+    return req<{
+      ok: boolean;
+      status: 'cancelled' | 'cancelling';
+      aborted?: boolean;
+      removedJob?: boolean;
+      note?: string;
+    }>(`/executions/${executionId}/cancel`, { method: 'POST' });
   },
 
   async retryExecution(executionId: string) {
