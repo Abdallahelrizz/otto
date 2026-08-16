@@ -17,13 +17,15 @@ function resolveBase(descriptor, config) {
 
 function applyAuth(descriptor, config, token, headers, params) {
   const kind = descriptor.auth.kind;
-  if (!token && kind !== 'oauth2') throw new Error(`${descriptor.type}: credential is required`);
+  if (!token) throw new Error(`${descriptor.type}: credential is required`);
   switch (kind) {
     case 'bearer': headers.Authorization = `Bearer ${token}`; break;
+    // WHAT was wrong: oauth2 passed descriptor validation but every execution rejected it as unsupported.
+    case 'oauth2': headers.Authorization = `Bearer ${token}`; break;
     case 'header': headers[descriptor.auth.header || 'Authorization'] = token; break;
     case 'basic': headers.Authorization = `Basic ${Buffer.from(token).toString('base64')}`; break;
     case 'query': params.set(descriptor.auth.param || 'api_key', token); break;
-    case 'path': /* token injected via the operation path template (see descriptor) */ break;
+    case 'path': /* Injected into the path interpolation config below. */ break;
     default: throw new Error(`${descriptor.type}: auth.kind "${kind}" not supported in this batch`);
   }
 }
@@ -53,7 +55,11 @@ export function makeServiceHandler(descriptor, { request = safeRequestJson } = {
     const queryParams = new URLSearchParams(buildQuery(op.query, config));
     applyAuth(descriptor, config, token, headers, queryParams);
 
-    let url = urlJoin(base, fillPath(op.path, config));
+    // WHAT was wrong: path auth validated and required a credential, but never put the stored secret in the path.
+    const pathConfig = descriptor.auth.kind === 'path'
+      ? { ...config, [descriptor.auth.param || 'token']: token }
+      : config;
+    let url = urlJoin(base, fillPath(op.path, pathConfig));
     const qs = queryParams.toString();
     if (qs) url += (url.includes('?') ? '&' : '?') + qs;
 

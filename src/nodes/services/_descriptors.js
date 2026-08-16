@@ -13,10 +13,16 @@ const files = (await readdir(dir))
   .filter((f) => f.endsWith('.service.js') && !f.startsWith('_'));
 
 export const serviceDescriptors = [];
+const descriptorTypes = new Set();
 
 for (const file of files) {
   const mod = await import(new URL(file, dir));
   const descriptor = mod.default;
   validateDescriptor(descriptor);
+  // WHAT was wrong: duplicate types silently overwrote one another in the runtime Map.
+  if (descriptorTypes.has(descriptor.type)) {
+    throw new Error(`Duplicate service descriptor type "${descriptor.type}"`);
+  }
+  descriptorTypes.add(descriptor.type);
   serviceDescriptors.push(descriptor);
 }
