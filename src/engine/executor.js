@@ -185,7 +185,13 @@ export async function runWorkflow({
         : await dagPromise;
       if (outputs?.waited) {
         const { waitNodeId, waitDescriptor, nodeOutputs } = outputs;
-        const resumeToken = randomUUID().replace(/-/g, '');
+        // Honour a token the node already issued. `human_approval` inserts an approvals
+        // row keyed by its own token and hands that back as `waitToken`, but the executor
+        // used to mint a DIFFERENT resume token — so `POST /approvals/:token` looked up
+        // `executions.resume_token` with the approval token and never matched. Combined
+        // with the wait_type CHECK rejecting 'approval' (migration 027), human-in-the-loop
+        // approvals could never work at all.
+        const resumeToken = waitDescriptor.waitToken ?? randomUUID().replace(/-/g, '');
         const waitUntil = waitDescriptor.waitType === 'time'
           ? new Date(Date.now() + waitDescriptor.durationSeconds * 1000)
           : null;

@@ -18,6 +18,11 @@ const EXECUTION_TYPE_BY_TRIGGER = {
   api: 'api',
   schedule: 'scheduled',
   scheduled: 'scheduled',
+  // Both spellings map to the same execution_type. `nodes/sub-workflow.js` writes
+  // `subworkflow` (no underscore, which is what the DB CHECK on trigger_type allows),
+  // while this table previously keyed only on `sub_workflow` — so every sub-workflow run
+  // fell through to 'production' and was indistinguishable from a webhook run.
+  subworkflow: 'sub_workflow',
   sub_workflow: 'sub_workflow',
   error_workflow: 'error_workflow',
   resume: 'resume',

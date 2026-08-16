@@ -155,3 +155,47 @@ test('queue still retries, so the guard is load-bearing not decorative', async (
   const src = await readFile(path.join(root, 'src/queue/client.js'), 'utf-8');
   assert.match(src, /attempts:\s*[2-9]/, 'attempts > 1 is what makes the replay guard necessary');
 });
+
+// Found while building the benchmark harness: executions.trigger_type had a CHECK
+// constraint that predated several features, so values the code writes were rejected.
+// 'api' was a LIVE failure — every run started through the public API raised 23514 and
+// could never create an execution. Migration 026 widened the constraint.
+test('every trigger type the code writes is permitted by the schema', async () => {
+  const migration = await readFile(path.join(root, 'migrations/026_trigger_type_align.sql'), 'utf-8');
+  // These are written somewhere in src/ and must all be accepted.
+  for (const t of ['webhook','manual','schedule','subworkflow','form','chat','error_workflow','api','resume','test']) {
+    assert.ok(migration.includes(`'${t}'`), `trigger_type "${t}" is written by the code but not allowed by the CHECK`);
+  }
+});
+
+// nodes/sub-workflow.js writes 'subworkflow' (no underscore — that is what the DB CHECK
+// allows), but the mapping keyed only on 'sub_workflow', so sub-workflow runs were
+// labelled 'production' and were indistinguishable from webhook runs.
+test('both sub-workflow spellings map to the sub_workflow execution type', async () => {
+  const { executionTypeFor } = await import('../src/engine/logger.js');
+  assert.equal(executionTypeFor('subworkflow'), 'sub_workflow');
+  assert.equal(executionTypeFor('sub_workflow'), 'sub_workflow');
+  assert.equal(executionTypeFor('api'), 'api');
+  assert.equal(executionTypeFor('resume'), 'resume');
+});
+
+// Human-in-the-loop approvals had NEVER worked, for two independent reasons:
+//   1. executions.wait_type CHECK allowed only time/webhook/form, so a node emitting
+//      waitType='approval' was rejected outright (migration 027 widened it).
+//   2. human_approval inserts an approvals row keyed by its OWN token and returns it as
+//      waitToken, but the executor minted a DIFFERENT resume token — so
+//      POST /approvals/:token searched executions.resume_token and never matched.
+test('the executor honours a wait token issued by the node', async () => {
+  const src = await readFile(path.join(root, 'src/engine/executor.js'), 'utf-8');
+  assert.match(
+    src, /waitDescriptor\.waitToken\s*\?\?/,
+    'suspend must reuse waitDescriptor.waitToken, or approval links can never resolve',
+  );
+});
+
+test('wait_type CHECK permits every waitType a node emits', async () => {
+  const migration = await readFile(path.join(root, 'migrations/027_approval_wait_and_query_indexes.sql'), 'utf-8');
+  for (const wt of ['time', 'webhook', 'form', 'approval']) {
+    assert.ok(migration.includes(`'${wt}'`), `waitType "${wt}" is emitted by a node but not allowed`);
+  }
+});

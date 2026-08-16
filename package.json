@@ -11,7 +11,8 @@
     "worker": "node src/queue/worker.js",
     "migrate": "node migrations/run.js",
     "test": "node --test --test-force-exit test/services-validate.test.js test/services-interpolate.test.js test/services-engine.test.js test/services-response-cap.test.js test/services-nodedef-gen.test.js test/services-load.test.js test/redirect-auth.test.js test/expression-sandbox.test.js test/github-descriptor-parity.test.js test/hubspot-descriptor-parity.test.js test/usage-stats.test.js test/workflow-editor-persistence.test.js test/cancellation.test.js test/error-mapping.test.js",
-    "test:all": "node --test"
+    "test:all": "node --test",
+    "benchmark": "node scripts/benchmark.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.98.0",
