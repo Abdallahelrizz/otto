@@ -422,8 +422,8 @@ function ParallelVisual() {
       {/* n8n */}
       <div style={{ background: '#09090d', border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <span style={{ fontSize: 12, color: C.textSub }}>n8n — serial execution</span>
-          <span style={{ fontSize: 11, color: C.error, fontWeight: 600 }}>1m 49s</span>
+          <span style={{ fontSize: 12, color: C.textSub }}>Serial — one node at a time</span>
+          <span style={{ fontSize: 11, color: C.error, fontWeight: 600 }}>sum of every node</span>
         </div>
         <div style={{ display: 'flex', gap: 4 }}>
           {['Trigger', 'Embed', 'Retrieval', 'LLM (sub)', 'IF gate', 'LLM (main)', 'Merge', 'Output'].map(n => (
@@ -440,8 +440,8 @@ function ParallelVisual() {
       {/* Otto */}
       <div style={{ background: '#09090d', border: `1px solid rgba(34,197,94,0.15)`, borderRadius: 8, padding: '12px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <span style={{ fontSize: 12, color: C.textSub }}>Otto — parallel execution</span>
-          <span style={{ fontSize: 11, color: C.success, fontWeight: 600 }}>1.4s</span>
+          <span style={{ fontSize: 12, color: C.textSub }}>Otto — independent branches together</span>
+          <span style={{ fontSize: 11, color: C.success, fontWeight: 600 }}>longest path only</span>
         </div>
         <div style={{ display: 'flex', gap: 4 }}>
           <div style={{ flex: '0 0 auto', width: 48, height: 48, background: C.accentSoft, border: `1px solid ${C.border}`, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -467,13 +467,16 @@ function ParallelVisual() {
             <span style={{ fontSize: 8, color: C.success, textAlign: 'center', lineHeight: 1.2 }}>Merge + Output</span>
           </div>
         </div>
+        {/* Width = the critical path as a share of total node time. Keep this honest:
+            parallelism can only remove the time of branches that overlap, so the bar must
+            never imply a speedup larger than the graph's own longest path allows. */}
         <div style={{ marginTop: 6, height: 3, background: 'rgba(34,197,94,0.1)', borderRadius: 2, overflow: 'hidden' }}>
-          <div style={{ width: '1.3%', height: '100%', background: C.success, borderRadius: 2 }} />
+          <div style={{ width: '81%', height: '100%', background: C.success, borderRadius: 2 }} />
         </div>
       </div>
 
       <div style={{ textAlign: 'center', fontSize: 11, color: C.textMuted }}>
-        Cortex Brain benchmark · 10-node workflow · real API calls
+        Independent branches run at once — you wait for the longest path, not the sum
       </div>
     </div>
   );
@@ -491,7 +494,7 @@ function OttoBotVisual() {
       <div style={{ padding: '9px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{ width: 8, height: 8, borderRadius: '50%', background: C.success }} />
         <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>OttoBot</span>
-        <span style={{ fontSize: 10, color: C.textMuted }}>— learns how you build</span>
+        <span style={{ fontSize: 10, color: C.textMuted }}>— reads your workflow</span>
       </div>
       <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {msgs.map((m, i) => (
@@ -623,7 +626,7 @@ export function Landing() {
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text',
           }}>
-            78× faster.
+            All at once.
           </h1>
 
           <p style={{
@@ -709,9 +712,12 @@ export function Landing() {
           padding: '0 32px',
         }}>
           {[
-            { value: '78×', label: 'faster than n8n' },
-            { value: '1.4s', label: 'Cortex Brain benchmark' },
-            { value: '20+', label: 'node types' },
+            // No speed ratio here until there is a reproducible harness that measures
+            // both sides identically (see HARDENING.md item 5). Claims must be things a
+            // visitor can verify from the repo.
+            { value: 'Parallel', label: 'independent branches, by default' },
+            { value: '50+', label: 'node types' },
+            { value: 'Self-host', label: 'free forever, your infra' },
             { value: '100%', label: 'user-owned credentials' },
           ].map(({ value, label }) => (
             <div key={label} style={{ textAlign: 'center' }}>
@@ -727,21 +733,24 @@ export function Landing() {
         <FeatureSection
           tag="Parallel execution"
           title="Run workflows at the speed of your ideas."
-          body="Otto analyzes your workflow as a DAG and fires every independent node simultaneously using Promise.all(). No configuration needed — it just works. The Cortex Brain benchmark: n8n took 1m 49s. Otto did it in 1.4 seconds."
+          body="Otto analyzes your workflow as a DAG and fires every independent node simultaneously. Two API calls that don't depend on each other run at the same time — you wait for the longest path, not the sum of every step. No configuration needed; it's just how execution works."
           visual={<ParallelVisual />}
         />
 
         <FeatureSection
           tag="OttoBot"
-          title="An assistant that learns how you build."
-          body="OttoBot watches your workflows and gets smarter over time. It notices when nodes can be parallelized, when you're using a slower model for a task that a faster one handles just as well, and when your patterns suggest a better architecture."
+          // Describes what OttoBot actually does today: deterministic DAG analysis +
+          // chat grounded in the open workflow. It does NOT persist learning across
+          // sessions — do not reinstate "gets smarter over time" until it measurably does.
+          title="An assistant that reads your workflow."
+          body="OttoBot analyzes the graph you're building — it spots independent branches still wired in series, nodes nothing connects to, and chained LLM calls that could run together. Ask it questions about the open workflow and it answers with your actual nodes in context."
           visual={<OttoBotVisual />}
         />
 
         <FeatureSection
           tag="Fully observable"
           title="See exactly what's happening, always."
-          body="Every execution is logged. Every node output is inspectable. Live SSE streaming brings execution state to the canvas in real time — running nodes pulse, completed nodes show their output, failed nodes show the exact error."
+          body="Every execution is logged. Every node output is inspectable as JSON, a table, or a schema. Live SSE streaming brings execution state to the canvas in real time — nodes light up as they run, completed nodes show their output, and failed nodes show the exact error with the context to fix it."
           visual={<TerminalVisual />}
           isLast
         />

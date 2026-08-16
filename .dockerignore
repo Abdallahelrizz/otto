@@ -1,0 +1,46 @@
+# Keep the Docker build context small and secret-free.
+node_modules
+canvas/node_modules
+canvas/dist
+public
+
+.git
+.github
+.gitignore
+.gitattributes
+
+# Secrets / local env — never ship into an image
+.env
+.env.*
+!.env.example
+
+# Local agent / tooling state
+.agents
+.claude
+.external
+.playwright-cli
+graphify-out
+skills-lock.json
+_gfy_audit.py
+_*.json
+_*.txt
+
+# Design/reference handoffs and internal docs
+forClaudeDesign
+design_handoff_node_cards_p1
+otto_handoff
+otto_handoff_phase2
+AGENTS.md
+CLAUDE.md
+*.pdf
+*.docx
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode
+.idea
+
+# Tests are not needed in the runtime image
+test
+docs
