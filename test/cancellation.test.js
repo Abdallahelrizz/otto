@@ -112,3 +112,40 @@ test('AbortSignal.any combines a request timeout with execution cancel', () => {
   assert.equal(combined2.aborted, true, 'timeout must still abort independently');
   unregisterExecution('exec-9');
 });
+
+// A workflow timeout used to reject the caller via Promise.race while the DAG kept
+// running: nodes carried on making paid calls and writing rows for an execution already
+// marked failed. The timeout now aborts the execution signal — but that only works if
+// each node actually honours the signal. `delay` did not, so a "timed out" run still
+// reported the delay node as succeeded (up to 5 minutes later) and continued downstream.
+test('delay is abortable — a cancelled/timed-out run does not sleep to completion', async () => {
+  const { delayNode } = await import('../src/nodes/delay.js');
+  const signal = registerExecution('exec-delay');
+
+  const started = Date.now();
+  const pending = delayNode({ input: { a: 1 }, config: { amount: 30, unit: 's' }, signal });
+  abortExecution('exec-delay');
+
+  await assert.rejects(pending, (err) => isCancellation(err));
+  assert.ok(Date.now() - started < 2000, 'delay should abort promptly, not sleep 30s');
+});
+
+test('delay still completes normally when nothing aborts it', async () => {
+  const { delayNode } = await import('../src/nodes/delay.js');
+  const signal = registerExecution('exec-delay-ok');
+  const out = await delayNode({ input: { a: 1 }, config: { amount: 10, unit: 'ms' }, signal });
+  assert.deepEqual(out, { a: 1 }, 'delay must pass its input through unchanged');
+  unregisterExecution('exec-delay-ok');
+});
+
+test('delay rejects immediately if the signal is already aborted', async () => {
+  const { delayNode } = await import('../src/nodes/delay.js');
+  const signal = registerExecution('exec-delay-pre');
+  abortExecution('exec-delay-pre');
+  const started = Date.now();
+  await assert.rejects(
+    delayNode({ input: {}, config: { amount: 30, unit: 's' }, signal }),
+    (err) => isCancellation(err),
+  );
+  assert.ok(Date.now() - started < 500, 'should not start the timer at all');
+});

@@ -6,6 +6,7 @@ import { resolveConfigAsync } from './expressions.js';
 import {
   registerExecution,
   unregisterExecution,
+  abortExecution,
   isCancellation,
   throwIfAborted,
 } from './abort-registry.js';
@@ -157,16 +158,22 @@ export async function runWorkflow({
         vars,
         signal,
       });
+      // A timeout must ABORT the run, not just stop waiting for it. `Promise.race`
+      // only settles this promise — the losing `dagPromise` keeps going, so nodes
+      // carried on making (paid) LLM/HTTP calls and writing node_executions rows for an
+      // execution already recorded as failed. Aborting the execution signal propagates
+      // through every handler exactly as user-initiated cancellation does.
+      let timeoutTimer = null;
       const outputs = (timeoutSeconds > 0)
         ? await Promise.race([
             dagPromise,
-            new Promise((_, reject) =>
-              setTimeout(
-                () => reject(new Error(`Workflow exceeded timeout of ${timeoutSeconds}s`)),
-                timeoutSeconds * 1000,
-              )
-            ),
-          ])
+            new Promise((_, reject) => {
+              timeoutTimer = setTimeout(() => {
+                abortExecution(executionId, `Workflow exceeded timeout of ${timeoutSeconds}s`);
+                reject(new Error(`Workflow exceeded timeout of ${timeoutSeconds}s`));
+              }, timeoutSeconds * 1000);
+            }),
+          ]).finally(() => clearTimeout(timeoutTimer)) // otherwise the timer holds the loop open
         : await dagPromise;
       if (outputs?.waited) {
         const { waitNodeId, waitDescriptor, nodeOutputs } = outputs;
