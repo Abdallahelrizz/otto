@@ -33,7 +33,9 @@ export async function postgresQuery({ config, credential }) {
 
   let params;
   try {
-    params = typeof paramsRaw === 'string' ? JSON.parse(paramsRaw) : (Array.isArray(paramsRaw) ? paramsRaw : []);
+    params = typeof paramsRaw === 'string' ? JSON.parse(paramsRaw) : paramsRaw;
+    // CORRECTNESS: non-array params were silently replaced, producing misleading bind errors.
+    if (!Array.isArray(params)) throw new Error('not an array');
   } catch {
     throw new Error('Postgres Query: params must be a valid JSON array');
   }

@@ -48,7 +48,12 @@ export async function aiAgent({ input, config, credential, workspaceId, signal }
 
   const steps = [];
   const totalUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
-  const effectiveMaxSteps = Math.min(Number(maxSteps), ABSOLUTE_MAX_STEPS);
+  const parsedMaxSteps = Number(maxSteps);
+  // CORRECTNESS: NaN/zero previously made the agent silently perform no work.
+  if (!Number.isInteger(parsedMaxSteps) || parsedMaxSteps < 1) {
+    throw new Error('AI Agent: maxSteps must be a positive integer');
+  }
+  const effectiveMaxSteps = Math.min(parsedMaxSteps, ABSOLUTE_MAX_STEPS);
   const apiKey = getApiKey(provider, credential);
   if (!apiKey) throw new Error(`AI Agent: no API key for provider "${provider}"`);
 

@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { assertSafeConnectionTarget } from '../utils/safe-fetch.js';
 
 export async function sendEmail({ config, credential }) {
   const { to, subject, body, html } = config;
@@ -19,10 +20,19 @@ export async function sendEmail({ config, credential }) {
       auth: { user: 'resend', pass: apiKey },
     });
   } else {
+    const smtpHost = host ?? 'localhost';
+    const smtpPort = Number(port ?? 587);
+    if (!Number.isInteger(smtpPort) || smtpPort < 1 || smtpPort > 65535) {
+      throw new Error('Send Email: SMTP port must be an integer between 1 and 65535');
+    }
+    if (host) {
+      // SECURITY: a workspace-controlled SMTP credential could otherwise scan internal TCP services.
+      await assertSafeConnectionTarget(`smtp://${smtpHost}:${smtpPort}`);
+    }
     transporter = nodemailer.createTransport({
-      host: host ?? 'localhost',
-      port: Number(port ?? 587),
-      secure: Number(port) === 465,
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
       auth: user ? { user, pass } : undefined,
     });
   }

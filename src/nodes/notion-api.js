@@ -13,7 +13,9 @@ function notionHeaders(token, notionVersion) {
 }
 
 function notion(path, { token, method = 'GET', body, notionVersion, signal } = {}) {
-  const url = /^https?:\/\//i.test(path) ? path : `${BASE}/${path.replace(/^\//, '')}`;
+  // SECURITY: accepting an absolute generic path sent the Notion credential to any public host.
+  if (/^https?:\/\//i.test(path)) throw new Error('Notion: path must be relative to the Notion API');
+  const url = `${BASE}/${path.replace(/^\//, '')}`;
   return requestJson(url, {
     method,
     headers: notionHeaders(token, notionVersion),

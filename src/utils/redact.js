@@ -62,3 +62,25 @@ export function redactObject(obj, depth = 0) {
   }
   return result;
 }
+
+/**
+ * A URL safe to put in an error message: scheme + host + port only.
+ *
+ * Node errors are persisted to `node_executions` and streamed over SSE, so a raw URL
+ * in an error can leak a credential carried in the path or query (`?token=…`,
+ * `/webhook/<secret>`). But dropping the URL entirely — as an earlier fix did — left
+ * users with a bare "network request failed" and no way to tell a typo'd host from a
+ * refused connection.
+ *
+ * The origin is the part that essentially never carries a secret and is exactly what a
+ * user needs to debug. Returns a placeholder rather than throwing on unparseable input.
+ */
+export function safeUrlLabel(url) {
+  try {
+    const u = new URL(String(url));
+    // Credentials can also be embedded as user:pass@host — drop those too.
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    return '(invalid URL)';
+  }
+}

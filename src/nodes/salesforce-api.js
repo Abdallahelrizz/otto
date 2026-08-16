@@ -3,9 +3,19 @@ import { safeRequestJson } from './service-utils.js';
 
 const SF_API_VERSION = 'v59.0';
 
+function salesforceOrigin(value) {
+  let url;
+  try { url = new URL(String(value)); } catch { throw new Error('Salesforce: instanceUrl must be a valid HTTPS URL'); }
+  const host = url.hostname.toLowerCase();
+  const allowed = host.endsWith('.salesforce.com') || host.endsWith('.force.com');
+  // SECURITY: otherwise a config fallback can send the selected Salesforce token to an attacker host.
+  if (url.protocol !== 'https:' || !allowed) throw new Error('Salesforce: instanceUrl must be a Salesforce HTTPS host');
+  return url.origin;
+}
+
 export async function salesforceApi({ config, input, workspaceId, signal }) {
   const cred = await getCredential(config.credentialId, { workspaceId });
-  const instanceUrl = cred.data.instanceUrl ?? config.instanceUrl; // e.g. https://myorg.salesforce.com
+  const instanceUrl = salesforceOrigin(cred.data.instanceUrl ?? config.instanceUrl); // e.g. https://myorg.salesforce.com
   const token = cred.data.accessToken ?? cred.data.token;
   const base = `${instanceUrl}/services/data/${SF_API_VERSION}`;
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -18,26 +28,26 @@ export async function salesforceApi({ config, input, workspaceId, signal }) {
       return safeRequestJson(`${base}/query?q=${encodeURIComponent(soql)}`, { headers, signal });
     }
     case 'get_record': {
-      const sobject = config.sobject ?? 'Account';
+      const sobject = encodeURIComponent(config.sobject ?? 'Account');
       const recordId = config.recordId ?? input.id;
-      return safeRequestJson(`${base}/sobjects/${sobject}/${recordId}`, { headers, signal });
+      return safeRequestJson(`${base}/sobjects/${sobject}/${encodeURIComponent(recordId)}`, { headers, signal });
     }
     case 'create_record': {
-      const sobject = config.sobject ?? 'Account';
+      const sobject = encodeURIComponent(config.sobject ?? 'Account');
       const fields = config.fields ? JSON.parse(config.fields) : input;
       return safeRequestJson(`${base}/sobjects/${sobject}`, { method: 'POST', headers, body: JSON.stringify(fields), signal });
     }
     case 'update_record': {
-      const sobject = config.sobject ?? 'Account';
+      const sobject = encodeURIComponent(config.sobject ?? 'Account');
       const recordId = config.recordId ?? input.id;
       const fields = config.fields ? JSON.parse(config.fields) : input;
-      await safeRequestJson(`${base}/sobjects/${sobject}/${recordId}`, { method: 'PATCH', headers, body: JSON.stringify(fields), signal });
+      await safeRequestJson(`${base}/sobjects/${sobject}/${encodeURIComponent(recordId)}`, { method: 'PATCH', headers, body: JSON.stringify(fields), signal });
       return { updated: true, id: recordId };
     }
     case 'delete_record': {
-      const sobject = config.sobject ?? 'Account';
+      const sobject = encodeURIComponent(config.sobject ?? 'Account');
       const recordId = config.recordId ?? input.id;
-      await safeRequestJson(`${base}/sobjects/${sobject}/${recordId}`, { method: 'DELETE', headers, signal });
+      await safeRequestJson(`${base}/sobjects/${sobject}/${encodeURIComponent(recordId)}`, { method: 'DELETE', headers, signal });
       return { deleted: true, id: recordId };
     }
     default:

@@ -86,3 +86,44 @@ test('derived execution types all have a UI label (no raw value leaks to users)'
     );
   }
 });
+
+// Node errors are persisted to node_executions AND streamed over SSE, so a raw URL in
+// an error leaks any credential carried in its path or query. But an earlier fix removed
+// the URL entirely, leaving "network request failed" with nothing to debug. safeUrlLabel
+// is the middle ground: origin only.
+test('safeUrlLabel keeps the origin and drops credential-bearing parts', async () => {
+  const { safeUrlLabel } = await import('../src/utils/redact.js');
+  assert.equal(safeUrlLabel('https://api.example.com/v1/x?token=SECRET'), 'https://api.example.com');
+  assert.equal(safeUrlLabel('http://user:pw@internal:8080/path'), 'http://internal:8080');
+  assert.equal(safeUrlLabel('https://h.example.com/a/SECRET-PATH-SEG'), 'https://h.example.com');
+  assert.equal(safeUrlLabel('not a url'), '(invalid URL)');
+  assert.equal(safeUrlLabel(undefined), '(invalid URL)');
+});
+
+test('safeUrlLabel output never contains a query string or userinfo', async () => {
+  const { safeUrlLabel } = await import('../src/utils/redact.js');
+  for (const u of [
+    'https://a.example.com/p?token=abc123&k=v',
+    'https://u:p@b.example.com/p#frag',
+    'https://c.example.com/webhook/SECRETPATH',
+  ]) {
+    const label = safeUrlLabel(u);
+    assert.ok(!label.includes('?'), `query leaked: ${label}`);
+    assert.ok(!label.includes('@'), `userinfo leaked: ${label}`);
+    assert.ok(!label.includes('SECRET'), `secret leaked: ${label}`);
+    assert.ok(!label.includes('token'), `token leaked: ${label}`);
+  }
+});
+
+test('network failures name the host so they stay diagnosable', async () => {
+  // The executor persists only err.message, so putting detail in err.cause is not enough.
+  const { requestJson } = await import('../src/nodes/service-utils.js');
+  await assert.rejects(
+    () => requestJson('https://no-such-host-zz-999.invalid/v1/x?token=LEAKME'),
+    (err) => {
+      assert.ok(!err.message.includes('LEAKME'), `token leaked into error: ${err.message}`);
+      assert.ok(err.message.includes('no-such-host-zz-999.invalid'), `host missing: ${err.message}`);
+      return true;
+    },
+  );
+});

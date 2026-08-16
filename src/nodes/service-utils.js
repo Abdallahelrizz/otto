@@ -1,6 +1,16 @@
 import { safeFetch } from '../utils/safe-fetch.js';
+import { safeUrlLabel } from '../utils/redact.js';
 
-/** Throw if a Content-Length header exceeds maxBytes. Unknown lengths pass (cap is best-effort). */
+const DEFAULT_MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
+const SENSITIVE_RESPONSE_HEADERS = new Set([
+  'authorization',
+  'proxy-authorization',
+  'set-cookie',
+  'www-authenticate',
+  'proxy-authenticate',
+]);
+
+/** Reject a declared Content-Length above the caller's cap; streamed bytes are checked separately. */
 export function assertWithinCap(contentLength, maxBytes) {
   if (!maxBytes) return;
   const len = Number(contentLength);
@@ -28,9 +38,39 @@ export function parseJson(value, fallback = null) {
   }
 }
 
-async function _jsonFromResponse(response, maxBytes) {
+async function readTextWithinCap(response, maxBytes) {
   assertWithinCap(response.headers.get('content-length'), maxBytes);
-  const text = await response.text();
+  if (!response.body) return '';
+
+  const reader = response.body.getReader();
+  const chunks = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > maxBytes) {
+      await reader.cancel();
+      // SECURITY: Content-Length is optional/untrusted; cap streamed bytes too.
+      const err = new Error(`Response too large: streamed body exceeds cap of ${maxBytes}`);
+      err.code = 'RESPONSE_TOO_LARGE';
+      throw err;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8');
+}
+
+function responseHeaders(response) {
+  return Object.fromEntries([...response.headers.entries()].map(([key, value]) => [
+    key,
+    // SECURITY: response auth/cookie challenges may contain credentials and outputs are persisted.
+    SENSITIVE_RESPONSE_HEADERS.has(key.toLowerCase()) ? '[REDACTED]' : value,
+  ]));
+}
+
+async function _jsonFromResponse(response, maxBytes) {
+  const text = await readTextWithinCap(response, maxBytes);
   let body = text;
   try {
     body = text ? JSON.parse(text) : null;
@@ -38,15 +78,13 @@ async function _jsonFromResponse(response, maxBytes) {
     // Keep plain-text response bodies.
   }
   if (!response.ok) {
-    const message = typeof body === 'object' && body?.error
-      ? body.error.message ?? body.error
-      : `HTTP ${response.status}`;
-    const err = new Error(String(message));
+    // SECURITY: provider-controlled error text can echo tokens or signed URLs into persisted errors.
+    const err = new Error(`HTTP ${response.status}`);
     err.statusCode = response.status;
     err.body = body;
     throw err;
   }
-  return { statusCode: response.status, headers: Object.fromEntries(response.headers.entries()), body };
+  return { statusCode: response.status, headers: responseHeaders(response), body };
 }
 
 // All outbound integration calls go through safeFetch (SSRF-guarded).
@@ -60,8 +98,23 @@ async function _jsonFromResponse(response, maxBytes) {
 // redirect hops). Callers pass `signal` from their handler params. Do not "fix"
 // the apparent absence of `signal` in this file; the pass-through is deliberate.
 export async function requestJson(url, options = {}) {
-  const { maxBytes, ...fetchOptions } = options;
-  return _jsonFromResponse(await safeFetch(url, fetchOptions), maxBytes);
+  const { maxBytes = DEFAULT_MAX_RESPONSE_BYTES, ...fetchOptions } = options;
+  let response;
+  try {
+    response = await safeFetch(url, fetchOptions);
+  } catch (err) {
+    if (fetchOptions.signal?.aborted) throw err;
+    // SECURITY: fetch errors often include the full URL, including path/query
+    // credentials, and node errors are persisted + streamed. Keep the ORIGIN and the
+    // underlying reason so the failure is still diagnosable — a bare "network request
+    // failed" tells the user nothing. `cause` is not enough: the executor persists
+    // only `err.message`.
+    const reason = err instanceof Error ? (err.cause?.code ?? err.code ?? err.message) : String(err);
+    const safeError = new Error(`Request to ${safeUrlLabel(url)} failed: ${reason}`);
+    safeError.cause = err;
+    throw safeError;
+  }
+  return _jsonFromResponse(response, maxBytes);
 }
 
 export const safeRequestJson = requestJson;

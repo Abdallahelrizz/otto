@@ -59,6 +59,8 @@ export async function airtableRecords({ config, credential, signal }) {
       method = 'POST';
       url = `${base}/bulk`;
       const recordsArray = parseJson(config.recordsJson, []);
+      // CORRECTNESS: an object produced an opaque `.map is not a function` failure.
+      if (!Array.isArray(recordsArray)) throw new Error('Airtable bulk_create: recordsJson must be an array');
       body = { records: recordsArray.map(fields => ({ fields })) };
       break;
     }
@@ -67,6 +69,7 @@ export async function airtableRecords({ config, credential, signal }) {
       method = 'PATCH';
       url = `${base}/bulk`;
       const recordsArray = parseJson(config.recordsJson, []);
+      if (!Array.isArray(recordsArray)) throw new Error('Airtable bulk_update: recordsJson must be an array');
       body = { records: recordsArray };
       break;
     }

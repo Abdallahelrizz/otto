@@ -82,8 +82,33 @@ function parseStdout(stdout) {
 }
 
 const PUBLIC_PISTON = 'https://emkc.org/api/v2/piston';
+const MAX_PISTON_RESPONSE_BYTES = 10 * 1024 * 1024;
 
-export async function codeNode({ input, config }) {
+async function readPistonPayload(response) {
+  const declared = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > MAX_PISTON_RESPONSE_BYTES) {
+    throw new Error('Code node: Piston response is too large');
+  }
+  if (!response.body) return {};
+  const reader = response.body.getReader();
+  const chunks = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_PISTON_RESPONSE_BYTES) {
+      await reader.cancel();
+      // SECURITY: Piston stdout/stderr was previously buffered without a ceiling.
+      throw new Error('Code node: Piston response is too large');
+    }
+    chunks.push(value);
+  }
+  const text = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8');
+  try { return text ? JSON.parse(text) : {}; } catch { return {}; }
+}
+
+export async function codeNode({ input, config, signal }) {
   const primaryUrl = (process.env.PISTON_URL ?? 'http://localhost:2000').replace(/\/$/, '');
   const language = normalizeLanguage(String(config.language ?? 'javascript'));
   const version = String(config.version ?? DEFAULT_VERSIONS[language] ?? '*');
@@ -117,6 +142,8 @@ export async function codeNode({ input, config }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      // CORRECTNESS: cancellation previously left the remote Piston execution running.
+      signal,
     });
     return res;
   }
@@ -126,17 +153,19 @@ export async function codeNode({ input, config }) {
     res = await executePiston(`${primaryUrl}/api/v2`);
   } catch (primaryErr) {
     if (!allowPublic) {
-      throw new Error(`Code node: Piston is unreachable at ${primaryUrl}. Point PISTON_URL at a reachable Piston, or set PISTON_ALLOW_PUBLIC=true to allow the public emkc.org fallback (which sends your code and input off-box).`);
+      // SECURITY: PISTON_URL may contain connection credentials; do not persist it.
+      throw new Error('Code node: Piston is unreachable. Point PISTON_URL at a reachable Piston, or set PISTON_ALLOW_PUBLIC=true to allow the public emkc.org fallback (which sends your code and input off-box).');
     }
     // Explicitly opted in — try public Piston
     try {
       res = await executePiston(PUBLIC_PISTON);
     } catch (err2) {
-      throw new Error(`Code node: could not reach Piston (tried ${primaryUrl} and public fallback): ${err2.message}`);
+      // SECURITY: fetch errors may echo credential-bearing URLs into persisted errors.
+      throw new Error('Code node: could not reach Piston or the public fallback');
     }
   }
 
-  const payload = await res.json().catch(() => ({}));
+  const payload = await readPistonPayload(res);
   if (!res.ok) {
     throw new Error(`Code node: Piston rejected execution: ${payload.message ?? res.statusText}`);
   }

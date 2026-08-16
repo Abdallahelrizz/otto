@@ -29,13 +29,10 @@ function branchId(target, index) {
   return String(raw).trim() || `branch_${index + 1}`;
 }
 
-function withTimeout(promise, timeoutMs, label) {
-  if (!timeoutMs || timeoutMs <= 0) return promise;
-  let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`Parallel AI branch "${label}" exceeded timeout of ${timeoutMs}ms`)), timeoutMs);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+function branchSignal(signal, timeoutMs) {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  // CORRECTNESS: racing a timer left the paid provider request running after timeout.
+  return signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
 }
 
 async function credentialForTarget(target, sharedCredential, ctx, workspaceId) {
@@ -48,10 +45,12 @@ async function credentialForTarget(target, sharedCredential, ctx, workspaceId) {
 }
 
 function errorMessage(err) {
-  return err instanceof Error ? err.message : String(err);
+  if (err?.name === 'AbortError' || err?.name === 'TimeoutError') return 'request cancelled or timed out';
+  // SECURITY: SDK errors can echo request URLs/headers; this string is persisted as node output.
+  return 'provider request failed';
 }
 
-export async function parallelAi({ config, credential, workspaceId, ctx }) {
+export async function parallelAi({ config, credential, workspaceId, ctx, signal }) {
   const targets = parseTargets(config.targets ?? config.targetsJson);
   if (!targets.length) throw new Error('Parallel AI: at least one target is required');
 
@@ -75,8 +74,7 @@ export async function parallelAi({ config, credential, workspaceId, ctx }) {
 
     try {
       const targetCredential = await credentialForTarget(target, credential, ctx, workspaceId);
-      const response = await withTimeout(
-        llmCall({
+      const response = await llmCall({
           config: {
             provider,
             model,
@@ -86,10 +84,8 @@ export async function parallelAi({ config, credential, workspaceId, ctx }) {
             maxTokens: target.maxTokens ?? defaultMaxTokens,
           },
           credential: targetCredential,
-        }),
-        parsePositiveInt(target.timeoutMs, timeoutMs, 100, 300_000),
-        id
-      );
+          signal: branchSignal(signal, parsePositiveInt(target.timeoutMs, timeoutMs, 100, 300_000)),
+        });
 
       return {
         id,

@@ -20,7 +20,8 @@ export async function graphqlRequest({ config, credential, signal }) {
   });
 
   if (result.body?.errors?.length) {
-    throw new Error(`GraphQL: ${result.body.errors[0].message ?? 'request failed'}`);
+    // SECURITY: remote GraphQL errors can echo authorization values into persisted errors.
+    throw new Error('GraphQL: request returned errors');
   }
 
   return result.body;
