@@ -46,3 +46,6 @@ jobs:
       - name: Typecheck
         working-directory: canvas
         run: npx tsc --noEmit
+      - name: Unit tests
+        working-directory: canvas
+        run: npm test

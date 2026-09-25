@@ -26,6 +26,8 @@ export function useEditorShortcuts(shortcutRefOpen: boolean, setShortcutRefOpen:
   const setBottomPanelsOpen = useStore((s) => s.setBottomPanelsOpen);
   const selectNode      = useStore((s) => s.selectNode);
   const fitViewCallback = useStore((s) => s.fitViewCallback);
+  const undo            = useStore((s) => s.undo);
+  const redo            = useStore((s) => s.redo);
 
   const handler = useCallback((e: KeyboardEvent) => {
     if (isEditingField(e.target)) return;
@@ -48,6 +50,17 @@ export function useEditorShortcuts(shortcutRefOpen: boolean, setShortcutRefOpen:
         case 'd':
           e.preventDefault();
           duplicateNodes();
+          return;
+
+        // Text fields returned early above, so their native text undo still works.
+        case 'z':
+          e.preventDefault();
+          if (e.shiftKey) redo(); else undo();
+          return;
+
+        case 'y':
+          e.preventDefault();
+          redo();
           return;
 
         case 'f':
@@ -106,7 +119,7 @@ export function useEditorShortcuts(shortcutRefOpen: boolean, setShortcutRefOpen:
     toggleSidebar, toggleOttobot, toggleLogs,
     selectedNodeId, nodes, deleteNodes, duplicateNodes,
     saveWorkflow, saveStatus,
-    setBottomPanelsOpen, selectNode, fitViewCallback,
+    setBottomPanelsOpen, selectNode, fitViewCallback, undo, redo,
     shortcutRefOpen, setShortcutRefOpen,
   ]);
 
@@ -125,6 +138,8 @@ export const SHORTCUT_GROUPS: Array<{
     label: 'Canvas',
     items: [
       { key: '⌃S', description: 'Save' },
+      { key: '⌃Z', description: 'Undo' },
+      { key: '⌃⇧Z', description: 'Redo' },
       { key: '⌃B', description: 'Toggle sidebar' },
       { key: '⌃⇧F', description: 'Fit view' },
       { key: 'O', description: 'Toggle OttoBot' },
