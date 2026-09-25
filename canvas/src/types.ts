@@ -39,7 +39,7 @@ export interface Execution {
   id: string;
   workflow_id: string;
   workflow_name?: string | null;
-  status: 'pending' | 'running' | 'success' | 'error' | 'cancelled';
+  status: 'pending' | 'running' | 'waiting' | 'success' | 'error' | 'cancelled';
   started_at: string | null;
   completed_at: string | null;
   trigger_type: string;

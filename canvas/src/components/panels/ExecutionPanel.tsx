@@ -61,9 +61,16 @@ export function ExecutionPanel() {
     ?? [...rows].reverse().find((ne) => ne.output != null || ne.error)
     ?? rows[0]
     ?? null;
+  // A failed node has no output, so opening it on Output showed a bare `null`.
+  const inspectedHasError = Boolean(inspectedNode?.error);
   useEffect(() => {
-    setInspectTab('output');
-  }, [inspectedNode?.node_id]);
+    setInspectTab(inspectedHasError ? 'error' : 'output');
+  }, [inspectedNode?.node_id, inspectedHasError]);
+
+  // Some failures happen outside any node (workflow timeout, a crash between nodes). Without
+  // this the panel said FAILED with every listed node green and no reason anywhere.
+  const executionError = selectedExecutionDetail?.execution?.error ?? null;
+  const showExecutionError = isError && Boolean(executionError) && !rows.some((ne) => ne.error);
 
   const fullData = inspectedNode
     ? {
@@ -298,6 +305,22 @@ export function ExecutionPanel() {
               ))}
             </div>
           </div>
+          {showExecutionError && (
+            <div style={{
+              marginBottom: '10px',
+              padding: '8px 10px',
+              border: '1px solid var(--node-error)',
+              borderRadius: '4px',
+              background: 'rgba(239,68,68,0.08)',
+              color: 'var(--text-primary)',
+              fontFamily: "'Inter'",
+              fontSize: '11.5px',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+            }}>
+              {executionError}
+            </div>
+          )}
           <DataInspector
             label={inspectTab}
             data={inspectedData}
