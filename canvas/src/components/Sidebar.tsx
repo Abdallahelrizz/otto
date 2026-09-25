@@ -2107,11 +2107,8 @@ function TeamSection() {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/workspace/members', { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
-        setMembers(data.members ?? []);
-      }
+      const data = await api.listWorkspaceMembers<WorkspaceMember>();
+      setMembers(data.members ?? []);
     } catch { /* ignore */ } finally {
       setLoading(false);
     }
@@ -2124,14 +2121,8 @@ function TeamSection() {
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch('/api/v1/workspace/members', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: newEmail.trim(), name: newName.trim() || undefined, password: newPassword, role: newRole }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Failed');
+      // Goes through api so the request carries the CSRF token like every other write.
+      await api.addWorkspaceMember({ email: newEmail.trim(), name: newName.trim() || undefined, password: newPassword, role: newRole });
       setNewEmail(''); setNewName(''); setNewPassword(''); setNewRole('editor');
       setAddOpen(false);
       await load();
@@ -2144,17 +2135,22 @@ function TeamSection() {
 
   const handleRemove = async (id: string, email: string) => {
     if (!confirm(`Remove ${email} from this workspace?`)) return;
-    await fetch(`/api/v1/workspace/members/${id}`, { method: 'DELETE', credentials: 'include' });
+    setMsg(null);
+    try {
+      await api.removeWorkspaceMember(id);
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : 'Failed');
+    }
     await load();
   };
 
   const handleRoleChange = async (id: string, role: string) => {
-    await fetch(`/api/v1/workspace/members/${id}/role`, {
-      method: 'PUT',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role }),
-    });
+    setMsg(null);
+    try {
+      await api.setWorkspaceMemberRole(id, role);
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : 'Failed');
+    }
     await load();
   };
 

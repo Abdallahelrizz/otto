@@ -66,3 +66,6 @@ const malformed = validateWorkflowDefinition({ nodes: [] });
 assert.equal(hasSaveBlockingIssues(malformed), true);
 
 console.log('workflow validation smoke ok');
+
+// Importing the node registry opens a Redis connection that keeps the process alive.
+process.exit(0);

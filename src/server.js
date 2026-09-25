@@ -135,6 +135,9 @@ await fastify.register(csrfPlugin);
 
 // Parse JSON bodies
 fastify.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+  // Many clients send Content-Type: application/json on a bodiless DELETE; JSON.parse('')
+  // turned those into a 400 "Unexpected end of JSON input".
+  if (body === '') return done(null, undefined);
   try {
     done(null, JSON.parse(body));
   } catch (err) {

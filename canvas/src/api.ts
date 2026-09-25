@@ -39,10 +39,12 @@ async function req<T>(path: string, options?: RequestInit): Promise<T> {
     const csrfToken = getCsrfToken();
     if (csrfToken) headers['x-csrf-token'] = csrfToken;
   }
+  // headers goes last: spreading options after it let a caller's own headers replace the
+  // merged set and silently drop the CSRF token and Content-Type.
   const res = await fetch(`${BASE}${path}`, {
     credentials: 'include',
-    headers,
     ...options,
+    headers,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -104,6 +106,26 @@ export const api = {
 
   async me() {
     return req<AuthStatus>('/auth/me');
+  },
+
+  // Workspace members
+  async listWorkspaceMembers<T>() {
+    return req<{ members: T[] }>('/workspace/members');
+  },
+
+  async addWorkspaceMember(payload: { email: string; name?: string; password: string; role: string }) {
+    return req<unknown>('/workspace/members', { method: 'POST', body: JSON.stringify(payload) });
+  },
+
+  async removeWorkspaceMember(userId: string) {
+    return req<unknown>(`/workspace/members/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+  },
+
+  async setWorkspaceMemberRole(userId: string, role: string) {
+    return req<unknown>(`/workspace/members/${encodeURIComponent(userId)}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role }),
+    });
   },
 
   async updateOttobotSettings(settings: Partial<import('./types').OttobotSettings>) {

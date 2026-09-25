@@ -149,3 +149,6 @@ const validation = validateWorkflowDefinition({
 assert.equal(validation.errorCount, 0);
 
 console.log('transform nodes smoke ok');
+
+// Importing the node registry opens a Redis connection that keeps the process alive.
+process.exit(0);

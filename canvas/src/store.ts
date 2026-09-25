@@ -77,12 +77,15 @@ let workflowActiveRequest = 0;
 let executionDetailRequest = 0;
 let executionFallbackTimer: ReturnType<typeof setTimeout> | null = null;
 let executionPhaseTimer: ReturnType<typeof setTimeout> | null = null;
+let executionResyncTimer: ReturnType<typeof setTimeout> | null = null;
 
 function clearExecutionTimers(): void {
   if (executionFallbackTimer) clearTimeout(executionFallbackTimer);
   if (executionPhaseTimer) clearTimeout(executionPhaseTimer);
+  if (executionResyncTimer) clearTimeout(executionResyncTimer);
   executionFallbackTimer = null;
   executionPhaseTimer = null;
+  executionResyncTimer = null;
 }
 
 interface OttoStore {
@@ -1139,6 +1142,9 @@ export const useStore = create<OttoStore>((set, get) => ({
           executionPhase: phase,
           nodeExecutions: Object.fromEntries(data.nodes.map((ne) => [ne.node_id, ne])),
         });
+        // The server ends the stream right after the snapshot of a finished run. Close our
+        // side first so that expected close does not reach onerror.
+        if (phase !== 'running') get().stopSSE();
       } catch {}
     });
 
@@ -1183,10 +1189,38 @@ export const useStore = create<OttoStore>((set, get) => ({
       get().stopSSE();
     });
 
+    // A dropped stream says nothing about the run itself: a proxy timeout or a network blip
+    // used to mark a healthy run FAILED and freeze its nodes mid-flight. Ask the server for
+    // the real status instead, and keep polling while the run is still going.
+    const resync = (failures = 0) => {
+      executionResyncTimer = null;
+      if (get().executionId !== executionId) return;
+      api.getExecution(executionId).then((rawDetail) => {
+        if (get().executionId !== executionId) return;
+        const detail = normalizeExecutionDetail(rawDetail);
+        const status = detail.execution.status;
+        const finished = status === 'success' || status === 'error' || status === 'cancelled';
+        set({
+          selectedExecutionDetail: detail,
+          nodeExecutions: Object.fromEntries(detail.nodes.map((ne) => [ne.node_id, ne])),
+          executionPhase: status === 'success' ? 'success' : status === 'error' ? 'error' : finished ? 'idle' : 'running',
+        });
+        // A 'waiting' run can sit for hours on a timer or approval, so check it less often.
+        if (!finished) executionResyncTimer = setTimeout(() => resync(0), status === 'waiting' ? 15_000 : 2000);
+      }).catch(() => {
+        if (get().executionId !== executionId) return;
+        if (failures >= 4) {
+          set({ executionPhase: 'error' });
+          return;
+        }
+        executionResyncTimer = setTimeout(() => resync(failures + 1), 2000 * (failures + 1));
+      });
+    };
+
     source.onerror = () => {
       if (!isCurrentSource()) return;
-      set({ executionPhase: 'error' });
       get().stopSSE();
+      resync();
     };
 
     set({ _sseSource: source });

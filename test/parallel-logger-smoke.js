@@ -13,9 +13,10 @@ db.query = async (text, params) => {
   await new Promise(resolve => setTimeout(resolve, queryDelay));
   
   if (text.includes('INSERT INTO executions') || text.includes('INSERT INTO node_executions')) {
-    return { rows: [{ id: 'mock-uuid-' + Math.random().toString(36).substr(2, 9) }] };
+    return { rows: [{ id: 'mock-uuid-' + Math.random().toString(36).substr(2, 9) }], rowCount: 1 };
   }
-  return { rows: [] };
+  // startExecution only proceeds when its guarded UPDATE reports an accepted transition.
+  return { rows: [], rowCount: 1 };
 };
 
 // ─── Parallel Branch Test Definition ─────────────────────────────────────────
@@ -114,3 +115,6 @@ queries.forEach((q, idx) => {
 console.log('✓ SQL logging race condition checks passed!');
 console.log('All parallel logger smoke tests passed successfully!');
 console.log('======================================================');
+
+// Importing the node registry opens a Redis connection that keeps the process alive.
+process.exit(0);

@@ -10,25 +10,25 @@
     "dev": "node --watch src/server.js",
     "worker": "node src/queue/worker.js",
     "migrate": "node migrations/run.js",
-    "test": "node --test --test-force-exit test/services-validate.test.js test/services-interpolate.test.js test/services-engine.test.js test/services-response-cap.test.js test/services-nodedef-gen.test.js test/services-load.test.js test/redirect-auth.test.js test/expression-sandbox.test.js test/github-descriptor-parity.test.js test/hubspot-descriptor-parity.test.js test/usage-stats.test.js test/workflow-editor-persistence.test.js test/cancellation.test.js test/error-mapping.test.js",
-    "test:all": "node --test",
+    "test": "node --test --test-force-exit test/services-validate.test.js test/services-interpolate.test.js test/services-engine.test.js test/services-response-cap.test.js test/services-nodedef-gen.test.js test/services-load.test.js test/redirect-auth.test.js test/safe-fetch-lookup.test.js test/csrf.test.js test/expression-sandbox.test.js test/github-descriptor-parity.test.js test/hubspot-descriptor-parity.test.js test/usage-stats.test.js test/workflow-editor-persistence.test.js test/cancellation.test.js test/error-mapping.test.js",
+    "test:all": "node --test --test-force-exit",
     "benchmark": "node scripts/benchmark.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.98.0",
-    "@fastify/cookie": "^9.4.0",
-    "@fastify/cors": "^9.0.1",
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/cors": "^11.3.0",
     "@opentelemetry/api": "^1.9.1",
     "bullmq": "^5.56.0",
     "cron-parser": "^4.9.0",
     "dotenv": "^17.4.2",
-    "fastify": "^4.28.1",
+    "fastify": "^5.12.5",
+    "fastify-plugin": "^5.1.0",
     "ioredis": "^5.3.2",
     "nodemailer": "^9.0.3",
     "openai": "^6.39.0",
     "pg": "^8.11.3",
-    "undici": "^6.28.0",
-    "uuid": "^9.0.0"
+    "undici": "^6.28.0"
   },
   "engines": {
     "node": ">=20.0.0"
