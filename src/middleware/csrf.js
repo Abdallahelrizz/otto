@@ -1,4 +1,5 @@
 import { randomBytes, timingSafeEqual } from 'crypto';
+import fp from 'fastify-plugin';
 
 const CSRF_COOKIE = 'otto-csrf';
 const CSRF_HEADER = 'x-csrf-token';
@@ -25,7 +26,7 @@ function tokensEqual(left, right) {
 }
 
 // NOTE: This plugin requires @fastify/cookie to be registered before it.
-export function csrfPlugin(fastify, _opts, done) {
+function csrf(fastify, _opts, done) {
   // On every request: set the CSRF cookie if missing
   fastify.addHook('onRequest', (req, reply, hookDone) => {
     // Issue a new token if one isn't present
@@ -35,7 +36,8 @@ export function csrfPlugin(fastify, _opts, done) {
         path: '/',
         httpOnly: false,   // must be readable by JS to double-submit
         sameSite: 'strict',
-        secure: process.env.NODE_ENV === 'production',
+        // Same rule as the session cookie, so the two are always stored together.
+        secure: process.env.NODE_ENV === 'production' || process.env.FORCE_SECURE_COOKIES === 'true',
       });
     }
     hookDone();
@@ -64,3 +66,8 @@ export function csrfPlugin(fastify, _opts, done) {
 
   done();
 }
+
+// fastify-plugin lifts the hooks out of this plugin's own encapsulated scope. Registered as
+// a plain plugin, they applied to no routes at all: the CSRF cookie was never issued and no
+// state-changing request was ever checked.
+export const csrfPlugin = fp(csrf, { name: 'otto-csrf', dependencies: ['@fastify/cookie'] });
