@@ -158,3 +158,6 @@ for (const [name, , , expectedType] of n8nNodes) {
 assert.equal(imported.report.summary.partial, n8nNodes.length);
 
 console.log('node wedge smoke ok');
+
+// Importing the node registry opens a Redis connection that keeps the process alive.
+process.exit(0);

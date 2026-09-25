@@ -158,3 +158,6 @@ assert.equal(importedByName.Chat.type, 'chat_trigger');
 assert.equal(imported.report.summary.partial, 3);
 
 console.log('trigger runtime smoke ok');
+
+// Importing the node registry opens a Redis connection that keeps the process alive.
+process.exit(0);

@@ -80,6 +80,26 @@ async function resolveAndCheck(hostname) {
   return records;
 }
 
+/**
+ * Connect-time DNS lookup for the guarded dispatcher: resolves, rejects any private or
+ * reserved address, and answers in the shape the socket asked for.
+ */
+export function pinnedLookup(hostname, opts, cb) {
+  dns.lookup(hostname, { all: true })
+    .then((records) => {
+      const bad = records.find((r) => isBlockedIP(r.address));
+      if (bad) return cb(new SsrfBlockedError(`Blocked: ${hostname} → ${bad.address}`), null, null);
+      if (!records.length) return cb(new SsrfBlockedError(`Blocked: ${hostname} did not resolve`), null, null);
+      // Node 20+ connects with autoSelectFamily, which asks for { all: true } and expects
+      // the whole list back. Answering with a single address string made every pinned
+      // request fail with ERR_INVALID_IP_ADDRESS ("Invalid IP address: undefined").
+      if (opts?.all) return cb(null, records);
+      const chosen = (opts?.family && records.find((r) => r.family === opts.family)) || records[0];
+      cb(null, chosen.address, chosen.family);
+    })
+    .catch((err) => cb(err, null, null));
+}
+
 // A single shared undici dispatcher whose DNS lookup re-validates at CONNECT time,
 // so the socket cannot be pointed at a private IP after our pre-check passed
 // (DNS-rebinding TOCTOU).
@@ -107,16 +127,7 @@ async function getGuardedDispatcher() {
     }
     _dispatcher = new undici.Agent({
       connect: {
-        lookup: (hostname, _opts, cb) => {
-          dns.lookup(hostname, { all: true })
-            .then((records) => {
-              const bad = records.find((r) => isBlockedIP(r.address));
-              if (bad) return cb(new SsrfBlockedError(`Blocked: ${hostname} → ${bad.address}`), null, null);
-              const chosen = records[0];
-              cb(null, chosen.address, chosen.family);
-            })
-            .catch((err) => cb(err, null, null));
-        },
+        lookup: pinnedLookup,
       },
     });
   } catch (err) {

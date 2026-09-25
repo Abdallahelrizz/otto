@@ -1,6 +1,7 @@
 import assert from 'assert/strict';
 import { mkdir, rm } from 'fs/promises';
 import path from 'path';
+import dns from 'dns/promises';
 
 import { db } from '../src/db/client.js';
 import { getNodeHandler } from '../src/nodes/index.js';
@@ -112,6 +113,14 @@ try {
   assert.match(signed.Authorization, /^AWS4-HMAC-SHA256 Credential=AKIA_TEST\/20260526\/us-east-1\/s3\/aws4_request/);
 
   const originalFetch = globalThis.fetch;
+  // safeFetch resolves the host for its SSRF check before calling fetch, and the fake
+  // endpoint has no real DNS entry, so answer it with a public documentation address.
+  const originalLookup = dns.lookup;
+  dns.lookup = async (hostname, opts) => {
+    if (hostname !== 's3.example.test') return originalLookup(hostname, opts);
+    const record = { address: '203.0.113.10', family: 4 };
+    return opts?.all ? [record] : record;
+  };
   const calls = [];
   globalThis.fetch = async (url, init) => {
     calls.push({ url: String(url), init });
@@ -172,6 +181,7 @@ try {
     assert.equal(calls[1].init.method, 'PUT');
   } finally {
     globalThis.fetch = originalFetch;
+    dns.lookup = originalLookup;
   }
 
   const imported = importN8n({
@@ -216,3 +226,6 @@ try {
 }
 
 console.log('storage nodes smoke ok');
+
+// Importing the node registry opens a Redis connection that keeps the process alive.
+process.exit(0);
