@@ -16,7 +16,11 @@ import type {
   WorkflowSettings,
 } from './types';
 import { DEFAULT_WORKFLOW_SETTINGS } from './types';
-import { getNodeDef, EDGE_COLOR_DARK, EDGE_COLOR_LIGHT } from './components/nodes/nodeConfig';
+import { getNodeDef, NODE_TYPE_MAP, EDGE_COLOR_DARK, EDGE_COLOR_LIGHT } from './components/nodes/nodeConfig';
+import { GraphHistory } from './editor/history';
+import type { GraphDoc } from './editor/history';
+import { applyOperations as applyGraphOperations, renameNodeInGraph } from './editor/operations';
+import type { ApplyResult, EditorOperation, OperationContext } from './editor/operations';
 import { api } from './api';
 import { hasBlockingValidationIssues, validateCanvasWorkflow } from './utils/workflowValidation';
 
@@ -88,6 +92,15 @@ function clearExecutionTimers(): void {
   executionResyncTimer = null;
 }
 
+// Undo/redo covers the graph only. A store subscription (below) feeds it every change,
+// so no individual action has to remember to record itself.
+const graphHistory = new GraphHistory();
+
+const operationContext: OperationContext = {
+  getNodeType: (type) => NODE_TYPE_MAP[type],
+  newId: () => uuidv4(),
+};
+
 interface OttoStore {
   // React Flow state
   nodes: Node[];
@@ -97,6 +110,18 @@ interface OttoStore {
   onConnect: (connection: Connection) => void;
   setNodes: (nodes: Node[]) => void;
   setEdges: (edges: Edge[]) => void;
+
+  // Undo / redo
+  canUndo: boolean;
+  canRedo: boolean;
+  undo: () => void;
+  redo: () => void;
+
+  /**
+   * Apply editor operations (add/remove/connect/configure...) as a single undo step.
+   * This is the entry point for OttoBot and any other programmatic canvas edit.
+   */
+  applyOperations: (operations: EditorOperation[], options?: { atomic?: boolean }) => ApplyResult;
 
   // Selection
   selectedNodeId: string | null;
@@ -351,6 +376,22 @@ export const useStore = create<OttoStore>((set, get) => ({
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
 
+  canUndo: false,
+  canRedo: false,
+  undo: () => restoreFromHistory(graphHistory.undo()),
+  redo: () => restoreFromHistory(graphHistory.redo()),
+
+  applyOperations: (operations, options) => {
+    const { nodes, edges } = get();
+    const result = applyGraphOperations({ nodes, edges }, operations, operationContext, options);
+    if (result.graph.nodes === nodes && result.graph.edges === edges) return result;
+    // Checkpoints on both sides keep the batch from merging with neighbouring user edits.
+    graphHistory.checkpoint();
+    set({ nodes: result.graph.nodes, edges: styleEdges(result.graph.edges, get().theme) });
+    graphHistory.checkpoint();
+    return result;
+  },
+
   selectedNodeId: null,
   selectNode: (id) => set((s) => ({
     selectedNodeId: id,
@@ -366,12 +407,9 @@ export const useStore = create<OttoStore>((set, get) => ({
       ),
     })),
 
+  // Expressions reference nodes by label, so a rename also rewrites those references.
   updateNodeLabel: (id, label) =>
-    set((s) => ({
-      nodes: s.nodes.map((n) =>
-        n.id === id ? { ...n, data: { ...n.data, label } } : n
-      ),
-    })),
+    set((s) => ({ nodes: renameNodeInGraph({ nodes: s.nodes, edges: s.edges }, id, label).nodes })),
 
   updateNodeControls: (id, patch) =>
     set((s) => ({
@@ -717,6 +755,7 @@ export const useStore = create<OttoStore>((set, get) => ({
       selectedNodeId: null,
       configPanelOpen: false,
     });
+    resetGraphHistory();
     writeLastWorkflowId(id);
   },
 
@@ -796,6 +835,7 @@ export const useStore = create<OttoStore>((set, get) => ({
       selectedNodeId: null,
       configPanelOpen: false,
     });
+    resetGraphHistory();
     writeLastWorkflowId(null);
   },
 
@@ -1265,6 +1305,43 @@ export const useStore = create<OttoStore>((set, get) => ({
     set({ notifications: [], unreadCount: 0 });
   },
 }));
+
+function styleEdges(edges: Edge[], theme: 'dark' | 'light'): Edge[] {
+  const stroke = theme === 'dark' ? EDGE_COLOR_DARK : EDGE_COLOR_LIGHT;
+  return edges.map((edge) => (edge.style ? edge : { ...edge, type: edge.type ?? 'default', style: { strokeWidth: 1.4, stroke } }));
+}
+
+function syncHistoryFlags(): void {
+  const { canUndo, canRedo } = useStore.getState();
+  if (canUndo !== graphHistory.canUndo || canRedo !== graphHistory.canRedo) {
+    useStore.setState({ canUndo: graphHistory.canUndo, canRedo: graphHistory.canRedo });
+  }
+}
+
+function restoreFromHistory(doc: GraphDoc | null): void {
+  if (!doc) return;
+  const { selectedNodeId, theme } = useStore.getState();
+  const stillThere = selectedNodeId && doc.nodes.some((n) => n.id === selectedNodeId);
+  useStore.setState({
+    nodes: doc.nodes,
+    edges: styleEdges(doc.edges.map(({ style: _style, ...edge }) => edge), theme),
+    ...(stillThere ? {} : { selectedNodeId: null, configPanelOpen: false }),
+  });
+  syncHistoryFlags();
+}
+
+/** Forget undo history, e.g. when a different workflow is loaded or a new one is started. */
+function resetGraphHistory(): void {
+  const { nodes, edges } = useStore.getState();
+  graphHistory.reset({ nodes, edges });
+  syncHistoryFlags();
+}
+
+useStore.subscribe((state, previous) => {
+  if (state.nodes === previous.nodes && state.edges === previous.edges) return;
+  graphHistory.observe({ nodes: state.nodes, edges: state.edges });
+  syncHistoryFlags();
+});
 
 export function buildDefinition(
   nodes: Node[],
